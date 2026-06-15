@@ -11,14 +11,14 @@ Pick the data points you want from a curated catalog and the portal generates:
    that collects exactly those fields.
 3. **A `deploy.ps1` command** — to update the workspace, table and DCR.
 
-It is the companion to the **[LogIngestionAPI](https://github.com/sandytsang/LogIngestionAPI)**
-solution.
+It is the companion to the **[LogIngestionAPI](../LogIngestionAPI)** solution,
+which lives in the same repository.
 
 ## Why it exists
 
-In the API repo, adding a data point means editing a collector in
-`scripts/remediate.ps1` **and** a column in `schema/columns.json`, then
-redeploying. This portal fixes that: every catalog entry bundles **both** the
+In [`../LogIngestionAPI`](../LogIngestionAPI), adding a data point means editing a
+collector in `scripts/remediate.ps1` **and** a column in `schema/columns.json`,
+then redeploying. This portal fixes that: every catalog entry bundles **both** the
 column definition and its PowerShell collector, so a single selection keeps them
 in sync and emits ready-to-use files.
 
@@ -33,16 +33,20 @@ in sync and emits ready-to-use files.
 
 1. Open the portal (GitHub Pages) and select the fields you want. The defaults
    reproduce the current `DeviceInventory_CL` schema.
-2. Fill in the **Function URL** (and optionally an existing workspace name).
-3. Copy/download the three outputs.
+2. Fill in the **Function URL**, the deployment options (resource group, region,
+   plan), and — if reusing one — an existing workspace name.
+3. Click **Download all (.zip)** to get `columns.json`, `remediate.ps1`, and a
+   `README.txt` with the exact deploy command.
 4. In your `LogIngestionAPI` checkout:
    - replace `schema/columns.json` with the generated file,
-   - run the generated `deploy.ps1` command,
+   - run the deploy command from the bundled `README.txt`,
    - paste the generated `remediate.ps1` into your Intune Proactive Remediation
      (detection script).
 
-> The optional **"open Azure portal"** link deploys *infrastructure only* in your
-> own tenant; the Function code is still published locally with `func`.
+> Two extra tools in the portal: **“Update data columns only”** generates a
+> lighter `deploy.ps1 -SchemaOnly` command (table + DCR only), and **“Build
+> columns.json from data”** turns a `remediate.ps1 -PreviewData` JSON sample into
+> a matching schema.
 
 ## Develop
 
@@ -82,8 +86,9 @@ portal and the CI validator, so the in-browser check matches CI exactly.
 
 ## Keeping in sync with LogIngestionAPI
 
-The catalog under [`catalog/`](catalog) mirrors the collectors in the API repo's
-`scripts/remediate.ps1`, and [test/fixtures/columns.json](test/fixtures/columns.json)
-is a copy of that repo's `schema/columns.json` used to guarantee the default
-selection round-trips exactly. If you change the schema in the API repo, update
-those here.
+The catalog under [`catalog/`](catalog) mirrors the collectors in
+[`../LogIngestionAPI/scripts/remediate.ps1`](../LogIngestionAPI/scripts/remediate.ps1),
+and [test/fixtures/columns.json](test/fixtures/columns.json) is a copy of
+[`../LogIngestionAPI/schema/columns.json`](../LogIngestionAPI/schema/columns.json)
+used to guarantee the default selection round-trips exactly. If you change the
+schema in `LogIngestionAPI`, update those here.

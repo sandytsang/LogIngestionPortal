@@ -5,7 +5,7 @@ and storing it in Log Analytics:
 
 ```
 Intune Proactive Remediation (PowerShell)
-        │  HTTPS POST (+ function key, + optional device JWT)
+        │  HTTPS POST (+ function key + device-signed JWT)
         ▼
 Azure Function App (PowerShell)
         │  Managed identity token + DCR direct endpoint
@@ -99,11 +99,10 @@ command line.
 
 ## Device authentication (device-signed JWT)
 
-By default the endpoint is protected only by the **function key** — a shared
-secret copied to every device. You can optionally require each device to prove
-possession of its **Entra-join (MS-Organization-Access) certificate** by signing
-a short-lived JWT, exactly like the Autopilot Credential Portal. The function key
-stays in place as a cheap second gate.
+Every request must prove possession of the device's **Entra-join
+(MS-Organization-Access) certificate** by signing a short-lived JWT, exactly like
+the Autopilot Credential Portal. The **function key** stays in place as a cheap
+second gate.
 
 Device-signed JWT authentication is **always required** — every request must
 carry a valid device JWT. The remaining behaviour (audience, tenant pinning,
@@ -193,8 +192,13 @@ hardening, not enabled by default.
 1. Edit [schema/columns.json](schema/columns.json) (add/remove a column).
 2. Update `Get-DeviceData` in [scripts/remediate.ps1](scripts/remediate.ps1) so
    the uploaded object includes/excludes that property.
-3. Redeploy:
+3. Redeploy — either a full deploy, or a lighter **schema-only** update that
+   touches just the table + DCR (the Function App is left untouched):
    ```powershell
+   # Schema-only update (recommended for column changes)
+   ./deploy.ps1 -SchemaOnly -DcrResourceGroup rg-loging-dev
+
+   # Or a full redeploy without republishing the Function code
    ./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus -SkipFunctionPublish
    ```
    The table and DCR are regenerated; existing data is preserved and the Function
@@ -226,7 +230,8 @@ DeviceInventory_CL
 | Path | Purpose |
 | --- | --- |
 | `schema/columns.json` | Single source of truth for the table + DCR schema |
-| `infra/main.bicep` | LAW (new or existing), custom table, DCR (Direct), Function App, role assignment |
+| `infra/main.bicep` | RG-scoped orchestrator: deploys the modules below |
+| `infra/modules/` | Log Analytics + table, DCR (Direct), Function App, DCR role assignment |
 | `infra/main.bicepparam` | Deployment parameters |
 | `function/DCRLogIngestionAPI/run.ps1` | Schema-agnostic forwarder to the DCR endpoint |
 | `function/Modules/DeviceJwtAuth/` | Device-JWT request authentication (proof-of-possession) |
