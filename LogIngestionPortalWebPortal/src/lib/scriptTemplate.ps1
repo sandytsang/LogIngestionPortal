@@ -187,7 +187,7 @@ function Send-Telemetry {
 }
 
 try {
-    Write-Log -Level INFO -Message 'Remediation started.'
+    Write-Log -Level INFO -Message ('Remediation ' + $RemediationName + ' started.')
     $data = Get-DeviceData
     Send-Telemetry -Records @($data) | Out-Null
 

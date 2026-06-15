@@ -122,6 +122,16 @@ export default function App() {
   const resetDefaults = () => setSelected(defaultSelected());
   const clearAll = () => setSelected(new Set());
 
+  const setMany = (ids: string[], select: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Header */}
@@ -164,7 +174,7 @@ export default function App() {
                 Clear
               </button>
             </div>
-            <CatalogBrowser catalog={catalog} selected={selected} onToggle={toggle} />
+            <CatalogBrowser catalog={catalog} selected={selected} onToggle={toggle} onSetMany={setMany} />
           </div>
 
           {/* Right: config + output (sticky) */}

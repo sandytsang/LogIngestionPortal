@@ -5,9 +5,10 @@ interface Props {
   catalog: Catalog;
   selected: Set<string>;
   onToggle: (id: string) => void;
+  onSetMany: (ids: string[], select: boolean) => void;
 }
 
-export function CatalogBrowser({ catalog, selected, onToggle }: Props) {
+export function CatalogBrowser({ catalog, selected, onToggle, onSetMany }: Props) {
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -71,58 +72,82 @@ export function CatalogBrowser({ catalog, selected, onToggle }: Props) {
       </div>
 
       <div className="space-y-6">
-        {groups.map(([category, fields]) => (
+        {groups.map(([category, fields]) => {
+          const toggleable = fields.filter((f) => !f.locked);
+          const selectedCount = toggleable.filter((f) => selected.has(f.id)).length;
+          const allSelected = toggleable.length > 0 && selectedCount === toggleable.length;
+          const someSelected = selectedCount > 0 && !allSelected;
+          return (
           <section key={category} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <button
-              type="button"
-              onClick={() => toggleCat(category)}
-              className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
-            >
-              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <span
-                  className={`text-[9px] transition-transform ${collapsed.has(category) ? '' : 'rotate-90'}`}
-                >
-                  ▶
+            <div className="flex w-full items-center gap-2 px-3 py-2 hover:bg-slate-50">
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0 accent-indigo-600"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                disabled={toggleable.length === 0}
+                onChange={() => onSetMany(toggleable.map((f) => f.id), !allSelected)}
+                title={allSelected ? 'Clear all in this category' : 'Select all in this category'}
+                aria-label={`Select all in ${category}`}
+              />
+              <button
+                type="button"
+                onClick={() => toggleCat(category)}
+                className="flex flex-1 items-center justify-between text-left"
+              >
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <span
+                    className={`text-[9px] transition-transform ${collapsed.has(category) ? '' : 'rotate-90'}`}
+                  >
+                    ▶
+                  </span>
+                  {category}
                 </span>
-                {category}
-              </span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                {fields.filter(isChecked).length}/{fields.length}
-              </span>
-            </button>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  {fields.filter(isChecked).length}/{fields.length}
+                </span>
+              </button>
+            </div>
             {!collapsed.has(category) && (
-              <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2">
+              <div className="divide-y divide-slate-100 px-3 pb-2 dark:divide-slate-800">
                 {fields.map((f) => {
                 const checked = f.locked || selected.has(f.id);
                 return (
                   <label
                     key={f.id}
-                    className={`group flex cursor-pointer gap-3 rounded-xl border p-3 transition ${
-                      checked
-                        ? 'border-indigo-400 bg-indigo-50/60 dark:border-indigo-500/60 dark:bg-indigo-500/10'
-                        : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'
-                    } ${f.locked ? 'cursor-not-allowed opacity-90' : ''}`}
+                    title={f.column.description}
+                    className={`group flex cursor-pointer items-center gap-3 py-1.5 transition ${
+                      f.locked ? 'cursor-not-allowed opacity-90' : ''
+                    }`}
                   >
                     <input
                       type="checkbox"
-                      className="mt-0.5 h-4 w-4 accent-indigo-600"
+                      className="h-4 w-4 shrink-0 accent-indigo-600"
                       checked={checked}
                       disabled={f.locked}
                       onChange={() => onToggle(f.id)}
                     />
-                    <span className="min-w-0">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-slate-800 dark:text-slate-100">{f.label}</span>
-                        <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          {f.column.type}
-                        </code>
-                        {f.locked && (
-                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                            required
-                          </span>
-                        )}
+                    <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                      <span
+                        className={`shrink-0 text-sm ${
+                          checked
+                            ? 'font-medium text-slate-900 dark:text-slate-100'
+                            : 'text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {f.label}
                       </span>
-                      <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                      <code className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        {f.column.type}
+                      </code>
+                      {f.locked && (
+                        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                          required
+                        </span>
+                      )}
+                      <span className="truncate text-xs text-slate-400 dark:text-slate-500">
                         {f.column.description}
                       </span>
                     </span>
@@ -132,7 +157,8 @@ export function CatalogBrowser({ catalog, selected, onToggle }: Props) {
               </div>
             )}
           </section>
-        ))}
+          );
+        })}
         {groups.length === 0 && (
           <p className="py-8 text-center text-sm text-slate-500">No fields match “{query}”.</p>
         )}
