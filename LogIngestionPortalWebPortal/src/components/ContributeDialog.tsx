@@ -32,6 +32,15 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
     (c) => c.toLowerCase() === draft.category.trim().toLowerCase(),
   );
 
+  // Heuristic: a dynamic column whose collector returns a whole object (no
+  // Select-Object / projection) usually serializes badly and bloats records.
+  const showRawObjectWarning =
+    draft.columnType === 'dynamic' &&
+    draft.collector.trim().length > 0 &&
+    !/select-object|select\s|convertto-json|@\{|\[pscustomobject\]|\|\s*%|foreach-object/i.test(
+      draft.collector,
+    );
+
   const copyJson = async () => {
     if (await copyText(fieldJson)) {
       setCopied(true);
@@ -172,6 +181,20 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
               A small snippet whose LAST line returns the value (it runs as SYSTEM via Intune).
               Must be read-only — no writes, downloads, installs, or service/process changes.
             </p>
+            {draft.columnType === 'dynamic' && (
+              <p className="mt-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+                <strong>dynamic</strong> stores a JSON object/array. Return a small,
+                projected object — pipe through <code>Select-Object Prop1, Prop2</code>
+                rather than emitting a whole .NET object (e.g.{' '}
+                <code>Get-ComputerInfo</code>), which serializes poorly and bloats every record.
+                {showRawObjectWarning && (
+                  <>
+                    {' '}Your collector looks like it returns a raw object — consider adding{' '}
+                    <code>| Select-Object …</code>.
+                  </>
+                )}
+              </p>
+            )}
           </div>
 
           {errors.length > 0 ? (

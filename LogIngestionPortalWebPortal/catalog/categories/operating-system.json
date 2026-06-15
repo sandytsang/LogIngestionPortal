@@ -77,12 +77,12 @@
       "order": 100,
       "default": false,
       "setups": [],
-      "collector": "Get-ComputerInfo",
+      "collector": "Get-ComputerInfo | Select-Object OsName, OsVersion, OsBuildNumber, OsArchitecture, WindowsProductName, WindowsVersion, CsManufacturer, CsModel, CsName, BiosManufacturer, BiosVersion",
       "column": {
         "name": "ComputerInfo",
         "type": "dynamic",
-        "description": "Full Get-ComputerInfo object (OS, BIOS, CPU, hotfixes, etc.)."
+        "description": "Selected Get-ComputerInfo properties (OS, Windows, manufacturer/model, BIOS) as a JSON object."
       }
-    }     
+    }
   ]
 }

@@ -19,39 +19,49 @@ script in sync automatically.
 
 ## 2. Field format
 
+Each field is one column plus the **PowerShell that collects it**. The PowerShell
+goes in `collector` — write the actual command, and make sure its **last line
+returns the value**. That's it; you don't need to know anything else.
+
 ```json
 {
-  "id": "ThermalState",
-  "label": "Thermal state",
+  "id": "ChassisType",
+  "label": "Chassis type",
   "order": 100,
   "default": false,
   "setups": [],
   "collector": "(Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes -join ','",
   "column": {
-    "name": "ChassisTypes",
+    "name": "ChassisType",
     "type": "string",
     "description": "Chassis type codes from Win32_SystemEnclosure."
   }
 }
 ```
 
+Multi-line collector? Join the lines with `\n` (the last line is the value):
+
+```json
+"collector": "$ci = Get-ComputerInfo\n$ci | Select-Object OsName, OsVersion, CsModel"
+```
+
 Rules:
 
-- `id` — unique, letters/numbers only (used as a PowerShell variable).
-- `order` — controls position; use **100+** for new fields so existing columns
-  keep their order.
+- `collector` — your PowerShell. The **last line is the value** that gets stored.
+  It runs as SYSTEM and is wrapped in `Invoke-Safe`, so a failure won't break the
+  whole upload. Must be **read-only** (see the rule above).
+- `setups` — leave it as `[]`. (It's an internal optimization; see §5.)
+- `id` — unique, letters/numbers only.
+- `label` — the friendly name shown in the portal (spaces OK).
+- `order` — position in the list; use **100+** for new fields.
 - `default` — `true` only for broadly useful, low-cost fields.
+- `column.name` — the Log Analytics column / KQL field (letters, numbers, `_`).
 - `column.type` — one of `string`, `int`, `long`, `real`, `boolean`, `datetime`,
-  `dynamic`, `guid`.
-- Provide **exactly one** of:
-  - `collector` — a self-contained PowerShell snippet that returns the value. It
-    is automatically wrapped in `Invoke-Safe` (failures won't break the upload).
-  - `expression` — a one-line expression that uses a shared setup. Add the setup
-    id to `setups` and define it in [`catalog/setups.json`](catalog/setups.json)
-    (and to `setupOrder` in [`catalog/meta.json`](catalog/meta.json)).
+  `dynamic`, `guid`. For `dynamic`, return a **small projected object**
+  (`… | Select-Object Prop1, Prop2`), not a whole .NET object.
 
-Prefer `collector` unless you need to share an expensive query (e.g. a single
-`Get-CimInstance`) across several fields.
+> 💡 The easiest path: open the portal, click **“+ Contribute a field”**, fill in
+> the form, and it generates this exact JSON for you to paste here.
 
 ## 3. Validate locally
 
@@ -67,3 +77,39 @@ npm test                    # round-trip + generator tests
 CI runs the same checks. A maintainer then reviews the collector for safety and
 correctness before merging. Once merged, your field appears in the portal and is
 emitted into the generated Intune script.
+
+## 5. Advanced (maintainers): shared setups + `expression`
+
+> Contributors can ignore this section — always use `collector`.
+
+Some built-in fields use a second style to avoid running the **same** query many
+times. Instead of `collector`, they use:
+
+- A **`setups`** id, which emits a shared variable once at the top of the script
+  (defined in [`catalog/setups.json`](catalog/setups.json)). For example `cs`
+  emits `$cs = Get-CimInstance Win32_ComputerSystem`.
+- An **`expression`** that reads that variable, e.g. `"$cs.Model"`.
+
+```json
+{ "id": "Model", "setups": ["cs"], "expression": "$cs.Model",
+  "column": { "name": "Model", "type": "string", "description": "System model." } }
+```
+
+Rules for this style:
+
+- A field has **exactly one** of `collector` or `expression` — never both.
+- Any `$var` an `expression` uses **must** have its setup id listed in `setups`,
+  or it's undefined at runtime (value comes out null). `npm run validate` enforces this.
+
+| `setups` id | Variable | Source |
+| --- | --- | --- |
+| `cs` | `$cs` | `Win32_ComputerSystem` |
+| `os` | `$os` | `Win32_OperatingSystem` |
+| `bios` | `$bios` | `Win32_BIOS` |
+| `mp` | `$mp` | `Get-MpComputerStatus` |
+| `tpm` | `$tpm` | `Get-Tpm` |
+| `secureBoot` | `$secureBoot` | `Confirm-SecureBootUEFI` |
+| `net` | `$net` | `Get-NetIPConfiguration` (first IPv4) |
+| `disk` | `$sysDrive` | `Win32_LogicalDisk` (system drive) |
+| `deviceId` | `$deviceId` | Intune enrollment id |
+| `bitLocker` | `$bitLocker` | `Get-BitLockerVolume` |

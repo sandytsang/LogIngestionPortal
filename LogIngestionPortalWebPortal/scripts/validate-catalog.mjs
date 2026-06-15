@@ -55,6 +55,15 @@ const validateCategory = ajv.compile(schema);
 const setups = readJson(join(catalogDir, 'setups.json'));
 const setupIds = new Set(Object.keys(setups));
 
+// Map each shared setup's variable name (the leading `$x = …`) back to its id,
+// so we can verify an expression that uses `$cs` actually lists the `cs` setup.
+// Note: the variable name can differ from the id (e.g. 'disk' defines $sysDrive).
+const setupVarToId = new Map();
+for (const [id, code] of Object.entries(setups)) {
+  const m = /\$(\w+)\s*=/.exec(code);
+  if (m) setupVarToId.set(m[1], id);
+}
+
 const allowedTypes = ['string', 'int', 'long', 'real', 'boolean', 'datetime', 'dynamic', 'guid'];
 
 // --- Walk category files ---------------------------------------------------
@@ -112,6 +121,20 @@ for (const file of files) {
     for (const s of field.setups ?? []) {
       if (!setupIds.has(s)) {
         fail(`${where}: references unknown shared setup '${s}' (add it to catalog/setups.json).`);
+      }
+    }
+
+    // An expression that uses a shared variable (e.g. $cs) must list its setup,
+    // otherwise the variable is undefined at runtime and the value is silently
+    // null. This is the easy mistake when hand-copying an example field.
+    if (field.expression) {
+      const listed = new Set(field.setups ?? []);
+      const used = new Set([...field.expression.matchAll(/\$(\w+)/g)].map((m) => m[1]));
+      for (const v of used) {
+        const id = setupVarToId.get(v);
+        if (id && !listed.has(id)) {
+          fail(`${where}: expression uses $${v} but does not list its shared setup in "setups". Add "${id}" to "setups": [...].`);
+        }
       }
     }
 
