@@ -41,8 +41,6 @@ export interface CatalogField {
   default: boolean;
   /** TimeGenerated is mandatory and cannot be deselected. */
   locked?: boolean;
-  /** Collector needs SYSTEM/admin context (surfaced as a badge in the UI). */
-  needsSystem?: boolean;
   /** Shared setup snippet ids (emitted once) this field's value depends on. */
   setups: string[];
   /**
@@ -71,10 +69,18 @@ export interface Catalog {
 
 export interface PortalConfig {
   functionUrl: string;
-  useJwt: boolean;
   remediationName: string;
   tableName: string;
   tableDescription: string;
+  action: 'deploy' | 'updateColumns';
+  scenario: 'new' | 'existing';
+  baseName: string;
+  environment: 'dev' | 'test' | 'prod';
+  functionResourceGroup: string;
+  dcrResourceGroup: string;
+  existingWorkspaceResourceGroup: string;
+  location: string;
+  functionPlanType: 'Consumption' | 'Flex';
 }
 
 /** Serialized columns.json structure. */

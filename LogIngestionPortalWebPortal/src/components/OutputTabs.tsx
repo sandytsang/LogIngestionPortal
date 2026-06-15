@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { copyText, downloadText } from '../lib/browser';
+import { createZip, downloadBlob } from '../lib/zip';
 
 export interface OutputTab {
   id: string;
@@ -15,17 +15,13 @@ interface Props {
 
 export function OutputTabs({ tabs }: Props) {
   const [active, setActive] = useState(tabs[0]?.id ?? '');
-  const [copied, setCopied] = useState(false);
   const current = tabs.find((t) => t.id === active) ?? tabs[0];
 
   if (!current) return null;
 
-  const onCopy = async () => {
-    const ok = await copyText(current.content);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }
+  const onDownloadZip = () => {
+    const zip = createZip(tabs.map((t) => ({ name: t.filename, content: t.content })));
+    downloadBlob('logingestion-bundle.zip', zip);
   };
 
   return (
@@ -48,16 +44,10 @@ export function OutputTabs({ tabs }: Props) {
         </div>
         <div className="flex gap-2 pb-1">
           <button
-            onClick={onCopy}
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-          <button
-            onClick={() => downloadText(current.filename, current.content)}
+            onClick={onDownloadZip}
             className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500"
           >
-            Download
+            Download all (.zip)
           </button>
         </div>
       </div>

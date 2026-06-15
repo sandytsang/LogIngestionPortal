@@ -24,11 +24,14 @@ export function CatalogBrowser({ catalog, selected, onToggle }: Props) {
     const q = query.trim().toLowerCase();
     const filtered = catalog.fields.filter(
       (f) =>
-        !q ||
-        f.label.toLowerCase().includes(q) ||
-        f.column.name.toLowerCase().includes(q) ||
-        f.column.description.toLowerCase().includes(q) ||
-        f.category.toLowerCase().includes(q),
+        // Locked fields (e.g. TimeGenerated) are always included in columns.json
+        // automatically, so there's nothing to choose — hide them from the list.
+        !f.locked &&
+        (!q ||
+          f.label.toLowerCase().includes(q) ||
+          f.column.name.toLowerCase().includes(q) ||
+          f.column.description.toLowerCase().includes(q) ||
+          f.category.toLowerCase().includes(q)),
     );
     const map = new Map<string, CatalogField[]>();
     for (const f of filtered) {
@@ -116,14 +119,6 @@ export function CatalogBrowser({ catalog, selected, onToggle }: Props) {
                         {f.locked && (
                           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                             required
-                          </span>
-                        )}
-                        {f.needsSystem && (
-                          <span
-                            title="Collector needs SYSTEM/admin context (runs fine via Intune Proactive Remediation)."
-                            className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                          >
-                            SYSTEM
                           </span>
                         )}
                       </span>

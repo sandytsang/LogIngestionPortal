@@ -32,7 +32,7 @@ in sync and emits ready-to-use files.
 ## Use it
 
 1. Open the portal (GitHub Pages) and select the fields you want. The defaults
-   reproduce the current `DeviceRemediation_CL` schema.
+   reproduce the current `DeviceInventory_CL` schema.
 2. Fill in the **Function URL** (and optionally an existing workspace name).
 3. Copy/download the three outputs.
 4. In your `LogIngestionAPI` checkout:

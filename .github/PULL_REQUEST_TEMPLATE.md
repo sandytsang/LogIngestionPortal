@@ -9,7 +9,6 @@
 - [ ] Exactly one of `collector` or `expression` is set.
 - [ ] The collector is **read-only** (no downloads, writes, deletes, service/process
       changes, or dynamic code execution).
-- [ ] `needsSystem` is set correctly.
 - [ ] I ran `npm run validate`, `pwsh ./scripts/Test-Collectors.ps1`, and `npm test`
       locally and they pass.
 

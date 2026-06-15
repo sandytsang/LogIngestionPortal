@@ -6,7 +6,6 @@
       "label": "BitLocker status",
       "order": 13,
       "default": true,
-      "needsSystem": true,
       "setups": ["bitLocker"],
       "expression": "$bitLocker",
       "column": {
@@ -46,7 +45,6 @@
       "label": "TPM present",
       "order": 22,
       "default": false,
-      "needsSystem": true,
       "setups": ["tpm"],
       "expression": "[bool]$tpm.TpmPresent",
       "column": { "name": "TpmPresent", "type": "boolean", "description": "Whether a TPM is present on the device." }
@@ -56,7 +54,6 @@
       "label": "TPM ready",
       "order": 23,
       "default": false,
-      "needsSystem": true,
       "setups": ["tpm"],
       "expression": "[bool]$tpm.TpmReady",
       "column": { "name": "TpmReady", "type": "boolean", "description": "Whether the TPM is ready for use." }
@@ -66,7 +63,6 @@
       "label": "Secure Boot enabled",
       "order": 24,
       "default": false,
-      "needsSystem": true,
       "setups": ["secureBoot"],
       "expression": "[bool]$secureBoot",
       "column": { "name": "SecureBootEnabled", "type": "boolean", "description": "Whether UEFI Secure Boot is enabled." }

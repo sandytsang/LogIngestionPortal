@@ -9,7 +9,6 @@ export interface FieldDraft {
   columnName: string;
   columnType: ColumnType;
   description: string;
-  needsSystem: boolean;
   collector: string;
 }
 
@@ -19,7 +18,6 @@ export const emptyDraft: FieldDraft = {
   columnName: '',
   columnType: 'string',
   description: '',
-  needsSystem: false,
   collector: '',
 };
 
@@ -68,7 +66,6 @@ export function draftToFieldJson(draft: FieldDraft): string {
       description: draft.description.trim(),
     },
   };
-  if (draft.needsSystem) field.needsSystem = true;
   return JSON.stringify(field, null, 2);
 }
 

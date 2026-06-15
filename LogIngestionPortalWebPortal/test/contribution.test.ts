@@ -42,12 +42,10 @@ describe('contribution drafts', () => {
       columnName: 'ChassisType',
       description: 'Chassis code.',
       collector: '(Get-CimInstance Win32_SystemEnclosure).ChassisTypes -join ","',
-      needsSystem: true,
     });
     const parsed = JSON.parse(json);
     expect(parsed.id).toBe('ChassisType');
     expect(parsed.column.name).toBe('ChassisType');
-    expect(parsed.needsSystem).toBe(true);
     expect(parsed.order).toBe(100);
   });
 });

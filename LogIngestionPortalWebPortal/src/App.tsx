@@ -8,20 +8,28 @@ import { ContributeDialog } from './components/ContributeDialog';
 import {
   columnsToJson,
   generateColumns,
-  generateDeployCommand,
+  generateDeployReadme,
   generateScript,
   selectedFields,
 } from './lib/generators';
 import { validateColumns } from './lib/validation';
 
-const STORAGE_KEY = 'logingestion-portal.v1';
+const STORAGE_KEY = 'logingestion-portal.v4';
 
 const defaultConfig = (): PortalConfig => ({
-  functionUrl: 'https://<your-function-app>.azurewebsites.net/api/Ingest?code=<your-function-key>',
-  useJwt: true,
+  functionUrl: 'https://<your-function-app>.azurewebsites.net/api/DCRLogIngestionAPI?code=<your-function-key>',
   remediationName: 'DeviceInventory',
   tableName: catalog.tableName,
   tableDescription: catalog.description,
+  action: 'deploy',
+  scenario: 'new',
+  baseName: 'logapi',
+  environment: 'dev',
+  functionResourceGroup: '',
+  dcrResourceGroup: '',
+  existingWorkspaceResourceGroup: '',
+  location: '',
+  functionPlanType: 'Consumption',
 });
 
 const defaultSelected = (): Set<string> =>
@@ -47,11 +55,13 @@ export default function App() {
     persisted.selected ? new Set(persisted.selected) : defaultSelected(),
   );
   const [workspaceName, setWorkspaceName] = useState(persisted.workspaceName ?? '');
-  const [importNote, setImportNote] = useState<string | null>(null);
   const [showContribute, setShowContribute] = useState(false);
   const [config, setConfig] = useState<PortalConfig>(() => persisted.config ?? defaultConfig());
 
-  const knownCategories = useMemo(() => [...new Set(catalog.fields.map((f) => f.category))], []);
+  const knownCategories = useMemo(
+    () => [...new Set(catalog.fields.filter((f) => !f.locked).map((f) => f.category))],
+    [],
+  );
 
   useEffect(() => {
     try {
@@ -87,10 +97,15 @@ export default function App() {
       },
       {
         id: 'deploy',
-        label: 'Deploy command',
-        filename: 'deploy-command.ps1',
-        language: 'PowerShell · run locally with your own az/func login',
-        content: generateDeployCommand(workspaceName.trim() || undefined),
+        label: 'README.txt',
+        filename: 'README.txt',
+        language: 'Text · how to deploy with these files',
+        content: generateDeployReadme(
+          config,
+          config.action === 'updateColumns' || config.scenario === 'existing'
+            ? workspaceName.trim() || undefined
+            : undefined,
+        ),
       },
     ],
     [columnsDoc, fields, config, workspaceName],
@@ -107,29 +122,6 @@ export default function App() {
   const resetDefaults = () => setSelected(defaultSelected());
   const clearAll = () => setSelected(new Set());
 
-  const importColumns = async (file: File) => {
-    try {
-      const doc = JSON.parse(await file.text()) as ColumnsDocument;
-      const names = new Set((doc.columns ?? []).map((c) => c.name));
-      const matched = catalog.fields.filter((f) => names.has(f.column.name) && !f.locked);
-      const unknown = [...names].filter(
-        (n) => n !== 'TimeGenerated' && !catalog.fields.some((f) => f.column.name === n),
-      );
-      setSelected(new Set(matched.map((f) => f.id)));
-      if (doc.tableName) setConfig((c) => ({ ...c, tableName: doc.tableName }));
-      if (doc.description) setConfig((c) => ({ ...c, tableDescription: doc.description }));
-      setImportNote(
-        `Imported ${matched.length} field(s).` +
-          (unknown.length ? ` ${unknown.length} column(s) not in the catalog were ignored: ${unknown.join(', ')}.` : ''),
-      );
-    } catch {
-      setImportNote('Could not parse that file as columns.json.');
-    }
-  };
-
-  const azureButtonUrl =
-    'https://portal.azure.com/#blade/Microsoft_Azure_Marketplace_PortalQuickStart/AnonymousCreateBlade';
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Header */}
@@ -140,8 +132,8 @@ export default function App() {
                 Log Ingestion Portal
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Pick the device data you want · generate columns.json, the Intune script, and the deploy
-                command · runs entirely in your browser
+                Pick the device data you want · download columns.json, the Intune script, and a deploy
+                README as one zip · runs entirely in your browser
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -171,21 +163,7 @@ export default function App() {
               <button onClick={clearAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
                 Clear
               </button>
-              <label className="ml-auto cursor-pointer text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
-                Import existing columns.json
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && importColumns(e.target.files[0])}
-                />
-              </label>
             </div>
-            {importNote && (
-              <p className="mb-4 rounded-lg border border-sky-300 bg-sky-50 p-2 text-xs text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300">
-                {importNote}
-              </p>
-            )}
             <CatalogBrowser catalog={catalog} selected={selected} onToggle={toggle} />
           </div>
 
@@ -206,16 +184,6 @@ export default function App() {
               <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <OutputTabs tabs={tabs} />
               </div>
-
-              <a
-                href={azureButtonUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-xs text-slate-500 shadow-sm hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
-                title="Opens the Azure portal in your own tenant. Deploys infrastructure only — publish the Function code locally with func."
-              >
-                Optional: open Azure portal to deploy infrastructure in <strong>your</strong> tenant ↗
-              </a>
             </div>
           </div>
         </main>

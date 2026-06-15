@@ -68,24 +68,20 @@ if (-not $dcrEndpoint -or -not $dcrImmutableId -or -not $dcrStream) {
     return
 }
 
-# --- Device authentication (optional, env-var gated) ------------------------
-# When JWT_ENFORCE=true the caller must present a device-signed JWT
-# (Authorization: Bearer <jwt>) proving possession of its Entra-join
-# (MS-Organization-Access) certificate. See function/Modules/DeviceJwtAuth and
-# README.md. When unset/false the function behaves as before (function key only),
-# so it is safe to deploy this code before any device certificates exist.
-if ($env:JWT_ENFORCE -eq 'true') {
-    $authHeader = $Request.Headers.Authorization
-    if (-not $authHeader) { $authHeader = $Request.Headers.authorization }
+# --- Device authentication (always required) --------------------------------
+# Every caller must present a device-signed JWT (Authorization: Bearer <jwt>)
+# proving possession of its Entra-join (MS-Organization-Access) certificate.
+# See function/Modules/DeviceJwtAuth and README.md.
+$authHeader = $Request.Headers.Authorization
+if (-not $authHeader) { $authHeader = $Request.Headers.authorization }
 
-    $auth = Test-DeviceRequestJwt -AuthorizationHeader $authHeader
-    if (-not $auth.Valid) {
-        Write-Warning "Device JWT rejected: $($auth.Reason)"
-        Write-HttpResponse -StatusCode ([HttpStatusCode]::Unauthorized) -Body @{ error = 'Authentication failed.' }
-        return
-    }
-    Write-Information "Device authenticated (did=$($auth.Claims.did) tid=$($auth.Claims.tid))."
+$auth = Test-DeviceRequestJwt -AuthorizationHeader $authHeader
+if (-not $auth.Valid) {
+    Write-Warning "Device JWT rejected: $($auth.Reason)"
+    Write-HttpResponse -StatusCode ([HttpStatusCode]::Unauthorized) -Body @{ error = 'Authentication failed.' }
+    return
 }
+Write-Information "Device authenticated (did=$($auth.Claims.did) tid=$($auth.Claims.tid))."
 
 # --- Validate payload -------------------------------------------------------
 $payload = $Request.Body

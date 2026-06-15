@@ -1,5 +1,5 @@
 {
-  "tableName": "DeviceRemediation_CL",
+  "tableName": "DeviceInventory_CL",
   "description": "Custom telemetry collected by Intune Proactive Remediation scripts and ingested via the Logs Ingestion API.",
   "columns": [
     {
@@ -86,6 +86,36 @@
       "name": "OSArchitecture",
       "type": "string",
       "description": "Operating system architecture (e.g. 64-bit)."
+    },
+    {
+      "name": "LastBootTime",
+      "type": "datetime",
+      "description": "Last system boot time (UTC)."
+    },
+    {
+      "name": "BiosVersion",
+      "type": "string",
+      "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
+    },
+    {
+      "name": "TpmPresent",
+      "type": "boolean",
+      "description": "Whether a TPM is present on the device."
+    },
+    {
+      "name": "TpmReady",
+      "type": "boolean",
+      "description": "Whether the TPM is ready for use."
+    },
+    {
+      "name": "DefenderAntivirusEnabled",
+      "type": "boolean",
+      "description": "Microsoft Defender antivirus enabled (Get-MpComputerStatus.AntivirusEnabled)."
+    },
+    {
+      "name": "AutopilotHardwareHash",
+      "type": "string",
+      "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData). Requires SYSTEM context."
     }
   ]
 }

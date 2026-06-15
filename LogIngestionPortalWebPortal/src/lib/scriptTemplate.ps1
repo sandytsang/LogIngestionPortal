@@ -26,9 +26,9 @@
 # ----------------------------------------------------------------------------
 $FunctionUrl = '__FUNCTION_URL__'
 
-# Device authentication (JWT). When $true the script signs a short-lived JWT with
-# the device's Entra-join (MS-Organization-Access) certificate and sends it as
-# Authorization: Bearer. Set the Function App JWT_ENFORCE=true to require it.
+# Device authentication (JWT). The script signs a short-lived JWT with the
+# device's Entra-join (MS-Organization-Access) certificate and sends it as
+# Authorization: Bearer. The Function requires this on every request.
 $UseDeviceJwt = __USE_JWT__
 
 # Name recorded in the RemediationName column.

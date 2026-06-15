@@ -57,6 +57,19 @@
         "type": "string",
         "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
       }
+    },
+    {
+      "id": "AutopilotHardwareHash",
+      "label": "Autopilot hardware hash",
+      "order": 26,
+      "default": false,
+      "setups": [],
+      "collector": "$dd = Get-CimInstance -Namespace 'root/cimv2/mdm/dmmap' -ClassName 'MDM_DevDetail_Ext01' -Filter \"InstanceID='Ext' AND ParentID='./DevDetail'\" -ErrorAction Stop\n$dd.DeviceHardwareData",
+      "column": {
+        "name": "AutopilotHardwareHash",
+        "type": "string",
+        "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
+      }
     }
   ]
 }

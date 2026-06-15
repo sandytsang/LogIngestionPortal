@@ -11,8 +11,8 @@
 #   4. Verifies the RS256 signature, audience, and iat/exp freshness.
 #
 # This mirrors the AutopilotCredentialPortal JWT method. It is schema-agnostic and
-# is only consulted by run.ps1 when JWT_ENFORCE=true, so the function ships safely
-# before any device certificates / Cloud PKI exist.
+# is consulted by run.ps1 on every request, which always requires a valid
+# device-signed JWT.
 #
 # NOTE: When JWT_REQUIRE_ENTRA_DEVICE is true (the default) the Function App's
 # managed identity needs the Microsoft Graph application permission

@@ -3,7 +3,7 @@ import { catalog } from '../src/data/catalog';
 import type { PortalConfig } from '../src/types';
 import {
   generateColumns,
-  generateDeployCommand,
+  generateDeployReadme,
   generateScript,
   selectedFields,
 } from '../src/lib/generators';
@@ -11,11 +11,19 @@ import { validateColumns } from '../src/lib/validation';
 import expectedColumns from './fixtures/columns.json';
 
 const baseConfig: PortalConfig = {
-  functionUrl: 'https://example.azurewebsites.net/api/Ingest?code=secret',
-  useJwt: true,
+  functionUrl: 'https://example.azurewebsites.net/api/DCRLogIngestionAPI?code=secret',
   remediationName: 'DeviceInventory',
   tableName: catalog.tableName,
   tableDescription: catalog.description,
+  action: 'deploy',
+  scenario: 'new',
+  baseName: 'logapi',
+  environment: 'dev',
+  functionResourceGroup: '',
+  dcrResourceGroup: '',
+  existingWorkspaceResourceGroup: '',
+  location: '',
+  functionPlanType: 'Consumption',
 };
 
 function defaultSelection(): Set<string> {
@@ -57,11 +65,11 @@ describe('generateScript', () => {
     }
   });
 
-  it('injects config values and toggles JWT', () => {
+  it('injects config values and always requires JWT', () => {
     const fields = selectedFields(catalog, defaultSelection());
-    const script = generateScript(catalog, fields, { ...baseConfig, useJwt: false });
-    expect(script).toContain("$FunctionUrl = 'https://example.azurewebsites.net/api/Ingest?code=secret'");
-    expect(script).toContain('$UseDeviceJwt = $false');
+    const script = generateScript(catalog, fields, baseConfig);
+    expect(script).toContain("$FunctionUrl = 'https://example.azurewebsites.net/api/DCRLogIngestionAPI?code=secret'");
+    expect(script).toContain('$UseDeviceJwt = $true');
     expect(script).toContain("$RemediationName = 'DeviceInventory'");
     expect(script).not.toContain('__GET_DEVICE_DATA_BODY__');
   });
@@ -80,12 +88,61 @@ describe('generateScript', () => {
   });
 });
 
-describe('generateDeployCommand', () => {
-  it('includes the existing workspace switch when provided', () => {
-    expect(generateDeployCommand('my-law')).toContain('-ExistingWorkspaceName my-law');
+describe('generateDeployReadme', () => {
+  it('emits a single deploy command (no A–E options)', () => {
+    const readme = generateDeployReadme(baseConfig);
+    const occurrences = readme.split('./scripts/deploy.ps1').length - 1;
+    expect(occurrences).toBe(1);
+    expect(readme).not.toContain('Use an EXISTING Log Analytics workspace');
   });
 
-  it('omits the workspace switch when not provided', () => {
-    expect(generateDeployCommand()).not.toContain('-ExistingWorkspaceName');
+  it('start-from-zero command has no workspace flags', () => {
+    const readme = generateDeployReadme(baseConfig);
+    expect(readme).toContain('Scenario: start from zero');
+    expect(readme).not.toContain('-ExistingWorkspaceName');
+  });
+
+  it('existing-workspace scenario includes the workspace flag', () => {
+    const cfg = {
+      ...baseConfig,
+      scenario: 'existing' as const,
+      existingWorkspaceResourceGroup: 'rg-mon',
+    };
+    const readme = generateDeployReadme(cfg, 'my-law');
+    expect(readme).toContain('-ExistingWorkspaceName my-law');
+    expect(readme).toContain('-ExistingWorkspaceResourceGroup rg-mon');
+  });
+
+  it('does not add the workspace flag for the new scenario even if a name is passed', () => {
+    expect(generateDeployReadme(baseConfig, 'my-law')).not.toContain('-ExistingWorkspaceName');
+  });
+
+  it('explains where to copy columns.json', () => {
+    expect(generateDeployReadme(baseConfig)).toContain('schema/columns.json');
+  });
+
+  it('adds the Flex plan flag when Flex is selected', () => {
+    const readme = generateDeployReadme({ ...baseConfig, functionPlanType: 'Flex' });
+    expect(readme).toContain('-FunctionPlanType Flex');
+  });
+
+  it('omits the Flex plan flag for Consumption', () => {
+    expect(generateDeployReadme(baseConfig)).not.toContain('-FunctionPlanType Flex');
+  });
+
+  it('update-columns mode emits a -SchemaOnly command and no Function App flags', () => {
+    const cfg = {
+      ...baseConfig,
+      action: 'updateColumns' as const,
+      existingWorkspaceResourceGroup: 'rg-logs',
+      dcrResourceGroup: 'rg-dcr',
+    };
+    const readme = generateDeployReadme(cfg, 'log-shared');
+    expect(readme).toContain('-SchemaOnly');
+    expect(readme).toContain('-ExistingWorkspaceName log-shared');
+    expect(readme).toContain('-ExistingWorkspaceResourceGroup rg-logs');
+    expect(readme).toContain('-DcrResourceGroup rg-dcr');
+    expect(readme).not.toContain('-FunctionResourceGroup');
+    expect(readme).not.toContain('-Location');
   });
 });

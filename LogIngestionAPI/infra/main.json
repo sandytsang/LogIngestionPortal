@@ -1,0 +1,940 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "3944654663946426733"
+    }
+  },
+  "parameters": {
+    "baseName": {
+      "type": "string",
+      "defaultValue": "loging",
+      "minLength": 3,
+      "maxLength": 17,
+      "metadata": {
+        "description": "Base name used to derive all resource names. 3-17 lowercase chars."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Default Azure region (used for the Function App RG resources and a new workspace)."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": [
+        "dev",
+        "test",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment short name, appended to resource names."
+      }
+    },
+    "functionPlanType": {
+      "type": "string",
+      "defaultValue": "Consumption",
+      "allowedValues": [
+        "Consumption",
+        "Flex"
+      ],
+      "metadata": {
+        "description": "Function App hosting plan. Consumption = Windows Y1. Flex = Linux Flex Consumption (FC1) with PowerShell 7.4."
+      }
+    },
+    "functionResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource group for the Function App, storage, App Insights and the App Service plan."
+      }
+    },
+    "dcrResourceGroup": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource group for the Data Collection Rule. Defaults to the Function App RG when empty."
+      }
+    },
+    "logAnalyticsResourceGroup": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource group for a NEW Log Analytics workspace. Defaults to the Function App RG when empty. Ignored when reusing an existing workspace."
+      }
+    },
+    "retentionInDays": {
+      "type": "int",
+      "defaultValue": 90,
+      "minValue": 30,
+      "maxValue": 730,
+      "metadata": {
+        "description": "Log Analytics data retention in days."
+      }
+    },
+    "existingWorkspaceName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of an existing Log Analytics workspace to reuse. Leave empty to create a new one."
+      }
+    },
+    "existingWorkspaceResourceGroup": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource group of the existing Log Analytics workspace. Required when existingWorkspaceName is set and the workspace is in a different RG."
+      }
+    },
+    "jwtExpectedAudience": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The JWT aud claim must equal this value. Leave empty to auto-bind to the Function App's own hostname. Set explicitly only for a custom domain / front door."
+      }
+    },
+    "jwtAllowedTenantId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Pin requests to a single Entra tenant id (the JWT tid claim). Leave empty to allow any tenant."
+      }
+    },
+    "jwtRequireEntraDevice": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "When true, resolve the device in Entra and validate its certificate against the device record (needs Graph Device.Read.All). When false, validate signature + MS-Organization-Access issuer only."
+      }
+    }
+  },
+  "variables": {
+    "copy": [
+      {
+        "name": "streamColumns",
+        "count": "[length(variables('schema').columns)]",
+        "input": {
+          "name": "[variables('schema').columns[copyIndex('streamColumns')].name]",
+          "type": "[variables('schema').columns[copyIndex('streamColumns')].type]"
+        }
+      },
+      {
+        "name": "tableColumns",
+        "count": "[length(variables('schema').columns)]",
+        "input": {
+          "name": "[variables('schema').columns[copyIndex('tableColumns')].name]",
+          "type": "[variables('schema').columns[copyIndex('tableColumns')].type]"
+        }
+      }
+    ],
+    "$fxv#0": {
+      "tableName": "DeviceInventory_CL",
+      "description": "Custom telemetry collected by Intune Proactive Remediation scripts and ingested via the Logs Ingestion API.",
+      "columns": [
+        {
+          "name": "TimeGenerated",
+          "type": "datetime",
+          "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
+        },
+        {
+          "name": "DeviceName",
+          "type": "string",
+          "description": "Hostname of the reporting device."
+        },
+        {
+          "name": "DeviceId",
+          "type": "string",
+          "description": "Intune/Entra device identifier."
+        },
+        {
+          "name": "UserName",
+          "type": "string",
+          "description": "Currently logged-on user (UPN or sAMAccountName)."
+        },
+        {
+          "name": "OSVersion",
+          "type": "string",
+          "description": "Operating system build/version string."
+        },
+        {
+          "name": "RemediationName",
+          "type": "string",
+          "description": "Name of the remediation package that produced this record."
+        },
+        {
+          "name": "Status",
+          "type": "string",
+          "description": "Result status reported by the script (e.g. Compliant, Remediated, Failed)."
+        },
+        {
+          "name": "Details",
+          "type": "string",
+          "description": "Free-form details or JSON payload describing what was collected/changed."
+        },
+        {
+          "name": "Manufacturer",
+          "type": "string",
+          "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
+        },
+        {
+          "name": "Model",
+          "type": "string",
+          "description": "System model (Win32_ComputerSystem.Model)."
+        },
+        {
+          "name": "SerialNumber",
+          "type": "string",
+          "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
+        },
+        {
+          "name": "TotalMemoryGB",
+          "type": "real",
+          "description": "Installed physical memory in GB."
+        },
+        {
+          "name": "BitLockerStatus",
+          "type": "dynamic",
+          "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+        },
+        {
+          "name": "DefenderRealtimeEnabled",
+          "type": "boolean",
+          "description": "Microsoft Defender real-time protection enabled (Get-MpComputerStatus.RealTimeProtectionEnabled)."
+        },
+        {
+          "name": "DefenderSignatureVersion",
+          "type": "string",
+          "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
+        },
+        {
+          "name": "OSBuildNumber",
+          "type": "string",
+          "description": "Operating system build number (Win32_OperatingSystem.BuildNumber)."
+        },
+        {
+          "name": "OSArchitecture",
+          "type": "string",
+          "description": "Operating system architecture (e.g. 64-bit)."
+        }
+      ]
+    },
+    "schema": "[variables('$fxv#0')]",
+    "tableName": "[variables('schema').tableName]",
+    "streamName": "[format('Custom-{0}', variables('tableName'))]",
+    "projectedColumns": "[join(map(variables('schema').columns, lambda('c', lambdaVariables('c').name)), ', ')]",
+    "transformKql": "[format('source | project {0}', variables('projectedColumns'))]",
+    "createWorkspace": "[empty(parameters('existingWorkspaceName'))]",
+    "funcRg": "[parameters('functionResourceGroup')]",
+    "dcrRg": "[if(empty(parameters('dcrResourceGroup')), variables('funcRg'), parameters('dcrResourceGroup'))]",
+    "laRg": "[if(variables('createWorkspace'), if(empty(parameters('logAnalyticsResourceGroup')), variables('funcRg'), parameters('logAnalyticsResourceGroup')), if(empty(parameters('existingWorkspaceResourceGroup')), variables('funcRg'), parameters('existingWorkspaceResourceGroup')))]",
+    "lawName": "[format('{0}-law-{1}', parameters('baseName'), parameters('environment'))]",
+    "dcrName": "[format('{0}-dcr-{1}', parameters('baseName'), parameters('environment'))]",
+    "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "logAnalytics",
+      "resourceGroup": "[variables('laRg')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "createWorkspace": {
+            "value": "[variables('createWorkspace')]"
+          },
+          "lawName": {
+            "value": "[variables('lawName')]"
+          },
+          "existingWorkspaceName": {
+            "value": "[parameters('existingWorkspaceName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "retentionInDays": {
+            "value": "[parameters('retentionInDays')]"
+          },
+          "tableName": {
+            "value": "[variables('tableName')]"
+          },
+          "tableDescription": {
+            "value": "[variables('schema').description]"
+          },
+          "tableColumns": {
+            "value": "[variables('tableColumns')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "4530697633677040128"
+            }
+          },
+          "parameters": {
+            "createWorkspace": {
+              "type": "bool",
+              "metadata": {
+                "description": "Create a new workspace (true) or reference an existing one (false)."
+              }
+            },
+            "lawName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name for a new workspace."
+              }
+            },
+            "existingWorkspaceName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Name of the existing workspace to reference when createWorkspace is false."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Region for a new workspace."
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "metadata": {
+                "description": "Data retention in days."
+              }
+            },
+            "tableName": {
+              "type": "string",
+              "metadata": {
+                "description": "Custom table name (must end in _CL)."
+              }
+            },
+            "tableDescription": {
+              "type": "string",
+              "metadata": {
+                "description": "Custom table description."
+              }
+            },
+            "tableColumns": {
+              "type": "array",
+              "metadata": {
+                "description": "Custom table columns ({ name, type })."
+              }
+            }
+          },
+          "variables": {
+            "effectiveLawName": "[if(parameters('createWorkspace'), parameters('lawName'), parameters('existingWorkspaceName'))]",
+            "lawId": "[if(parameters('createWorkspace'), resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName')), resourceId('Microsoft.OperationalInsights/workspaces', parameters('existingWorkspaceName')))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('createWorkspace')]",
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('lawName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "features": {
+                  "enableLogAccessUsingOnlyResourcePermissions": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', variables('effectiveLawName'), parameters('tableName'))]",
+              "properties": {
+                "totalRetentionInDays": "[parameters('retentionInDays')]",
+                "schema": {
+                  "name": "[parameters('tableName')]",
+                  "description": "[parameters('tableDescription')]",
+                  "columns": "[parameters('tableColumns')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "workspaceId": {
+              "type": "string",
+              "value": "[variables('lawId')]"
+            },
+            "workspaceLocation": {
+              "type": "string",
+              "value": "[if(parameters('createWorkspace'), parameters('location'), reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('existingWorkspaceName')), '2023-09-01', 'full').location)]"
+            },
+            "workspaceCustomerId": {
+              "type": "string",
+              "value": "[if(parameters('createWorkspace'), reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName')), '2023-09-01').customerId, reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('existingWorkspaceName')), '2023-09-01').customerId)]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "dcr",
+      "resourceGroup": "[variables('dcrRg')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dcrName": {
+            "value": "[variables('dcrName')]"
+          },
+          "location": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics'), '2025-04-01').outputs.workspaceLocation.value]"
+          },
+          "workspaceResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics'), '2025-04-01').outputs.workspaceId.value]"
+          },
+          "streamName": {
+            "value": "[variables('streamName')]"
+          },
+          "streamColumns": {
+            "value": "[variables('streamColumns')]"
+          },
+          "transformKql": {
+            "value": "[variables('transformKql')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "14409290972777914615"
+            }
+          },
+          "parameters": {
+            "dcrName": {
+              "type": "string",
+              "metadata": {
+                "description": "DCR name."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Region — must match the destination workspace region."
+              }
+            },
+            "workspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource id of the destination Log Analytics workspace."
+              }
+            },
+            "streamName": {
+              "type": "string",
+              "metadata": {
+                "description": "Stream name (Custom-<tableName>)."
+              }
+            },
+            "streamColumns": {
+              "type": "array",
+              "metadata": {
+                "description": "Stream column declarations ({ name, type })."
+              }
+            },
+            "transformKql": {
+              "type": "string",
+              "metadata": {
+                "description": "transformKql applied to the incoming stream."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2023-03-11",
+              "name": "[parameters('dcrName')]",
+              "location": "[parameters('location')]",
+              "kind": "Direct",
+              "properties": {
+                "streamDeclarations": {
+                  "[format('{0}', parameters('streamName'))]": {
+                    "columns": "[parameters('streamColumns')]"
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                      "name": "lawDestination"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "[parameters('streamName')]"
+                    ],
+                    "destinations": [
+                      "lawDestination"
+                    ],
+                    "transformKql": "[parameters('transformKql')]",
+                    "outputStream": "[parameters('streamName')]"
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "dcrName": {
+              "type": "string",
+              "value": "[parameters('dcrName')]"
+            },
+            "immutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2023-03-11').immutableId]"
+            },
+            "logsIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2023-03-11').endpoints.logsIngestion]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "functionApp",
+      "resourceGroup": "[variables('funcRg')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "functionPlanType": {
+            "value": "[parameters('functionPlanType')]"
+          },
+          "workspaceResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics'), '2025-04-01').outputs.workspaceId.value]"
+          },
+          "dcrEndpoint": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.logsIngestionEndpoint.value]"
+          },
+          "dcrImmutableId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.immutableId.value]"
+          },
+          "dcrStream": {
+            "value": "[variables('streamName')]"
+          },
+          "jwtExpectedAudience": {
+            "value": "[parameters('jwtExpectedAudience')]"
+          },
+          "jwtAllowedTenantId": {
+            "value": "[parameters('jwtAllowedTenantId')]"
+          },
+          "jwtRequireEntraDevice": {
+            "value": "[parameters('jwtRequireEntraDevice')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "7483484542410268000"
+            }
+          },
+          "parameters": {
+            "baseName": {
+              "type": "string",
+              "metadata": {
+                "description": "Base name used to derive resource names."
+              }
+            },
+            "environment": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment short name."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Region for the Function App and its dependencies."
+              }
+            },
+            "functionPlanType": {
+              "type": "string",
+              "allowedValues": [
+                "Consumption",
+                "Flex"
+              ],
+              "metadata": {
+                "description": "Hosting plan: Consumption or Flex."
+              }
+            },
+            "workspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource id of the Log Analytics workspace (for App Insights)."
+              }
+            },
+            "dcrEndpoint": {
+              "type": "string",
+              "metadata": {
+                "description": "DCR logsIngestion endpoint."
+              }
+            },
+            "dcrImmutableId": {
+              "type": "string",
+              "metadata": {
+                "description": "DCR immutable id."
+              }
+            },
+            "dcrStream": {
+              "type": "string",
+              "metadata": {
+                "description": "DCR stream name."
+              }
+            },
+            "jwtExpectedAudience": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional JWT audience override. Empty = bind to this app hostname."
+              }
+            },
+            "jwtAllowedTenantId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional Entra tenant id to pin requests to."
+              }
+            },
+            "jwtRequireEntraDevice": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Validate the device against its Entra record (needs Graph Device.Read.All)."
+              }
+            }
+          },
+          "variables": {
+            "suffix": "[uniqueString(resourceGroup().id, parameters('baseName'), parameters('environment'))]",
+            "funcName": "[format('{0}-func-{1}-{2}', parameters('baseName'), parameters('environment'), substring(variables('suffix'), 0, 5))]",
+            "planName": "[format('{0}-plan-{1}', parameters('baseName'), parameters('environment'))]",
+            "aiName": "[format('{0}-ai-{1}', parameters('baseName'), parameters('environment'))]",
+            "storageName": "[toLower(take(format('{0}st{1}', parameters('baseName'), variables('suffix')), 24))]",
+            "defaultAudience": "[format('https://{0}.azurewebsites.net', variables('funcName'))]",
+            "effectiveAudience": "[if(empty(parameters('jwtExpectedAudience')), variables('defaultAudience'), parameters('jwtExpectedAudience'))]",
+            "isFlex": "[equals(parameters('functionPlanType'), 'Flex')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[variables('storageName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": true,
+                "allowBlobPublicAccess": false
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('aiName')]",
+              "location": "[parameters('location')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[parameters('workspaceResourceId')]"
+              }
+            },
+            {
+              "condition": "[variables('isFlex')]",
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+              ]
+            },
+            {
+              "condition": "[not(variables('isFlex'))]",
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('planName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+              },
+              "properties": {}
+            },
+            {
+              "condition": "[not(variables('isFlex'))]",
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('funcName')]",
+              "location": "[parameters('location')]",
+              "kind": "functionapp",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "httpsOnly": true,
+                "siteConfig": {
+                  "minTlsVersion": "1.2",
+                  "ftpsState": "Disabled",
+                  "powerShellVersion": "7.4",
+                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('funcName'))), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1')), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'DCR_STREAM', 'value', parameters('dcrStream')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/components', variables('aiName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+              ]
+            },
+            {
+              "condition": "[variables('isFlex')]",
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('planName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "FC1",
+                "tier": "FlexConsumption"
+              },
+              "kind": "functionapp",
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "condition": "[variables('isFlex')]",
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('funcName')]",
+              "location": "[parameters('location')]",
+              "kind": "functionapp,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "httpsOnly": true,
+                "functionAppConfig": {
+                  "deployment": {
+                    "storage": {
+                      "type": "blobContainer",
+                      "value": "[format('{0}{1}-pkg', reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').primaryEndpoints.blob, variables('funcName'))]",
+                      "authentication": {
+                        "type": "StorageAccountConnectionString",
+                        "storageAccountConnectionStringName": "AzureWebJobsStorage"
+                      }
+                    }
+                  },
+                  "scaleAndConcurrency": {
+                    "maximumInstanceCount": 100,
+                    "instanceMemoryMB": 2048
+                  },
+                  "runtime": {
+                    "name": "powershell",
+                    "version": "7.4"
+                  }
+                },
+                "siteConfig": {
+                  "minTlsVersion": "1.2",
+                  "ftpsState": "Disabled",
+                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'DCR_STREAM', 'value', parameters('dcrStream')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/components', variables('aiName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[0], split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[1], split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[2])]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "functionAppName": {
+              "type": "string",
+              "value": "[if(variables('isFlex'), variables('funcName'), variables('funcName'))]"
+            },
+            "functionAppHostName": {
+              "type": "string",
+              "value": "[if(variables('isFlex'), reference(resourceId('Microsoft.Web/sites', variables('funcName')), '2023-12-01').defaultHostName, reference(resourceId('Microsoft.Web/sites', variables('funcName')), '2023-12-01').defaultHostName)]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[if(variables('isFlex'), reference(resourceId('Microsoft.Web/sites', variables('funcName')), '2023-12-01', 'full').identity.principalId, reference(resourceId('Microsoft.Web/sites', variables('funcName')), '2023-12-01', 'full').identity.principalId)]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "dcrRoleAssignment",
+      "resourceGroup": "[variables('dcrRg')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dcrName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.dcrName.value]"
+          },
+          "principalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('funcRg')), 'Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "[variables('monitoringMetricsPublisherRoleId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "15389737917969367071"
+            }
+          },
+          "parameters": {
+            "dcrName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the DCR to scope the role assignment to."
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal id of the Function App managed identity."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Role definition id (Monitoring Metrics Publisher)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]",
+              "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), parameters('principalId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('funcRg')), 'Microsoft.Resources/deployments', 'functionApp')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('funcRg')), 'Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppName.value]"
+    },
+    "functionAppHostName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('funcRg')), 'Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppHostName.value]"
+    },
+    "functionResourceGroup": {
+      "type": "string",
+      "value": "[variables('funcRg')]"
+    },
+    "dcrResourceGroup": {
+      "type": "string",
+      "value": "[variables('dcrRg')]"
+    },
+    "logAnalyticsResourceGroup": {
+      "type": "string",
+      "value": "[variables('laRg')]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.immutableId.value]"
+    },
+    "dcrIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.logsIngestionEndpoint.value]"
+    },
+    "dcrStreamName": {
+      "type": "string",
+      "value": "[variables('streamName')]"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics'), '2025-04-01').outputs.workspaceCustomerId.value]"
+    },
+    "customTableName": {
+      "type": "string",
+      "value": "[variables('tableName')]"
+    },
+    "functionPlanType": {
+      "type": "string",
+      "value": "[parameters('functionPlanType')]"
+    }
+  }
+}

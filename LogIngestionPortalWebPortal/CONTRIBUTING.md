@@ -25,7 +25,6 @@ script in sync automatically.
   "label": "Thermal state",
   "order": 100,
   "default": false,
-  "needsSystem": false,
   "setups": [],
   "collector": "(Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes -join ','",
   "column": {
@@ -42,7 +41,6 @@ Rules:
 - `order` — controls position; use **100+** for new fields so existing columns
   keep their order.
 - `default` — `true` only for broadly useful, low-cost fields.
-- `needsSystem` — `true` if the collector requires SYSTEM/admin.
 - `column.type` — one of `string`, `int`, `long`, `real`, `boolean`, `datetime`,
   `dynamic`, `guid`.
 - Provide **exactly one** of:
