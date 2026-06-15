@@ -70,8 +70,13 @@ and the Microsoft Graph `Device.Read.All` permission the device check needs).
 
 To **deploy** (steps 2–3) you need:
 
-- **PowerShell 7+**, **Azure CLI** (`az login`), **Azure Functions Core Tools v4**
+- **PowerShell 7+** — `winget install Microsoft.PowerShell`
+- **Azure CLI** — `winget install Microsoft.AzureCLI`, then `az login`
+  (Bicep is installed automatically by `az` on first use)
+- **Azure Functions Core Tools v4** — `winget install Microsoft.Azure.FunctionsCoreTools`
+  (or `npm i -g azure-functions-core-tools@4 --unsafe-perm true`)
 - An Azure subscription with rights to create resources and role assignments
+
 
 Using the hosted portal (step 1) needs nothing but a browser. **Node.js is only
 required if you choose to run the portal locally** (below).
@@ -101,6 +106,10 @@ npm run dev        # then open the printed localhost URL
 New data points are community‑driven via small JSON entries — no app code changes.
 See [`LogIngestionPortalWebPortal/CONTRIBUTING.md`](LogIngestionPortalWebPortal/CONTRIBUTING.md).
 Collectors must be **read‑only**; this is enforced automatically in CI.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
 
 ## Repository layout
 
