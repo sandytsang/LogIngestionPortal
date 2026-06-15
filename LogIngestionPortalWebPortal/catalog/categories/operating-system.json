@@ -70,6 +70,19 @@
         "type": "boolean",
         "description": "Whether the device is joined to an AD domain."
       }
-    }
+    },
+    {
+      "id": "ComputerInfo",
+      "label": "Computer info",
+      "order": 100,
+      "default": false,
+      "setups": [],
+      "collector": "Get-ComputerInfo",
+      "column": {
+        "name": "ComputerInfo",
+        "type": "dynamic",
+        "description": "Full Get-ComputerInfo object (OS, BIOS, CPU, hotfixes, etc.)."
+      }
+    }     
   ]
 }
