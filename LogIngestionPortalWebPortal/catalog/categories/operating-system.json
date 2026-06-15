@@ -58,6 +58,19 @@
         "description": "AD domain or workgroup the device belongs to."
       }
     },
+{
+  "id": "ComputerInfo",
+  "label": "ComputerInfo",
+  "order": 100,
+  "default": false,
+  "setups": [],
+  "collector": "Get-ComputerInfo",
+  "column": {
+    "name": "ComputerInfo",
+    "type": "dynamic",
+    "description": "ComputerInfo"
+  }
+}    
     {
       "id": "PartOfDomain",
       "label": "Domain joined",
