@@ -1,0 +1,32 @@
+name: Validate catalog & build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # 1. Schema + cross-file rules + read-only security gate for contributions.
+      - name: Validate catalog data
+        run: node scripts/validate-catalog.mjs
+      # 2. PowerShell syntax check for every collector/expression (no extra deps).
+      - name: Parse collectors (PowerShell)
+        shell: pwsh
+        run: ./scripts/Test-Collectors.ps1
+      # 3. Generator unit tests (incl. columns.json round-trip).
+      - run: npm test
+      # 4. Type-check + production build.
+      - run: npm run build

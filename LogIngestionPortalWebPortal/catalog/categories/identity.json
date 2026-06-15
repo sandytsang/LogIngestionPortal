@@ -1,0 +1,36 @@
+{
+  "category": "Identity",
+  "fields": [
+    {
+      "id": "DeviceName",
+      "label": "Device name",
+      "order": 2,
+      "default": true,
+      "setups": [],
+      "expression": "$env:COMPUTERNAME",
+      "column": { "name": "DeviceName", "type": "string", "description": "Hostname of the reporting device." }
+    },
+    {
+      "id": "DeviceId",
+      "label": "Intune/Entra device id",
+      "order": 3,
+      "default": true,
+      "setups": ["deviceId"],
+      "expression": "$deviceId",
+      "column": { "name": "DeviceId", "type": "string", "description": "Intune/Entra device identifier." }
+    },
+    {
+      "id": "UserName",
+      "label": "Logged-on user",
+      "order": 4,
+      "default": true,
+      "setups": ["cs"],
+      "expression": "$cs.UserName",
+      "column": {
+        "name": "UserName",
+        "type": "string",
+        "description": "Currently logged-on user (UPN or sAMAccountName)."
+      }
+    }
+  ]
+}

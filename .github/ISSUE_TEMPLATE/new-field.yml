@@ -1,0 +1,65 @@
+name: New data point
+description: Propose a new device property (and the PowerShell that collects it) for the catalog.
+title: "[field] <short name>"
+labels: ["catalog", "needs-review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for contributing! Collectors run as **SYSTEM on managed devices**, so they
+        must be **read-only**. If you can, open a pull request using the format in
+        [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) — it runs automated validation.
+  - type: input
+    id: category
+    attributes:
+      label: Category
+      description: Existing category, or a new one.
+      placeholder: Hardware
+    validations:
+      required: true
+  - type: input
+    id: column-name
+    attributes:
+      label: Column name
+      placeholder: ChassisTypes
+    validations:
+      required: true
+  - type: dropdown
+    id: column-type
+    attributes:
+      label: Column type
+      options: [string, int, long, real, boolean, datetime, dynamic, guid]
+    validations:
+      required: true
+  - type: input
+    id: description
+    attributes:
+      label: Description
+      placeholder: Chassis type codes from Win32_SystemEnclosure.
+    validations:
+      required: true
+  - type: textarea
+    id: collector
+    attributes:
+      label: PowerShell collector
+      description: A read-only snippet that returns the value.
+      render: powershell
+      placeholder: (Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes -join ','
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirms
+    attributes:
+      label: Confirmations
+      options:
+        - label: The collector only reads device state (no downloads, writes, or config changes).
+          required: true
+        - label: I tested the snippet on a Windows device.
+          required: true
+  - type: dropdown
+    id: needs-system
+    attributes:
+      label: Requires SYSTEM/admin?
+      options: ["No", "Yes"]
+    validations:
+      required: true

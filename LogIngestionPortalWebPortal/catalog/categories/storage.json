@@ -1,0 +1,23 @@
+{
+  "category": "Storage",
+  "fields": [
+    {
+      "id": "SystemDriveFreeGB",
+      "label": "System drive free (GB)",
+      "order": 26,
+      "default": false,
+      "setups": ["disk"],
+      "expression": "if ($sysDrive) { [math]::Round($sysDrive.FreeSpace / 1GB, 1) } else { $null }",
+      "column": { "name": "SystemDriveFreeGB", "type": "real", "description": "Free space on the system drive in GB." }
+    },
+    {
+      "id": "SystemDriveSizeGB",
+      "label": "System drive size (GB)",
+      "order": 27,
+      "default": false,
+      "setups": ["disk"],
+      "expression": "if ($sysDrive) { [math]::Round($sysDrive.Size / 1GB, 1) } else { $null }",
+      "column": { "name": "SystemDriveSizeGB", "type": "real", "description": "Total size of the system drive in GB." }
+    }
+  ]
+}

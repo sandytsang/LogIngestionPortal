@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+/* Light-only: bind the dark: variant to a .dark class that is never applied, so
+   any leftover dark: utilities can never activate (not even from OS preference). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Thin, theme-aware scrollbars for the code panes. */
+.scroll-thin::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, currentColor 25%, transparent);
+  border-radius: 9999px;
+}

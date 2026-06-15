@@ -1,0 +1,91 @@
+{
+  "tableName": "DeviceRemediation_CL",
+  "description": "Custom telemetry collected by Intune Proactive Remediation scripts and ingested via the Logs Ingestion API.",
+  "columns": [
+    {
+      "name": "TimeGenerated",
+      "type": "datetime",
+      "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
+    },
+    {
+      "name": "DeviceName",
+      "type": "string",
+      "description": "Hostname of the reporting device."
+    },
+    {
+      "name": "DeviceId",
+      "type": "string",
+      "description": "Intune/Entra device identifier."
+    },
+    {
+      "name": "UserName",
+      "type": "string",
+      "description": "Currently logged-on user (UPN or sAMAccountName)."
+    },
+    {
+      "name": "OSVersion",
+      "type": "string",
+      "description": "Operating system build/version string."
+    },
+    {
+      "name": "RemediationName",
+      "type": "string",
+      "description": "Name of the remediation package that produced this record."
+    },
+    {
+      "name": "Status",
+      "type": "string",
+      "description": "Result status reported by the script (e.g. Compliant, Remediated, Failed)."
+    },
+    {
+      "name": "Details",
+      "type": "string",
+      "description": "Free-form details or JSON payload describing what was collected/changed."
+    },
+    {
+      "name": "Manufacturer",
+      "type": "string",
+      "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
+    },
+    {
+      "name": "Model",
+      "type": "string",
+      "description": "System model (Win32_ComputerSystem.Model)."
+    },
+    {
+      "name": "SerialNumber",
+      "type": "string",
+      "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
+    },
+    {
+      "name": "TotalMemoryGB",
+      "type": "real",
+      "description": "Installed physical memory in GB."
+    },
+    {
+      "name": "BitLockerStatus",
+      "type": "dynamic",
+      "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+    },
+    {
+      "name": "DefenderRealtimeEnabled",
+      "type": "boolean",
+      "description": "Microsoft Defender real-time protection enabled (Get-MpComputerStatus.RealTimeProtectionEnabled)."
+    },
+    {
+      "name": "DefenderSignatureVersion",
+      "type": "string",
+      "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
+    },
+    {
+      "name": "OSBuildNumber",
+      "type": "string",
+      "description": "Operating system build number (Win32_OperatingSystem.BuildNumber)."
+    },
+    {
+      "name": "OSArchitecture",
+      "type": "string",
+      "description": "Operating system architecture (e.g. 64-bit)."
+    }
+  ]
+}

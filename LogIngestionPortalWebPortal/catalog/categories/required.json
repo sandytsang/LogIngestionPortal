@@ -1,0 +1,19 @@
+{
+  "category": "Required",
+  "fields": [
+    {
+      "id": "TimeGenerated",
+      "label": "Time generated",
+      "order": 1,
+      "default": true,
+      "locked": true,
+      "setups": [],
+      "expression": "(Get-Date).ToUniversalTime().ToString('o')",
+      "column": {
+        "name": "TimeGenerated",
+        "type": "datetime",
+        "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "category": "Inventory metadata",
+  "fields": [
+    {
+      "id": "RemediationName",
+      "label": "Remediation/package name",
+      "order": 6,
+      "default": true,
+      "setups": [],
+      "expression": "$RemediationName",
+      "column": {
+        "name": "RemediationName",
+        "type": "string",
+        "description": "Name of the remediation package that produced this record."
+      }
+    },
+    {
+      "id": "Status",
+      "label": "Status",
+      "order": 7,
+      "default": true,
+      "setups": [],
+      "expression": "'Remediated'",
+      "column": {
+        "name": "Status",
+        "type": "string",
+        "description": "Result status reported by the script (e.g. Compliant, Remediated, Failed)."
+      }
+    },
+    {
+      "id": "Details",
+      "label": "Details",
+      "order": 8,
+      "default": true,
+      "setups": ["cs"],
+      "expression": "\"Manufacturer=$($cs.Manufacturer); Model=$($cs.Model)\"",
+      "column": {
+        "name": "Details",
+        "type": "string",
+        "description": "Free-form details or JSON payload describing what was collected/changed."
+      }
+    }
+  ]
+}

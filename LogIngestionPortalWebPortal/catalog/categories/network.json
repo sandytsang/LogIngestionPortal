@@ -1,0 +1,14 @@
+{
+  "category": "Network",
+  "fields": [
+    {
+      "id": "IPv4Address",
+      "label": "Primary IPv4 address",
+      "order": 28,
+      "default": false,
+      "setups": ["net"],
+      "expression": "if ($net) { $net.IPv4Address.IPAddress } else { $null }",
+      "column": { "name": "IPv4Address", "type": "string", "description": "Primary IPv4 address of the device." }
+    }
+  ]
+}

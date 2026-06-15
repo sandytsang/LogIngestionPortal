@@ -1,0 +1,12 @@
+{
+  "cs": "    $cs = Get-CimInstance -ClassName Win32_ComputerSystem",
+  "os": "    $os = Get-CimInstance -ClassName Win32_OperatingSystem",
+  "bios": "    $bios = Invoke-Safe 'BIOS' { Get-CimInstance -ClassName Win32_BIOS }",
+  "mp": "    $mp = Invoke-Safe 'Defender' { Get-MpComputerStatus }",
+  "tpm": "    $tpm = Invoke-Safe 'TPM' { Get-Tpm }",
+  "secureBoot": "    $secureBoot = Invoke-Safe 'SecureBoot' { Confirm-SecureBootUEFI }",
+  "net": "    $net = Invoke-Safe 'Network' { Get-NetIPConfiguration | Where-Object { $_.IPv4Address } | Select-Object -First 1 }",
+  "disk": "    $sysDrive = Invoke-Safe 'Disk' { Get-CimInstance -ClassName Win32_LogicalDisk -Filter \"DeviceID='$env:SystemDrive'\" }",
+  "deviceId": "    $deviceId = ''\n    try {\n        $enrollKey = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -ErrorAction SilentlyContinue |\n            Where-Object { $_.GetValue('ProviderID') -eq 'MS DM Server' } | Select-Object -First 1\n        if ($enrollKey) { $deviceId = $enrollKey.PSChildName }\n    }\n    catch { }",
+  "bitLocker": "    $bitLocker = Invoke-Safe 'BitLocker' {\n        Get-BitLockerVolume | ForEach-Object {\n            [pscustomobject]@{\n                Mount      = $_.MountPoint\n                Protection = \"$($_.ProtectionStatus)\"\n                Volume     = \"$($_.VolumeStatus)\"\n                Percent    = $_.EncryptionPercentage\n            }\n        }\n    }"
+}

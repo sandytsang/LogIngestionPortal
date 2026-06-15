@@ -1,0 +1,75 @@
+{
+  "category": "Operating system",
+  "fields": [
+    {
+      "id": "OSVersion",
+      "label": "OS version",
+      "order": 5,
+      "default": true,
+      "setups": ["os"],
+      "expression": "\"$($os.Caption) $($os.Version)\"",
+      "column": { "name": "OSVersion", "type": "string", "description": "Operating system build/version string." }
+    },
+    {
+      "id": "OSBuildNumber",
+      "label": "OS build number",
+      "order": 16,
+      "default": false,
+      "setups": ["os"],
+      "expression": "\"$($os.BuildNumber)\"",
+      "column": {
+        "name": "OSBuildNumber",
+        "type": "string",
+        "description": "Operating system build number (Win32_OperatingSystem.BuildNumber)."
+      }
+    },
+    {
+      "id": "OSArchitecture",
+      "label": "OS architecture",
+      "order": 17,
+      "default": false,
+      "setups": ["os"],
+      "expression": "$os.OSArchitecture",
+      "column": {
+        "name": "OSArchitecture",
+        "type": "string",
+        "description": "Operating system architecture (e.g. 64-bit)."
+      }
+    },
+    {
+      "id": "LastBootTime",
+      "label": "Last boot time",
+      "order": 18,
+      "default": false,
+      "setups": ["os"],
+      "expression": "if ($os.LastBootUpTime) { $os.LastBootUpTime.ToUniversalTime().ToString('o') } else { $null }",
+      "column": { "name": "LastBootTime", "type": "datetime", "description": "Last system boot time (UTC)." }
+    },
+    {
+      "id": "Domain",
+      "label": "Domain / workgroup",
+      "order": 19,
+      "default": false,
+      "setups": ["cs"],
+      "expression": "$cs.Domain",
+      "column": {
+        "name": "Domain",
+        "type": "string",
+        "description": "AD domain or workgroup the device belongs to."
+      }
+    },
+    {
+      "id": "PartOfDomain",
+      "label": "Domain joined",
+      "order": 20,
+      "default": false,
+      "setups": ["cs"],
+      "expression": "[bool]$cs.PartOfDomain",
+      "column": {
+        "name": "PartOfDomain",
+        "type": "boolean",
+        "description": "Whether the device is joined to an AD domain."
+      }
+    }
+  ]
+}

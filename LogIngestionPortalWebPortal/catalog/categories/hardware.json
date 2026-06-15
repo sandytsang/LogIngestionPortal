@@ -1,0 +1,62 @@
+{
+  "category": "Hardware",
+  "fields": [
+    {
+      "id": "Manufacturer",
+      "label": "Manufacturer",
+      "order": 9,
+      "default": true,
+      "setups": ["cs"],
+      "expression": "$cs.Manufacturer",
+      "column": {
+        "name": "Manufacturer",
+        "type": "string",
+        "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
+      }
+    },
+    {
+      "id": "Model",
+      "label": "Model",
+      "order": 10,
+      "default": true,
+      "setups": ["cs"],
+      "expression": "$cs.Model",
+      "column": { "name": "Model", "type": "string", "description": "System model (Win32_ComputerSystem.Model)." }
+    },
+    {
+      "id": "SerialNumber",
+      "label": "Serial number",
+      "order": 11,
+      "default": true,
+      "setups": ["bios"],
+      "expression": "$bios.SerialNumber",
+      "column": {
+        "name": "SerialNumber",
+        "type": "string",
+        "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
+      }
+    },
+    {
+      "id": "TotalMemoryGB",
+      "label": "Total memory (GB)",
+      "order": 12,
+      "default": true,
+      "setups": ["cs"],
+      "expression": "if ($cs.TotalPhysicalMemory) { [math]::Round($cs.TotalPhysicalMemory / 1GB, 1) } else { $null }",
+      "column": { "name": "TotalMemoryGB", "type": "real", "description": "Installed physical memory in GB." }
+    },
+    {
+      "id": "BiosVersion",
+      "label": "BIOS version",
+      "order": 21,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "$bios.SMBIOSBIOSVersion",
+      "column": {
+        "name": "BiosVersion",
+        "type": "string",
+        "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
+      }
+    }
+  ]
+}

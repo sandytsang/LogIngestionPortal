@@ -1,0 +1,16 @@
+[
+  { "pattern": "\\biex\\b|Invoke-Expression", "why": "arbitrary code execution (Invoke-Expression)" },
+  { "pattern": "\\[scriptblock\\]::Create", "why": "dynamic script construction" },
+  { "pattern": "Add-Type", "why": "compiles/loads code" },
+  { "pattern": "-Encoded(Command)?\\b|\\b-enc\\b", "why": "encoded command execution" },
+  { "pattern": "Invoke-WebRequest|\\biwr\\b|Invoke-RestMethod|\\birm\\b|Start-BitsTransfer", "why": "network download" },
+  { "pattern": "Net\\.WebClient|DownloadString|DownloadFile|System\\.Net\\.Http", "why": "network download" },
+  { "pattern": "\\bcurl\\b|\\bwget\\b", "why": "network download" },
+  { "pattern": "Remove-Item|\\bRemove-\\w+|Clear-\\w+", "why": "deletes/clears state" },
+  { "pattern": "Set-Item|Set-ItemProperty|New-Item|New-ItemProperty|Remove-ItemProperty", "why": "writes to filesystem/registry" },
+  { "pattern": "Set-Content|Add-Content|Out-File|Export-\\w+", "why": "writes files" },
+  { "pattern": "\\breg(\\.exe)?\\s+(add|delete|import)", "why": "writes to the registry" },
+  { "pattern": "Start-Process|Stop-Process|Start-Service|Stop-Service|Restart-\\w+|Set-Service", "why": "changes processes/services" },
+  { "pattern": "Install-\\w+|Uninstall-\\w+|Enable-\\w+|Disable-\\w+|Set-ExecutionPolicy", "why": "changes system configuration" },
+  { "pattern": "Invoke-Item|\\bni\\b\\s|\\brm\\b\\s|\\bdel\\b\\s", "why": "filesystem mutation" }
+]
