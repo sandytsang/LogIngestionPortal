@@ -5,6 +5,7 @@ import { CatalogBrowser } from './components/CatalogBrowser';
 import { ConfigPanel } from './components/ConfigPanel';
 import { OutputTabs, type OutputTab } from './components/OutputTabs';
 import { ContributeDialog } from './components/ContributeDialog';
+import { SampleColumnsDialog } from './components/SampleColumnsDialog';
 import {
   columnsToJson,
   generateColumns,
@@ -56,6 +57,7 @@ export default function App() {
   );
   const [workspaceName, setWorkspaceName] = useState(persisted.workspaceName ?? '');
   const [showContribute, setShowContribute] = useState(false);
+  const [showSample, setShowSample] = useState(false);
   const [config, setConfig] = useState<PortalConfig>(() => persisted.config ?? defaultConfig());
 
   const knownCategories = useMemo(
@@ -148,6 +150,12 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowSample(true)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Build columns.json from data
+              </button>
+              <button
                 onClick={() => setShowContribute(true)}
                 className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
               >
@@ -205,6 +213,14 @@ export default function App() {
 
         {showContribute && (
           <ContributeDialog knownCategories={knownCategories} onClose={() => setShowContribute(false)} />
+        )}
+
+        {showSample && (
+          <SampleColumnsDialog
+            tableName={config.tableName}
+            tableDescription={config.tableDescription}
+            onClose={() => setShowSample(false)}
+          />
         )}
       </div>
   );
