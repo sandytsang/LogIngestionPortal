@@ -5,6 +5,10 @@ to a **custom Log Analytics table** via the **Logs Ingestion API** — no agents
 third‑party services. Pick the data you want in a browser, download the matching
 artifacts, and deploy with one command.
 
+**▶ Use the portal:** https://sandytsang.github.io/LogIngestionPortal/
+
+> Runs entirely in your browser — no sign‑in, no backend, nothing leaves your machine.
+
 The repo has two parts:
 
 | Folder | What it is |
@@ -35,16 +39,17 @@ of the device's Entra‑join certificate) — this is always required.
 
 ## Quick start
 
-**1. Generate artifacts** — open the portal (`LogIngestionPortalWebPortal`):
+**1. Generate artifacts** — just open the hosted portal in your browser:
 
-```powershell
-cd LogIngestionPortalWebPortal
-npm install
-npm run dev        # then open the printed localhost URL
-```
+**▶ https://sandytsang.github.io/LogIngestionPortal/**
 
-Pick your data points, click **Download all (.zip)** — you get `columns.json`,
-`remediate.ps1`, and a `README.txt` with the exact deploy command.
+Pick your data points, set the table/config, then click **Download all (.zip)** —
+you get `columns.json`, `remediate.ps1`, and a `README.txt` with the exact deploy
+command. Nothing to install for this step.
+
+> Prefer to run the portal locally instead of using the hosted page? See
+> [Run the portal locally](#run-the-portal-locally-optional) below — that's the
+> only part that needs Node.js/npm.
 
 **2. Deploy** — from `LogIngestionAPI` (after dropping in your `columns.json`):
 
@@ -63,9 +68,24 @@ and the Microsoft Graph `Device.Read.All` permission the device check needs).
 
 ## Prerequisites
 
+To **deploy** (steps 2–3) you need:
+
 - **PowerShell 7+**, **Azure CLI** (`az login`), **Azure Functions Core Tools v4**
-- **Node.js 20+** (to run/build the portal)
 - An Azure subscription with rights to create resources and role assignments
+
+Using the hosted portal (step 1) needs nothing but a browser. **Node.js is only
+required if you choose to run the portal locally** (below).
+
+## Run the portal locally (optional)
+
+Most people can skip this and use the hosted portal. Run it locally only if you
+want to develop it or run offline:
+
+```powershell
+cd LogIngestionPortalWebPortal
+npm install
+npm run dev        # then open the printed localhost URL
+```
 
 ## Updating what you collect
 
