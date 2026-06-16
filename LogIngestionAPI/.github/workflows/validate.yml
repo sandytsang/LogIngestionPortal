@@ -17,6 +17,13 @@ on:
       - 'schema/**'
       - 'function/**'
 
+# Run the bundled JavaScript actions (checkout, azure/cli) on Node.js 24. Their
+# current pinned versions still ship a Node 20 entrypoint, which the runner
+# deprecated; opting in here silences the warning and matches the runner default
+# from June 16th, 2026 onward.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
