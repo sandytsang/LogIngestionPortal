@@ -43,7 +43,13 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
       list.push(f);
       map.set(f.category, list);
     }
-    return [...map.entries()];
+    // Always present fields alphabetically by label (and categories A–Z) so the
+    // list is predictable. This is display-only; the generated column order is
+    // driven by each field's `order`, not by this sort.
+    for (const list of map.values()) {
+      list.sort((a, b) => a.label.localeCompare(b.label));
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [catalog.fields, query]);
 
   const chip = (active: boolean) =>
