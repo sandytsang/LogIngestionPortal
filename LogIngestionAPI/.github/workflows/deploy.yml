@@ -8,9 +8,9 @@ name: Deploy LogIngestionAPI
 # .github/workflows at the repository root, so paths below (infra/, function/,
 # scripts/) are relative to this folder.
 #
-# Pick what to do with the "action" input:
-#   - deploy        : create/update the full stack (Function App + table + DCR).
-#   - updateColumns : schema-only update (table + DCR only; Function App left as-is).
+# This workflow deploys the full stack (Function App + table + DCR). To refresh
+# just the table + DCR after a columns.json change without touching the Function
+# App, use the separate update-columns.yml workflow instead.
 #
 # Pick how you want to deploy with the "method" input:
 #   - native : no PowerShell script. Bicep + Azure/functions-action only.
@@ -25,11 +25,6 @@ name: Deploy LogIngestionAPI
 on:
   workflow_dispatch:
     inputs:
-      action:
-        description: 'deploy = full stack (Function App + table + DCR). updateColumns = schema-only (table + DCR; Function App untouched).'
-        type: choice
-        options: [deploy, updateColumns]
-        default: deploy
       method:
         description: 'Deployment method'
         type: choice
@@ -62,7 +57,7 @@ on:
         options: [Consumption, Flex]
         default: Consumption
       existingWorkspaceName:
-        description: 'Existing Log Analytics workspace name (leave blank to create a new one). Required for updateColumns.'
+        description: 'Existing Log Analytics workspace name (leave blank to create a new one).'
         type: string
         default: ''
       existingWorkspaceResourceGroup:
@@ -70,7 +65,7 @@ on:
         type: string
         default: ''
       dcrName:
-        description: 'DCR name to update (updateColumns only; blank = dcr-<baseName>-<environment>)'
+        description: 'Exact DCR name to use (blank = dcr-<baseName>-<environment>). Set this to target an existing DCR by name.'
         type: string
         default: ''
       requireEntraDevice:
@@ -130,11 +125,9 @@ jobs:
               existingWorkspaceResourceGroup="${{ inputs.existingWorkspaceResourceGroup }}"
               jwtRequireEntraDevice=${{ inputs.requireEntraDevice }}
             )
-            # Schema-only update: regenerate just the table + DCR (by name) and
-            # leave the Function App alone. Matches the portal's "Update data
-            # columns only" action.
-            if [ "${{ inputs.action }}" = "updateColumns" ]; then
-              params+=( schemaOnly=true dcrName="${{ inputs.dcrName }}" )
+            # Use a specific DCR name when one was provided.
+            if [ -n "${{ inputs.dcrName }}" ]; then
+              params+=( dcrName="${{ inputs.dcrName }}" )
             fi
             # Put the DCR in its own resource group when the portal selected one.
             if [ -n "${{ inputs.dcrResourceGroup }}" ]; then
@@ -153,11 +146,11 @@ jobs:
               --parameters "${params[@]}" \
               --query properties.outputs.functionAppName.value \
               --output tsv)
-            echo "Function App: ${appName:-<unchanged - schema-only>}"
+            echo "Function App: ${appName:-<unchanged>}"
             echo "functionAppName=$appName" >> "$GITHUB_OUTPUT"
 
       - name: Publish function code
-        if: ${{ inputs.method == 'native' && inputs.action == 'deploy' }}
+        if: ${{ inputs.method == 'native' }}
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ steps.infra.outputs.functionAppName }}
@@ -179,11 +172,7 @@ jobs:
           # step here and grant it once separately (see README). Everything else
           # runs exactly like a local deploy.
           $opt = @('-SkipDeviceGraphPermission')
-          if ('${{ inputs.action }}' -eq 'updateColumns') {
-            # Schema-only: update just the table + DCR, leave the Function App alone.
-            $opt += '-SchemaOnly'
-            if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
-          }
+          if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
           if ('${{ inputs.existingWorkspaceName }}') { $opt += @('-ExistingWorkspaceName', '${{ inputs.existingWorkspaceName }}') }
           if ('${{ inputs.existingWorkspaceResourceGroup }}') { $opt += @('-ExistingWorkspaceResourceGroup', '${{ inputs.existingWorkspaceResourceGroup }}') }
           if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
@@ -200,7 +189,7 @@ jobs:
       - name: Summary
         if: ${{ always() }}
         run: |
-          echo "### LogIngestionAPI ${{ inputs.action }} (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "### LogIngestionAPI deploy (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Resource group: ${{ inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Region: ${{ inputs.location }}" >> "$GITHUB_STEP_SUMMARY"

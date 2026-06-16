@@ -1,0 +1,161 @@
+name: Update data columns (schema-only)
+
+# Schema-only update workflow.
+#
+# Use this when your columns.json changed and you only need to refresh the
+# Log Analytics custom table + Data Collection Rule. The Function App and its
+# dependencies are left untouched (no code republish, no app-setting changes).
+# For a full stack deploy (Function App + table + DCR) use deploy.yml instead.
+#
+# Like deploy.yml, this is meant to run from a repository whose ROOT is this
+# LogIngestionAPI folder, so paths below (infra/, scripts/) are relative to it.
+#
+# Pick how you want to apply the update with the "method" input:
+#   - native : no PowerShell script. Bicep only (schemaOnly=true).
+#   - script : run scripts/deploy.ps1 -SchemaOnly in CI.
+#
+# One-time setup is identical to deploy.yml (see README "Deploy from your own
+# GitHub"): an Entra app with a federated credential for this repo and the
+# AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      method:
+        description: 'Update method'
+        type: choice
+        options: [native, script]
+        default: native
+      resourceGroup:
+        description: 'Resource group the deployment runs in (created if missing)'
+        type: string
+        default: rg-logingestion
+      location:
+        description: 'Azure region'
+        type: string
+        default: eastus
+      baseName:
+        description: 'Base name for resources (3-17 lowercase chars). Used to derive the workspace/DCR names.'
+        type: string
+        default: logapi
+      environment:
+        description: 'Environment'
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+      existingWorkspaceName:
+        description: 'Existing Log Analytics workspace name (required — schema-only updates need a workspace that already exists).'
+        type: string
+        default: ''
+      existingWorkspaceResourceGroup:
+        description: 'Resource group of the existing workspace (blank = same as the deployment resource group)'
+        type: string
+        default: ''
+      dcrName:
+        description: 'DCR name to update (blank = dcr-<baseName>-<environment>)'
+        type: string
+        default: ''
+      dcrResourceGroup:
+        description: 'Resource group of the Data Collection Rule (blank = same as the deployment resource group)'
+        type: string
+        default: ''
+
+permissions:
+  id-token: write   # required for OIDC (passwordless) Azure login
+  contents: read
+
+jobs:
+  update-columns:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}   # add protection rules here for approval gates
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate inputs
+        run: |
+          if [ -z "${{ inputs.existingWorkspaceName }}" ]; then
+            echo "::error::existingWorkspaceName is required for a schema-only update." >&2
+            exit 1
+          fi
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure resource group
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az group create \
+              --name "${{ inputs.resourceGroup }}" \
+              --location "${{ inputs.location }}" \
+              --output none
+
+      # ----------------------------------------------------------------------
+      # Method A: native (no deploy.ps1) — Bicep with schemaOnly=true
+      # ----------------------------------------------------------------------
+      - name: Update schema (Bicep)
+        if: ${{ inputs.method == 'native' }}
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            params=(
+              location="${{ inputs.location }}"
+              baseName="${{ inputs.baseName }}"
+              environment="${{ inputs.environment }}"
+              existingWorkspaceName="${{ inputs.existingWorkspaceName }}"
+              existingWorkspaceResourceGroup="${{ inputs.existingWorkspaceResourceGroup }}"
+              schemaOnly=true
+              dcrName="${{ inputs.dcrName }}"
+            )
+            # Put the DCR in its own resource group when one was selected.
+            if [ -n "${{ inputs.dcrResourceGroup }}" ]; then
+              params+=( dcrResourceGroup="${{ inputs.dcrResourceGroup }}" )
+            fi
+            az deployment group create \
+              --resource-group "${{ inputs.resourceGroup }}" \
+              --name "logapi-schema-$(date +%Y%m%d%H%M%S)" \
+              --template-file infra/main.bicep \
+              --parameters infra/main.bicepparam \
+              --parameters "${params[@]}" \
+              --output none
+            echo "Schema-only update complete (table + DCR; Function App untouched)."
+
+      # ----------------------------------------------------------------------
+      # Method B: script — run scripts/deploy.ps1 -SchemaOnly
+      # ----------------------------------------------------------------------
+      - name: Update schema with deploy.ps1
+        if: ${{ inputs.method == 'script' }}
+        shell: pwsh
+        working-directory: scripts
+        run: |
+          # CI has no Entra admin to grant Graph Device.Read.All; the function
+          # app isn't touched here anyway, so skip that step.
+          $opt = @('-SchemaOnly', '-SkipDeviceGraphPermission')
+          if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
+          if ('${{ inputs.existingWorkspaceName }}') { $opt += @('-ExistingWorkspaceName', '${{ inputs.existingWorkspaceName }}') }
+          if ('${{ inputs.existingWorkspaceResourceGroup }}') { $opt += @('-ExistingWorkspaceResourceGroup', '${{ inputs.existingWorkspaceResourceGroup }}') }
+          if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
+          ./deploy.ps1 `
+            -FunctionResourceGroup '${{ inputs.resourceGroup }}' `
+            -Location '${{ inputs.location }}' `
+            -BaseName '${{ inputs.baseName }}' `
+            -Environment '${{ inputs.environment }}' `
+            @opt
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          echo "### LogIngestionAPI schema-only update (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Resource group: ${{ inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Region: ${{ inputs.location }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workspace: ${{ inputs.existingWorkspaceName }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Only the Log Analytics custom table and Data Collection Rule were updated. The Function App was left unchanged." >> "$GITHUB_STEP_SUMMARY"

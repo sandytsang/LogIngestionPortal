@@ -192,10 +192,6 @@ describe('generateWorkflowYaml', () => {
     'on:',
     '  workflow_dispatch:',
     '    inputs:',
-    '      action:',
-    '        type: choice',
-    '        options: [deploy, updateColumns]',
-    '        default: deploy',
     '      method:',
     '        type: choice',
     '        options: [native, script]',
@@ -248,7 +244,6 @@ describe('generateWorkflowYaml', () => {
       functionPlanType: 'Flex',
     };
     const out = generateWorkflowYaml(sampleYaml, cfg);
-    expect(out).toContain('        default: deploy');
     expect(out).toContain("        default: 'rg-logingestion-prod'");
     expect(out).toContain("        default: 'rg-log-demo'");
     expect(out).toContain("        default: 'northeurope'");
@@ -261,7 +256,7 @@ describe('generateWorkflowYaml', () => {
     expect(out).toContain('        default: true');
   });
 
-  it('sets updateColumns + workspace + dcr name for a schema-only update', () => {
+  it('sets workspace + dcr name for a schema-only update', () => {
     const cfg: PortalConfig = {
       ...baseConfig,
       action: 'updateColumns',
@@ -270,7 +265,6 @@ describe('generateWorkflowYaml', () => {
       dcrName: 'dcr-logingestion-prod',
     };
     const out = generateWorkflowYaml(sampleYaml, cfg, 'log-shared-central');
-    expect(out).toContain('        default: updateColumns');
     expect(out).toContain("        default: 'log-shared-central'");
     expect(out).toContain("        default: 'rg-shared-logs'");
     expect(out).toContain("        default: 'dcr-logingestion-prod'");

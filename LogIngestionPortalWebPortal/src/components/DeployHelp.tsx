@@ -74,11 +74,10 @@ export function DeployHelp() {
               <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">AZURE_SUBSCRIPTION_ID</code>.
             </li>
             <li>
-              Open <span className="font-semibold">Actions → Deploy LogIngestionAPI → Run workflow</span>,
-              choose <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">action: deploy</code>{' '}
-              for the full stack or{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">action: updateColumns</code>{' '}
-              for a schema-only update, and a{' '}
+              Open <span className="font-semibold">Actions → Run workflow</span> on either{' '}
+              <span className="font-semibold">Deploy LogIngestionAPI</span> for the full stack or{' '}
+              <span className="font-semibold">Update data columns (schema-only)</span> for a
+              table + DCR refresh, then pick a{' '}
               <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">method</code>{' '}
               (native Bicep or the deploy.ps1 script).
             </li>

@@ -153,10 +153,17 @@ export default function App() {
     };
     // Pre-fill the GitHub Actions "Run workflow" form with the portal selections
     // so users who push the zip to their own repo don't have to retype them.
-    const workflowPath = 'LogIngestionAPI/.github/workflows/deploy.yml';
-    const baseWorkflow = apiFiles.find((f) => f.name === workflowPath)?.content;
-    if (baseWorkflow) {
-      overrides[workflowPath] = generateWorkflowYaml(baseWorkflow, config, workspaceName);
+    // Both workflows ship in the bundle (full deploy + schema-only), so pre-fill
+    // whichever one the user ends up running.
+    const workflowPaths = [
+      'LogIngestionAPI/.github/workflows/deploy.yml',
+      'LogIngestionAPI/.github/workflows/update-columns.yml',
+    ];
+    for (const workflowPath of workflowPaths) {
+      const baseWorkflow = apiFiles.find((f) => f.name === workflowPath)?.content;
+      if (baseWorkflow) {
+        overrides[workflowPath] = generateWorkflowYaml(baseWorkflow, config, workspaceName);
+      }
     }
     const exclude = new Set(['LogIngestionAPI/README.md']);
     const files: ZipEntry[] = apiFiles

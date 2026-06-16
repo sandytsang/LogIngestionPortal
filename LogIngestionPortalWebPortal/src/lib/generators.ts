@@ -322,11 +322,13 @@ function escapePsSingleQuote(value: string): string {
 }
 
 /**
- * Rewrites the `workflow_dispatch` input defaults in the bundled deploy.yml so
- * the GitHub Actions "Run workflow" form is pre-filled with exactly what the
- * user picked in the portal. Only inputs the portal controls are touched; the
- * rest (method, requireEntraDevice, skipRoleAssignment) keep their file
- * defaults. Returns the YAML unchanged if its shape isn't what we expect.
+ * Rewrites the `workflow_dispatch` input defaults in a bundled workflow file
+ * (deploy.yml or update-columns.yml) so the GitHub Actions "Run workflow" form
+ * is pre-filled with exactly what the user picked in the portal. Only inputs the
+ * portal controls are touched; the rest (method, requireEntraDevice,
+ * skipRoleAssignment) keep their file defaults. Inputs not present in the given
+ * file are simply ignored, so the same overrides work for both workflows.
+ * Returns the YAML unchanged if its shape isn't what we expect.
  */
 export function generateWorkflowYaml(
   baseYaml: string,
@@ -341,8 +343,9 @@ export function generateWorkflowYaml(
 
   const ws = useExisting ? trimmed(workspaceName) : undefined;
   // Map each workflow input name to its new default. `undefined` = leave as-is.
+  // Keys that don't exist in the given file (e.g. functionPlanType in the
+  // schema-only workflow) are ignored.
   const overrides: Record<string, string | undefined> = {
-    action: isUpdate ? 'updateColumns' : 'deploy',
     environment: config.environment,
     functionPlanType: config.functionPlanType,
     resourceGroup: trimmed(config.functionResourceGroup) && yamlStr(config.functionResourceGroup.trim()),

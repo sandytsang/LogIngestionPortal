@@ -115,7 +115,8 @@ from the portal's download bundle), GitHub picks them up automatically:
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
 | [validate.yml](.github/workflows/validate.yml) | PR / push | Compiles the Bicep and sanity-checks `schema/columns.json`. No Azure login needed. |
-| [deploy.yml](.github/workflows/deploy.yml) | Manual (**Run workflow**) | Deploys infra + publishes the Function, **or** does a schema-only update. Pick `action: deploy` (full stack) or `action: updateColumns` (table + DCR only, Function App untouched), and `method: native` (Bicep + `functions-action`) or `method: script` (runs `scripts/deploy.ps1`). |
+| [deploy.yml](.github/workflows/deploy.yml) | Manual (**Run workflow**) | Deploys the full stack (Function App + table + DCR). Pick `method: native` (Bicep + `functions-action`) or `method: script` (runs `scripts/deploy.ps1`). |
+| [update-columns.yml](.github/workflows/update-columns.yml) | Manual (**Run workflow**) | Schema-only update — refreshes just the table + DCR after a `columns.json` change; the Function App is left untouched. Needs an existing workspace. Pick `method: native` or `method: script`. |
 
 You choose how to deploy — the **same `deploy.ps1`** you'd run locally, or a
 fully native pipeline. Both authenticate to Azure with **OIDC (passwordless)**,
