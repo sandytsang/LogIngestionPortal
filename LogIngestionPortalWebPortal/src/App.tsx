@@ -204,21 +204,20 @@ export default function App() {
       'LogIngestionAPI/schema/columns.json': byId.columns,
       'LogIngestionAPI/scripts/IntuneScript.ps1': byId.script,
     };
-    // Pre-fill the GitHub Actions "Run workflow" form with the portal selections
-    // so users who push the zip to their own repo don't have to retype them.
-    // Both workflows ship in the bundle (full deploy + schema-only), so pre-fill
-    // whichever one the user ends up running.
-    const workflowPaths = [
-      'LogIngestionAPI/.github/workflows/deploy.yml',
-      'LogIngestionAPI/.github/workflows/update-columns.yml',
-    ];
-    for (const workflowPath of workflowPaths) {
-      const baseWorkflow = apiFiles.find((f) => f.name === workflowPath)?.content;
-      if (baseWorkflow) {
-        overrides[workflowPath] = generateWorkflowYaml(baseWorkflow, config, workspaceName);
-      }
+    // Only touch the workflow that matches the chosen action, and leave the
+    // other one OUT of the bundle entirely. That way pushing an "update columns"
+    // zip can't overwrite a deploy.yml you've already customized (and vice
+    // versa). Pre-fill the active workflow's "Run workflow" defaults from the
+    // portal selections so you don't have to retype them.
+    const deployWorkflow = 'LogIngestionAPI/.github/workflows/deploy.yml';
+    const updateWorkflow = 'LogIngestionAPI/.github/workflows/update-columns.yml';
+    const activeWorkflow = config.action === 'updateColumns' ? updateWorkflow : deployWorkflow;
+    const inactiveWorkflow = config.action === 'updateColumns' ? deployWorkflow : updateWorkflow;
+    const baseWorkflow = apiFiles.find((f) => f.name === activeWorkflow)?.content;
+    if (baseWorkflow) {
+      overrides[activeWorkflow] = generateWorkflowYaml(baseWorkflow, config, workspaceName);
     }
-    const exclude = new Set(['LogIngestionAPI/README.md']);
+    const exclude = new Set(['LogIngestionAPI/README.md', inactiveWorkflow]);
     const files: ZipEntry[] = apiFiles
       .filter((f) => !exclude.has(f.name))
       .map((f) => ({ name: f.name, content: overrides[f.name] ?? f.content }));
