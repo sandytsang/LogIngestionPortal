@@ -66,6 +66,11 @@
       "name": "WindowsUpdateSettings",
       "type": "dynamic",
       "description": "Windows Update posture as a JSON object: co-management state (CoMgmtWorkload, CoMgmtValue) plus the WindowsUpdate and WindowsUpdate\\AU policy registry values. Values are strings; an empty string means not configured."
+    },
+    {
+      "name": "DiagnosticDataSettings",
+      "type": "dynamic",
+      "description": "Windows diagnostic data / telemetry policy as a JSON object: all configured values under the DataCollection policy key (e.g. AllowTelemetry_PolicyManager, AllowDeviceNameInTelemetry, LimitDiagnosticLogCollection, LimitDumpCollection). Values are strings."
     }
   ]
 }

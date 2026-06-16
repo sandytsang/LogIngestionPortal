@@ -13,6 +13,19 @@
         "type": "dynamic",
         "description": "Windows Update posture as a JSON object: co-management state (CoMgmtWorkload, CoMgmtValue) plus the WindowsUpdate and WindowsUpdate\\AU policy registry values. Values are strings; an empty string means not configured."
       }
+    },
+    {
+      "id": "DiagnosticDataSettings",
+      "label": "Diagnostic data (telemetry) settings",
+      "order": 60,
+      "default": true,
+      "setups": [],
+      "collector": "$key = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection'\n$item = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue\n$settings = [ordered]@{}\nif ($item) {\n    foreach ($p in $item.PSObject.Properties) {\n        if ($p.Name -like 'PS*') { continue }\n        $settings[$p.Name] = \"$($p.Value)\"\n    }\n}\n[pscustomobject]$settings",
+      "column": {
+        "name": "DiagnosticDataSettings",
+        "type": "dynamic",
+        "description": "Windows diagnostic data / telemetry policy as a JSON object: all configured values under the DataCollection policy key (e.g. AllowTelemetry_PolicyManager, AllowDeviceNameInTelemetry, LimitDiagnosticLogCollection, LimitDumpCollection). Values are strings."
+      }
     }
   ]
 }
