@@ -71,6 +71,11 @@
       "name": "DiagnosticDataSettings",
       "type": "dynamic",
       "description": "Windows diagnostic data / telemetry policy as a JSON object: all configured values under the DataCollection policy key (e.g. AllowTelemetry_PolicyManager, AllowDeviceNameInTelemetry, LimitDiagnosticLogCollection, LimitDumpCollection). Values are strings."
+    },
+    {
+      "name": "TelemetryUploadStatus",
+      "type": "dynamic",
+      "description": "DiagTrack telemetry upload health as a JSON object: last successful upload times (UTC), Aria heartbeat counters (attempts, 4xx/5xx failures, last HTTP code), Seville connection counts, and cached regional collector endpoints."
     }
   ]
 }

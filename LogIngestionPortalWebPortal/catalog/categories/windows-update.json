@@ -26,6 +26,19 @@
         "type": "dynamic",
         "description": "Windows diagnostic data / telemetry policy as a JSON object: all configured values under the DataCollection policy key (e.g. AllowTelemetry_PolicyManager, AllowDeviceNameInTelemetry, LimitDiagnosticLogCollection, LimitDumpCollection). Values are strings."
       }
+    },
+    {
+      "id": "TelemetryUploadStatus",
+      "label": "Telemetry upload status (DiagTrack)",
+      "order": 61,
+      "default": true,
+      "setups": [],
+      "collector": "$diagTrack = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Diagnostics\\DiagTrack'\n$dt = Get-ItemProperty -Path $diagTrack -ErrorAction SilentlyContinue\n$ar = Get-ItemProperty -Path \"$diagTrack\\HeartBeats\\Aria\" -ErrorAction SilentlyContinue\n$sv = Get-ItemProperty -Path \"$diagTrack\\SevilleEventlogManager\" -ErrorAction SilentlyContinue\n$rs = Get-ItemProperty -Path \"$diagTrack\\RegionalSettings\" -ErrorAction SilentlyContinue\n$ft = {\n    param($Ticks)\n    if (-not $Ticks -or [int64]$Ticks -le 0) { return $null }\n    [DateTime]::FromFileTimeUtc([int64]$Ticks).ToString('o')\n}\n[pscustomobject]@{\n    LastSuccessfulUploadTime             = & $ft $dt.LastSuccessfulUploadTime\n    LastSuccessfulNormalUploadTime       = & $ft $dt.LastSuccessfulNormalUploadTime\n    LastSuccessfulRealtimeUploadTime     = & $ft $dt.LastSuccessfulRealtimeUploadTime\n    LastSuccessfulCostDeferredUploadTime = & $ft $dt.LastSuccessfulCostDeferredUploadTime\n    LastInvalidHttpCode                  = if ($null -ne $ar.LastInvalidHttpCode) { '0x{0:X8}' -f [uint32]$ar.LastInvalidHttpCode } else { $null }\n    VortexHttpAttempts                   = $ar.VortexHttpAttempts\n    VortexHttpFailures4xx                = $ar.VortexHttpFailures4xx\n    VortexHttpFailures5xx                = $ar.VortexHttpFailures5xx\n    SuccessfulConnections                = $sv.SuccessfulConnections\n    FailedConnections                    = $sv.FailedConnections\n    CollectorFunctionalRegionalUrl       = $rs.CollectorFunctionalRegionalUrl\n    CollectorDiagnosticRegionalUrl       = $rs.CollectorDiagnosticRegionalUrl\n    WatsonRegionalServerName             = $rs.WatsonRegionalServerName\n    LastSettingsUpdateTime               = & $ft $rs.LastSettingsUpdateTime\n}",
+      "column": {
+        "name": "TelemetryUploadStatus",
+        "type": "dynamic",
+        "description": "DiagTrack telemetry upload health as a JSON object: last successful upload times (UTC), Aria heartbeat counters (attempts, 4xx/5xx failures, last HTTP code), Seville connection counts, and cached regional collector endpoints."
+      }
     }
   ]
 }
