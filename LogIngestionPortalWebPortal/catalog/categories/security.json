@@ -162,6 +162,58 @@
         "type": "dynamic",
         "description": "Members of the local Administrators group (well-known SID S-1-5-32-544) as a JSON array of account names."
       }
+    },
+    {
+      "id": "CredentialGuardState",
+      "label": "Credential Guard state",
+      "order": 63,
+      "default": false,
+      "setups": [],
+      "collector": "$dg = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace 'root\\Microsoft\\Windows\\DeviceGuard' -ErrorAction Stop\nif ($dg.SecurityServicesRunning -contains 1) { 'Enabled' } else { 'Disabled' }",
+      "column": {
+        "name": "CredentialGuardState",
+        "type": "string",
+        "description": "Windows Defender Credential Guard state (Win32_DeviceGuard.SecurityServicesRunning contains 1): Enabled or Disabled."
+      }
+    },
+    {
+      "id": "VBSState",
+      "label": "Virtualization-based security state",
+      "order": 64,
+      "default": false,
+      "setups": [],
+      "collector": "$dg = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace 'root\\Microsoft\\Windows\\DeviceGuard' -ErrorAction Stop\nswitch ([int]$dg.VirtualizationBasedSecurityStatus) { 2 { 'EnabledRunning' } 1 { 'EnabledNotRunning' } default { 'Disabled' } }",
+      "column": {
+        "name": "VBSState",
+        "type": "string",
+        "description": "Virtualization-based security state (Win32_DeviceGuard.VirtualizationBasedSecurityStatus): EnabledRunning, EnabledNotRunning or Disabled."
+      }
+    },
+    {
+      "id": "HypervisorLaunchType",
+      "label": "Hypervisor launch type",
+      "order": 65,
+      "default": false,
+      "setups": [],
+      "collector": "$bcd = bcdedit /enum '{current}'\n$line = $bcd | Where-Object { $_ -match '^hypervisorlaunchtype' } | Select-Object -First 1\nif ($line) { ($line -replace '^hypervisorlaunchtype\\s+', '').Trim() } else { 'NotFound' }",
+      "column": {
+        "name": "HypervisorLaunchType",
+        "type": "string",
+        "description": "BCD hypervisorlaunchtype value for the current boot entry (e.g. Auto, Off), or NotFound when not set."
+      }
+    },
+    {
+      "id": "VSMLaunchType",
+      "label": "VSM launch type",
+      "order": 66,
+      "default": false,
+      "setups": [],
+      "collector": "$bcd = bcdedit /enum '{current}'\n$line = $bcd | Where-Object { $_ -match '^vsmlaunchtype' } | Select-Object -First 1\nif ($line) { ($line -replace '^vsmlaunchtype\\s+', '').Trim() } else { 'NotFound' }",
+      "column": {
+        "name": "VSMLaunchType",
+        "type": "string",
+        "description": "BCD vsmlaunchtype value for the current boot entry, or NotFound when not set."
+      }
     }
   ]
 }
