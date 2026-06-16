@@ -27,6 +27,17 @@ export interface CatalogColumn {
 }
 
 /**
+ * One per-item column for a field that returns an array (a "row source"). When a
+ * table is built from this field, each array item becomes a row and each element
+ * column is emitted from `expression`, evaluated with the item bound to `$item`.
+ */
+export interface CatalogElementColumn {
+  /** PowerShell expression for this column, evaluated per item (item = $item). */
+  expression: string;
+  column: CatalogColumn;
+}
+
+/**
  * A single selectable data point. Each entry bundles BOTH the column definition
  * and the PowerShell collector that produces its value, so adding a data point
  * never requires editing two files.
@@ -55,6 +66,12 @@ export interface CatalogField {
    */
   collector?: string;
   column: CatalogColumn;
+  /**
+   * Optional per-item schema for an array-returning collector. Its presence marks
+   * the field as usable as a table "row source" (one row per array item). The
+   * field can still be selected as a single `dynamic` column in normal tables.
+   */
+  element?: CatalogElementColumn[];
 }
 
 export interface Catalog {
@@ -96,6 +113,13 @@ export interface TableConfig {
   description: string;
   /** Ids of the non-locked catalog fields assigned to this table. */
   fieldIds: string[];
+  /**
+   * Optional. When set to an array-returning field id (one with an `element`
+   * schema), this table emits ONE ROW PER ITEM of that field's array instead of
+   * one row per device. `fieldIds` then holds the device-level columns stamped
+   * on every row; the per-item columns come from the field's `element`.
+   */
+  rowSourceFieldId?: string;
 }
 
 /** One table's serialized schema (a single entry in columns.json's tables[]). */

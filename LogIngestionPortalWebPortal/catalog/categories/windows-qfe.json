@@ -12,7 +12,14 @@
         "name": "Hotfixes",
         "type": "dynamic",
         "description": "Installed Windows quick-fix engineering updates (hotfixes) as a JSON array (HotFixID, description, install date/user) from Win32_QuickFixEngineering."
-      }
+      },
+      "element": [
+        { "expression": "$item.HotFixID", "column": { "name": "HotFixId", "type": "string", "description": "KB / hotfix id (Win32_QuickFixEngineering.HotFixID)." } },
+        { "expression": "$item.Description", "column": { "name": "HotFixDescription", "type": "string", "description": "Update type/description (Win32_QuickFixEngineering.Description)." } },
+        { "expression": "if ($item.InstalledOn) { \"$($item.InstalledOn)\" } else { $null }", "column": { "name": "HotFixInstalledOn", "type": "string", "description": "Install date as reported by Win32_QuickFixEngineering.InstalledOn." } },
+        { "expression": "$item.InstalledBy", "column": { "name": "HotFixInstalledBy", "type": "string", "description": "Account that installed the update (Win32_QuickFixEngineering.InstalledBy)." } },
+        { "expression": "$item.Caption", "column": { "name": "HotFixCaption", "type": "string", "description": "Support URL for the update (Win32_QuickFixEngineering.Caption)." } }
+      ]
     }
   ]
 }

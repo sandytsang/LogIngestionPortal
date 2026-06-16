@@ -47,6 +47,11 @@ Get-ChildItem -Path $categoriesDir -Filter *.json | ForEach-Object {
         if ($field.collector) {
             Test-PowerShell -Label "$file '$($field.id)' collector" -Code $field.collector
         }
+        if ($field.element) {
+            foreach ($el in $field.element) {
+                Test-PowerShell -Label "$file '$($field.id)' element '$($el.column.name)'" -Code $el.expression
+            }
+        }
     }
 }
 

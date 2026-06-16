@@ -126,6 +126,42 @@ describe('generateScript', () => {
   });
 });
 
+describe('row-source tables', () => {
+  const driverTable: TableConfig[] = [
+    {
+      id: 't-drv',
+      name: 'Drivers_CL',
+      description: 'one row per driver',
+      fieldIds: ['DeviceName'],
+      rowSourceFieldId: 'Drivers',
+    },
+  ];
+
+  it('columns.json has device columns + element columns, not the array column', () => {
+    const doc = generateColumns(catalog, driverTable);
+    const cols = doc.tables[0].columns.map((c) => c.name);
+    expect(cols).toContain('TimeGenerated');
+    expect(cols).toContain('DeviceName');
+    expect(cols).toContain('DriverName');
+    expect(cols).toContain('DriverVersion');
+    // the array field itself is expanded, not emitted as a dynamic column
+    expect(cols).not.toContain('Drivers');
+  });
+
+  it('script emits a foreach over the array with per-item expressions', () => {
+    const script = generateScript(catalog, driverTable, baseConfig);
+    expect(script).toContain("'Drivers_CL' = @(");
+    expect(script).toContain('foreach ($item in @($Drivers))');
+    expect(script).toMatch(/DriverName\s+= \$item\.DeviceName/);
+    expect(script).toMatch(/DeviceName\s+= \$DeviceName/);
+  });
+
+  it('a normal table still emits a single record (no foreach)', () => {
+    const script = generateScript(catalog, defaultTables(), baseConfig);
+    expect(script).not.toContain('foreach ($item in');
+  });
+});
+
 describe('generateDeployReadme', () => {
   const tables = defaultTables();
 

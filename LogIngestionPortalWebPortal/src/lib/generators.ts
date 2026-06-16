@@ -22,17 +22,40 @@ export function tableFields(catalog: Catalog, table: TableConfig): CatalogField[
   return catalog.fields.filter((f) => f.locked || ids.has(f.id));
 }
 
+/** The array-returning field a table expands into rows, or undefined for a normal table. */
+export function rowSourceField(catalog: Catalog, table: TableConfig): CatalogField | undefined {
+  if (!table.rowSourceFieldId) return undefined;
+  const f = catalog.fields.find((x) => x.id === table.rowSourceFieldId);
+  return f && f.element && f.element.length ? f : undefined;
+}
+
 /** Builds the multi-table columns.json document from the configured tables. */
 export function generateColumns(
   catalog: Catalog,
   tables: TableConfig[],
 ): MultiTableColumnsDocument {
   return {
-    tables: tables.map((t) => ({
-      tableName: t.name,
-      description: t.description,
-      columns: tableFields(catalog, t).map((f) => ({ ...f.column })),
-    })),
+    tables: tables.map((t) => {
+      const src = rowSourceField(catalog, t);
+      if (src) {
+        // Row-source table: device-level columns (minus the array field itself)
+        // followed by the field's per-item element columns.
+        const deviceCols = tableFields(catalog, t)
+          .filter((f) => f.id !== src.id)
+          .map((f) => ({ ...f.column }));
+        const elementCols = (src.element ?? []).map((e) => ({ ...e.column }));
+        return {
+          tableName: t.name,
+          description: t.description,
+          columns: [...deviceCols, ...elementCols],
+        };
+      }
+      return {
+        tableName: t.name,
+        description: t.description,
+        columns: tableFields(catalog, t).map((f) => ({ ...f.column })),
+      };
+    }),
   };
 }
 
@@ -55,8 +78,12 @@ export function generateScript(
   config: PortalConfig,
 ): string {
   // The union of fields needed across every table (locked fields are always in).
+  // A table's row-source field is included too so its array is collected once.
   const assigned = new Set<string>();
-  for (const t of tables) for (const id of t.fieldIds) assigned.add(id);
+  for (const t of tables) {
+    for (const id of t.fieldIds) assigned.add(id);
+    if (t.rowSourceFieldId) assigned.add(t.rowSourceFieldId);
+  }
   const usedFields = catalog.fields.filter((f) => f.locked || assigned.has(f.id));
 
   // Collect the shared setup snippets actually needed, de-duplicated. Emit those
@@ -92,9 +119,12 @@ export function generateScript(
   const setupSection = [sharedBlock, collectorBlock, exprBlock].filter(Boolean).join('\n\n');
 
   // The table-keyed payload. Each table gets TimeGenerated + its assigned columns,
-  // every property value referencing the pre-computed $<id> variable.
+  // every property value referencing the pre-computed $<id> variable. A row-source
+  // table instead expands its array field into one record per item.
   const tableBlocks = tables
     .map((t) => {
+      const src = rowSourceField(catalog, t);
+      if (src) return rowSourceTableBlock(catalog, t, src);
       const fields = tableFields(catalog, t);
       const pad = Math.max(0, ...fields.map((f) => f.column.name.length));
       const lines = fields
@@ -119,6 +149,30 @@ export function generateScript(
     .replace('__USE_JWT__', '$true')
     .replace('__SCRIPT_VERSION__', escapePsSingleQuote(config.scriptVersion))
     .replace('__GET_DEVICE_DATA_BODY__', body);
+}
+
+/**
+ * Emits a row-source table block: a foreach over the field's pre-computed array
+ * ($<id>) producing one [pscustomobject] per item. Device-level fields reference
+ * their $<id> variable; element columns reference the loop item via $item.
+ */
+function rowSourceTableBlock(catalog: Catalog, table: TableConfig, src: CatalogField): string {
+  const deviceFields = tableFields(catalog, table).filter((f) => f.id !== src.id);
+  const entries = [
+    ...deviceFields.map((f) => ({ name: f.column.name, value: `$${f.id}` })),
+    ...(src.element ?? []).map((e) => ({ name: e.column.name, value: e.expression })),
+  ];
+  const pad = Math.max(0, ...entries.map((e) => e.name.length));
+  const lines = entries
+    .map((e) => `                    ${e.name.padEnd(pad)} = ${e.value}`)
+    .join('\n');
+  return (
+    `        '${escapePsSingleQuote(table.name)}' = @(\n` +
+    `            foreach ($item in @($${src.id})) {\n` +
+    `                [pscustomobject]@{\n${lines}\n                }\n` +
+    `            }\n` +
+    `        )`
+  );
 }
 
 /** Wraps a self-contained collector body in Invoke-Safe, indented for the script. */

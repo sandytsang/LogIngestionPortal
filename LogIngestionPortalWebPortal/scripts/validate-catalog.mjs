@@ -140,6 +140,22 @@ for (const file of files) {
 
     if (field.expression) scanSecurity(`${where} expression`, field.expression);
     if (field.collector) scanSecurity(`${where} collector`, field.collector);
+
+    // Element columns (row-source fields): unique names within the field, valid
+    // types, and read-only expressions like any other collector code.
+    if (field.element) {
+      const elemSeen = new Set();
+      for (const el of field.element) {
+        if (!allowedTypes.includes(el.column.type)) {
+          fail(`${where}: element column '${el.column.name}' has unsupported type '${el.column.type}'.`);
+        }
+        if (elemSeen.has(el.column.name)) {
+          fail(`${where}: duplicate element column name '${el.column.name}'.`);
+        }
+        elemSeen.add(el.column.name);
+        scanSecurity(`${where} element '${el.column.name}'`, el.expression);
+      }
+    }
   }
 }
 

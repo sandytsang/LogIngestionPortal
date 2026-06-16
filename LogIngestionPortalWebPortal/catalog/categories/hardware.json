@@ -251,7 +251,16 @@
         "name": "Drivers",
         "type": "dynamic",
         "description": "Non-Microsoft signed PnP drivers as a JSON array (device name, version, date, class, manufacturer, provider, INF) from Win32_PnPSignedDriver."
-      }
+      },
+      "element": [
+        { "expression": "$item.DeviceName", "column": { "name": "DriverName", "type": "string", "description": "Driver device name (Win32_PnPSignedDriver.DeviceName)." } },
+        { "expression": "$item.DriverVersion", "column": { "name": "DriverVersion", "type": "string", "description": "Driver version (Win32_PnPSignedDriver.DriverVersion)." } },
+        { "expression": "if ($item.DriverDate) { $item.DriverDate.ToUniversalTime().ToString('o') } else { $null }", "column": { "name": "DriverDate", "type": "datetime", "description": "Driver date (UTC) from Win32_PnPSignedDriver.DriverDate." } },
+        { "expression": "$item.DeviceClass", "column": { "name": "DriverClass", "type": "string", "description": "Driver device class (Win32_PnPSignedDriver.DeviceClass)." } },
+        { "expression": "$item.Manufacturer", "column": { "name": "DriverManufacturer", "type": "string", "description": "Driver manufacturer (Win32_PnPSignedDriver.Manufacturer)." } },
+        { "expression": "$item.DriverProviderName", "column": { "name": "DriverProvider", "type": "string", "description": "Driver provider (Win32_PnPSignedDriver.DriverProviderName)." } },
+        { "expression": "$item.InfName", "column": { "name": "DriverInfName", "type": "string", "description": "Driver INF file name (Win32_PnPSignedDriver.InfName)." } }
+      ]
     },
     {
       "id": "Monitors",

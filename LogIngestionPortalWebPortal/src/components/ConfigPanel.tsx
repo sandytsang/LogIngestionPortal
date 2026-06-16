@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
 import type { PortalConfig, TableConfig } from '../types';
+import { catalog } from '../data/catalog';
+
+// Fields that return an array and declare a per-item schema can drive a
+// "row-source" table (one row per array item).
+const rowSourceOptions = catalog.fields.filter((f) => f.element && f.element.length);
 
 interface Props {
   config: PortalConfig;
@@ -473,6 +478,34 @@ export function ConfigPanel({
                   placeholder="Table description (optional)"
                   aria-label={`Table ${i + 1} description`}
                 />
+                {rowSourceOptions.length > 0 && (
+                  <div className="mt-2">
+                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      Rows
+                    </label>
+                    <select
+                      className={`${field} mt-1`}
+                      value={t.rowSourceFieldId ?? ''}
+                      onChange={(e) =>
+                        onUpdateTable(t.id, { rowSourceFieldId: e.target.value || undefined })
+                      }
+                      aria-label={`Table ${i + 1} row source`}
+                    >
+                      <option value="">One row per device</option>
+                      {rowSourceOptions.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          One row per item of: {f.label}
+                        </option>
+                      ))}
+                    </select>
+                    {t.rowSourceFieldId && (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        This table emits one row per item; the item columns are added automatically.
+                        Assign Identity fields in the catalog to stamp them on every row.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <p className="mt-1 text-[11px] text-slate-400">
                   {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned (plus
                   TimeGenerated &amp; IntuneScriptVersion).

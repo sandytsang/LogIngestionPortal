@@ -40,6 +40,19 @@
         },
         "expression": { "type": "string", "minLength": 1, "maxLength": 1000 },
         "collector": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "element": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["expression", "column"],
+            "properties": {
+              "expression": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "column": { "$ref": "#/definitions/column" }
+            }
+          }
+        },
         "column": { "$ref": "#/definitions/column" }
       },
       "oneOf": [
