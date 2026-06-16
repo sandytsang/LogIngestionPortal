@@ -141,16 +141,16 @@ $groups = New-Object System.Collections.Generic.List[object]
 if (Test-TableKeyed $payload) {
     foreach ($m in (Get-Members $payload)) {
         $table = [string]$m.Name
-        if (-not $streamByTable.Contains($table)) {
-            Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{
-                error           = "Unknown table '$table'."
-                configuredTables = @($streamByTable.Keys)
-            }
-            return
-        }
+        # Prefer the configured stream, but fall back to Custom-<table> for tables
+        # not listed in DCR_STREAMS. A schema-only update adds the DCR stream
+        # without redeploying the Function (so this app setting can lag); routing
+        # by name lets new tables ingest as soon as their DCR stream exists. If
+        # the stream truly doesn't exist, the ingestion call below returns the
+        # DCR's own error (relayed as 502) rather than a blanket 400 here.
+        $stream = if ($streamByTable.Contains($table)) { $streamByTable[$table] } else { "Custom-$table" }
         $records = @($m.Value)
         if ($records.Count -eq 0) { continue }
-        $groups.Add([pscustomobject]@{ Table = $table; Stream = $streamByTable[$table]; Records = $records })
+        $groups.Add([pscustomobject]@{ Table = $table; Stream = $stream; Records = $records })
     }
 }
 else {
