@@ -129,16 +129,24 @@ so no secrets/keys are stored.
    - Organization/owner = your GitHub user/org, Repository = your repo
    - Entity = **Environment**, value = `dev` (match the `environment` input), or
      use **Branch** = `main` if you remove the `environment:` line.
-2. **Assign Azure roles** to that app's service principal on the target
-   subscription or resource group:
+2. **Assign Azure roles** to that app registration's service principal on the
+   target subscription or resource group. These are **Azure RBAC roles** — the
+   app registration needs **no Microsoft Graph / API permissions** of its own:
    - **Contributor** — create the Function App, storage, workspace and DCR.
-   - **User Access Administrator** — the Bicep assigns the Function's managed
-     identity *Monitoring Metrics Publisher* on the DCR, which requires this.
+   - **User Access Administrator** (or **Owner**, which already includes it) —
+     the Bicep assigns the Function's managed identity *Monitoring Metrics
+     Publisher* on the DCR, and creating a role assignment needs this. Contributor
+     alone cannot create role assignments.
      *Contributor-only option:* if you can't grant this, set the
      **`skipRoleAssignment`** input to `true` when you run the workflow — the
      deploy then needs only **Contributor**, and you grant *Monitoring Metrics
      Publisher* on the DCR separately afterwards (the run log / `deploy.ps1`
      prints the exact `az role assignment create` command).
+
+   > The device check's Graph **Device.Read.All** is granted to the Function
+   > App's **managed identity** (a separate identity created at deploy time), not
+   > to this app registration — so don't add any Graph application permissions to
+   > the app registration itself. See [After it runs](#after-it-runs) below.
 3. **Add three repo secrets** (Settings → Secrets and variables → Actions):
    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 4. Run **Actions → Deploy LogIngestionAPI → Run workflow** and fill in the
