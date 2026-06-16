@@ -53,3 +53,54 @@ describe('update-columns workflow pre-fill (CRLF-tolerant)', () => {
     expect(out).toContain('        default: prod');
   });
 });
+
+// deploy.yml input block (CRLF) — a brand-new full deploy.
+const deployCrlfYaml = [
+  'on:',
+  '  workflow_dispatch:',
+  '    inputs:',
+  '      resourceGroup:',
+  '        type: string',
+  '        default: rg-logingestion',
+  '      location:',
+  '        type: string',
+  '        default: eastus',
+  '      baseName:',
+  '        type: string',
+  '        default: logapi',
+  '      environment:',
+  '        type: choice',
+  '        options: [dev, test, prod]',
+  '        default: dev',
+  '      functionPlanType:',
+  '        type: choice',
+  '        options: [Consumption, Flex]',
+  '        default: Consumption',
+  '      existingWorkspaceName:',
+  '        type: string',
+  "        default: ''",
+  '',
+].join('\r\n');
+
+describe('deploy workflow pre-fill (brand-new deploy)', () => {
+  it('keeps the web UI values: resource group, region, workload name, environment, plan', () => {
+    const cfg: PortalConfig = {
+      ...updateConfig,
+      action: 'deploy',
+      scenario: 'new',
+      baseName: 'logingestion',
+      environment: 'prod',
+      functionResourceGroup: 'rg-logingestion-prod',
+      location: 'northeurope',
+      functionPlanType: 'Flex',
+    };
+    const out = generateWorkflowYaml(deployCrlfYaml, cfg);
+    expect(out).toContain("        default: 'rg-logingestion-prod'");
+    expect(out).toContain("        default: 'northeurope'");
+    expect(out).toContain("        default: 'logingestion'");
+    expect(out).toContain('        default: prod');
+    expect(out).toContain('        default: Flex');
+    // A new deploy creates a new workspace, so this stays blank.
+    expect(out).toContain("      existingWorkspaceName:\n        type: string\n        default: ''");
+  });
+});
