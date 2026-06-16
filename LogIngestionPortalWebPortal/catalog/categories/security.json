@@ -214,6 +214,19 @@
         "type": "string",
         "description": "BCD vsmlaunchtype value for the current boot entry, or NotFound when not set."
       }
+    },
+    {
+      "id": "DefenderPreferences",
+      "label": "Defender preferences (Get-MpPreference)",
+      "order": 72,
+      "default": false,
+      "setups": [],
+      "collector": "$pref = Get-MpPreference -ErrorAction Stop\n$o = [ordered]@{}\nforeach ($p in $pref.PSObject.Properties) {\n    if ($p.Name -like 'PS*' -or $p.Name -like 'Cim*') { continue }\n    $o[$p.Name] = $p.Value\n}\n[pscustomobject]$o",
+      "column": {
+        "name": "DefenderPreferences",
+        "type": "dynamic",
+        "description": "Microsoft Defender preference/policy settings (Get-MpPreference) as a JSON object: exclusions, scan, threat, real-time and ASR configuration. Arrays (e.g. exclusion lists) are kept as JSON arrays."
+      }
     }
   ]
 }
