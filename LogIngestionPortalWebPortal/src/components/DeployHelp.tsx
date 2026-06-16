@@ -6,7 +6,7 @@
  */
 export function DeployHelp() {
   return (
-    <details className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <details open className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <summary className="cursor-pointer select-none text-sm font-semibold text-slate-800 dark:text-slate-100">
         How to deploy the downloaded zip
       </summary>
@@ -84,7 +84,16 @@ export function DeployHelp() {
             </li>
             <li>
               Full setup details (roles, federated-credential subject, prod approval gate) are in the
-              bundled <span className="font-semibold">README.md</span>.
+              bundled{' '}
+              <a
+                href="https://github.com/sandytsang/LogIngestionPortal/blob/main/LogIngestionAPI/README.md"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-400"
+              >
+                README.md
+              </a>
+              .
             </li>
           </ol>
         </section>
