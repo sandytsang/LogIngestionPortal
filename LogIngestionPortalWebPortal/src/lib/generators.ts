@@ -144,11 +144,15 @@ export function generateScript(
     tableBlocks +
     '\n    }';
 
+  // Use replacer FUNCTIONS so `$` sequences in the injected values (e.g. a regex
+  // ending in `(.*)$'` inside a collector) are inserted literally. A string
+  // replacement would treat `$'`, `$&`, `$1`, `$$` etc. as special patterns and
+  // corrupt the output.
   return scriptTemplate
-    .replace('__FUNCTION_URL__', config.functionUrl)
-    .replace('__USE_JWT__', '$true')
-    .replace('__SCRIPT_VERSION__', escapePsSingleQuote(config.scriptVersion))
-    .replace('__GET_DEVICE_DATA_BODY__', body);
+    .replace('__FUNCTION_URL__', () => config.functionUrl)
+    .replace('__USE_JWT__', () => '$true')
+    .replace('__SCRIPT_VERSION__', () => escapePsSingleQuote(config.scriptVersion))
+    .replace('__GET_DEVICE_DATA_BODY__', () => body);
 }
 
 /**

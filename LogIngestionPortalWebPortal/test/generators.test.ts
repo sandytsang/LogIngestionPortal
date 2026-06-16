@@ -124,6 +124,19 @@ describe('generateScript', () => {
     const script = generateScript(catalog, defaultTables(), { ...baseConfig, scriptVersion: "O'Brien" });
     expect(script).toContain("$ScriptVersion = 'O''Brien'");
   });
+
+  it('injects collectors containing $-replacement patterns literally (no String.replace corruption)', () => {
+    // The w32tm collector regex ends with `(.*)$'`. A string-based replace would
+    // treat `$'` as "text after the match" and truncate the body; a function
+    // replacer keeps it literal. Guard against a regression.
+    const tables: TableConfig[] = [
+      { id: 't-time', name: 'Device_CL', description: '', fieldIds: ['TimeSyncStatus'] },
+    ];
+    const script = generateScript(catalog, tables, baseConfig);
+    expect(script).toContain("$line -match '^\\s*([^:]+):\\s*(.*)$'");
+    expect(script).toContain('[pscustomobject]$o');
+    expect(script).not.toContain('__GET_DEVICE_DATA_BODY__');
+  });
 });
 
 describe('row-source tables', () => {
