@@ -129,6 +129,9 @@ so no secrets/keys are stored.
    - Organization/owner = your GitHub user/org, Repository = your repo
    - Entity = **Environment**, value = `dev` (match the `environment` input), or
      use **Branch** = `main` if you remove the `environment:` line.
+
+   New to this? Microsoft's step-by-step guide:
+   [Configure a federated identity credential on an app](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#configure-a-federated-identity-credential-on-an-app).
 2. **Assign Azure roles** to that app registration's service principal on the
    target subscription or resource group. These are **Azure RBAC roles** — the
    app registration needs **no Microsoft Graph / API permissions** of its own:
