@@ -416,7 +416,11 @@ export function generateWorkflowYaml(
   const inputKeyRe = /^ {6}([A-Za-z][A-Za-z0-9]*):\s*$/;
   const defaultRe = /^( {8}default:).*$/;
   let currentKey: string | null = null;
+  // Normalize CRLF -> LF first: on Windows checkouts the bundled YAML has \r\n,
+  // and a trailing \r stops the `.*$` default-line regex from matching (so no
+  // override would ever apply). Emitting LF is fine for GitHub Actions.
   return baseYaml
+    .replace(/\r\n/g, '\n')
     .split('\n')
     .map((line) => {
       const keyMatch = line.match(inputKeyRe);
