@@ -58,7 +58,7 @@ roles (see below).
 
 ```powershell
 cd scripts
-./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
+./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
 ```
 
 The script prints the **Function URL** and **function key**. Paste the full
@@ -90,10 +90,10 @@ you already have, pass `-ExistingWorkspaceName`:
 
 ```powershell
 # Workspace in the same resource group as the Function App
-./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus -ExistingWorkspaceName my-law
+./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus -ExistingWorkspaceName my-law
 
 # Workspace in a different resource group
-./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus `
+./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus `
   -ExistingWorkspaceName my-law `
   -ExistingWorkspaceResourceGroup rg-shared-monitoring
 ```
@@ -188,7 +188,7 @@ Set them via Bicep params (`jwtExpectedAudience`,
 1. **Deploy.** The script auto-grants the Graph permission the device check needs
    (see below), so a normal deploy is enough:
    ```powershell
-   ./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
+   ./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
    ```
 2. **Client side** in [scripts/IntuneScript.ps1](scripts/IntuneScript.ps1): keep
    `$UseDeviceJwt = $true` (the default) and package the Proactive Remediation.
@@ -209,7 +209,7 @@ Administrator). If you lack that, the script warns and continues; grant it
 manually afterwards:
 
 ```powershell
-$rg   = 'rg-loging-dev'
+$rg   = 'rg-logging-dev'
 $func = '<function-app-name>'
 $miId = az functionapp identity show -g $rg -n $func --query principalId -o tsv
 $graphId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query '[0].id' -o tsv
@@ -267,10 +267,10 @@ SCM basic auth just for that publish.
    touches just the table + DCR (the Function App is left untouched):
    ```powershell
    # Schema-only update (recommended for column changes)
-   ./deploy.ps1 -SchemaOnly -DcrResourceGroup rg-loging-dev
+   ./deploy.ps1 -SchemaOnly -DcrResourceGroup rg-logging-dev
 
    # Or a full redeploy without republishing the Function code
-   ./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus -SkipFunctionPublish
+   ./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus -SkipFunctionPublish
    ```
    The table and DCR are regenerated; existing data is preserved and the Function
    code is unchanged.

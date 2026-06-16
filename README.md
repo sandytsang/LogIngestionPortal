@@ -57,7 +57,7 @@ Nothing to install for this step.
 
 ```powershell
 cd LogIngestionAPI
-./scripts/deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
+./scripts/deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
 ```
 
 **3. Wire up Intune** — set `$FunctionUrl` in `IntuneScript.ps1` to the URL the deploy

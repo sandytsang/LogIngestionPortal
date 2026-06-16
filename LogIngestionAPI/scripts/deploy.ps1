@@ -77,7 +77,7 @@
     the existing DCR's name instead of passing -BaseName/-Environment.
 
 .EXAMPLE
-    ./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
+    ./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
 
 .EXAMPLE
     ./deploy.ps1 -FunctionResourceGroup rg-fn -DcrResourceGroup rg-dcr -Location eastus

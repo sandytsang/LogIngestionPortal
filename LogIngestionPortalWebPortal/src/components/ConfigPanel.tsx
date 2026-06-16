@@ -17,6 +17,21 @@ const field =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900';
 const label = 'block text-xs font-medium text-slate-600 dark:text-slate-300';
 
+// Applied to a required input whose value is still empty, so missing fields are
+// obvious at a glance (rose border + faint rose fill) instead of relying on a
+// small asterisk.
+const requiredRing =
+  'border-rose-400 bg-rose-50/60 focus:border-rose-500 focus:ring-rose-500/30 dark:border-rose-500/60 dark:bg-rose-500/10';
+
+// A clearly visible "Required" pill shown next to a label while its field is
+// empty. Disappears once the user fills the field in.
+const reqPill = (show: boolean): ReactNode =>
+  show ? (
+    <span className="ml-1.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:bg-rose-500/20 dark:text-rose-300">
+      Required
+    </span>
+  ) : null;
+
 // Common Azure regions that support Log Analytics + Data Collection Rules.
 const azureRegions: { value: string; label: string }[] = [
   { value: 'eastus', label: 'East US' },
@@ -77,6 +92,7 @@ export function ConfigPanel({
     if (isBlank(workspaceName)) requiredWarnings.push('Existing workspace name');
     if (isBlank(config.existingWorkspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
   } else {
+    if (isBlank(config.baseName)) requiredWarnings.push('Workload name');
     if (isBlank(config.functionResourceGroup)) {
       requiredWarnings.push(isNew ? 'Resource group' : 'Function App resource group');
     }
@@ -95,16 +111,18 @@ export function ConfigPanel({
   };
 
   type RgKey = 'functionResourceGroup' | 'dcrResourceGroup' | 'existingWorkspaceResourceGroup';
-  const rgField = (id: string, labelText: ReactNode, key: RgKey, placeholder: string) => {
+  const rgField = (id: string, labelText: ReactNode, key: RgKey, placeholder: string, required = true) => {
     const suggestion = cafSuggest(config[key], 'rg-');
+    const empty = required && isBlank(config[key]);
     return (
       <div>
         <label className={label} htmlFor={id}>
           {labelText}
+          {reqPill(empty)}
         </label>
         <input
           id={id}
-          className={`${field} mt-1`}
+          className={`${field} mt-1 ${empty ? requiredRing : ''}`}
           value={config[key]}
           onChange={(e) => onChange({ [key]: e.target.value } as Partial<PortalConfig>)}
           placeholder={placeholder}
@@ -123,26 +141,30 @@ export function ConfigPanel({
     );
   };
 
-  const regionSelect = (id: string, labelText: string) => (
-    <div>
-      <label className={label} htmlFor={id}>
-        {labelText}
-      </label>
-      <select
-        id={id}
-        className={`${field} mt-1`}
-        value={config.location}
-        onChange={(e) => onChange({ location: e.target.value })}
-      >
-        <option value="">Select a region…</option>
-        {azureRegions.map((r) => (
-          <option key={r.value} value={r.value}>
-            {r.label} ({r.value})
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+  const regionSelect = (id: string, labelText: string) => {
+    const empty = isBlank(config.location);
+    return (
+      <div>
+        <label className={label} htmlFor={id}>
+          {labelText}
+          {reqPill(empty)}
+        </label>
+        <select
+          id={id}
+          className={`${field} mt-1 ${empty ? requiredRing : ''}`}
+          value={config.location}
+          onChange={(e) => onChange({ location: e.target.value })}
+        >
+          <option value="">Select a region…</option>
+          {azureRegions.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label} ({r.value})
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -195,10 +217,11 @@ export function ConfigPanel({
             <div>
               <label className={label} htmlFor="baseName">
                 Workload name
+                {reqPill(isBlank(config.baseName))}
               </label>
               <input
                 id="baseName"
-                className={`${field} mt-1`}
+                className={`${field} mt-1 ${isBlank(config.baseName) ? requiredRing : ''}`}
                 value={config.baseName}
                 onChange={(e) => onChange({ baseName: e.target.value })}
                 placeholder="logapi"
@@ -237,10 +260,11 @@ export function ConfigPanel({
             <div>
               <label className={label} htmlFor="dcrName">
                 DCR name
+                {reqPill(isBlank(config.dcrName))}
               </label>
               <input
                 id="dcrName"
-                className={`${field} mt-1`}
+                className={`${field} mt-1 ${isBlank(config.dcrName) ? requiredRing : ''}`}
                 value={config.dcrName}
                 onChange={(e) => onChange({ dcrName: e.target.value })}
                 placeholder="dcr-logingestion-prod"
@@ -256,16 +280,17 @@ export function ConfigPanel({
                 </button>
               )}
             </div>
-            {rgField('dcrResourceGroup', 'DCR resource group', 'dcrResourceGroup', 'rg-loging-prod')}
+            {rgField('dcrResourceGroup', 'DCR resource group', 'dcrResourceGroup', 'rg-logging-prod')}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label} htmlFor="workspaceName">
                 Existing workspace name
+                {reqPill(isBlank(workspaceName))}
               </label>
               <input
                 id="workspaceName"
-                className={`${field} mt-1`}
+                className={`${field} mt-1 ${isBlank(workspaceName) ? requiredRing : ''}`}
                 value={workspaceName}
                 onChange={(e) => onWorkspaceChange(e.target.value)}
                 placeholder="log-shared-central"
@@ -305,7 +330,7 @@ export function ConfigPanel({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {rgField('functionResourceGroup', 'Resource group', 'functionResourceGroup', 'rg-loging-prod')}
+            {rgField('functionResourceGroup', 'Resource group', 'functionResourceGroup', 'rg-logging-prod')}
             {regionSelect('location', 'Region')}
           </div>
           <p className="text-[11px] text-slate-400">
@@ -342,10 +367,11 @@ export function ConfigPanel({
             <div>
               <label className={label} htmlFor="workspaceName">
                 Existing workspace name
+                {reqPill(isBlank(workspaceName))}
               </label>
               <input
                 id="workspaceName"
-                className={`${field} mt-1`}
+                className={`${field} mt-1 ${isBlank(workspaceName) ? requiredRing : ''}`}
                 value={workspaceName}
                 onChange={(e) => onWorkspaceChange(e.target.value)}
                 placeholder="log-shared-central"
@@ -354,7 +380,7 @@ export function ConfigPanel({
             {rgField('existingWorkspaceResourceGroup', 'Workspace resource group', 'existingWorkspaceResourceGroup', 'rg-shared-logs')}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {rgField('functionResourceGroup', 'Function App resource group', 'functionResourceGroup', 'rg-loging-prod')}
+            {rgField('functionResourceGroup', 'Function App resource group', 'functionResourceGroup', 'rg-logging-prod')}
             {regionSelect('location', 'Function App region')}
           </div>
           <p className="text-[11px] text-amber-600 dark:text-amber-400">
@@ -365,7 +391,7 @@ export function ConfigPanel({
           <details className="text-[11px] text-slate-500">
             <summary className="cursor-pointer select-none">Advanced: separate DCR resource group</summary>
             <div className="mt-2">
-              {rgField('dcrResourceGroup', <>DCR resource group <span className="text-slate-400">(optional)</span></>, 'dcrResourceGroup', 'defaults to Function App RG')}
+              {rgField('dcrResourceGroup', <>DCR resource group <span className="text-slate-400">(optional)</span></>, 'dcrResourceGroup', 'defaults to Function App RG', false)}
             </div>
           </details>
         </>
@@ -424,7 +450,7 @@ export function ConfigPanel({
               >
                 <div className="flex items-center gap-2">
                   <input
-                    className={field}
+                    className={`${field} ${isBlank(t.name) ? requiredRing : ''}`}
                     value={t.name}
                     onChange={(e) => onUpdateTable(t.id, { name: e.target.value })}
                     placeholder={`Table${i + 1}_CL`}
@@ -459,11 +485,12 @@ export function ConfigPanel({
 
       <div>
         <label className={label} htmlFor="scriptVersion">
-          Intune script version <span className="text-rose-500">*</span>
+          Intune script version
+          {reqPill(isBlank(config.scriptVersion))}
         </label>
         <input
           id="scriptVersion"
-          className={`${field} mt-1 ${isBlank(config.scriptVersion) ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/30' : ''}`}
+          className={`${field} mt-1 ${isBlank(config.scriptVersion) ? requiredRing : ''}`}
           value={config.scriptVersion}
           onChange={(e) => onChange({ scriptVersion: e.target.value })}
           placeholder="1.0.0"

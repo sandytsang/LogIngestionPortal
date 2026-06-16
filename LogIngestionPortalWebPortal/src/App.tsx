@@ -24,7 +24,7 @@ const defaultConfig = (): PortalConfig => ({
   scriptVersion: '1.0.0',
   action: 'deploy',
   scenario: 'new',
-  baseName: 'logapi',
+  baseName: '',
   environment: 'dev',
   functionResourceGroup: '',
   dcrResourceGroup: '',

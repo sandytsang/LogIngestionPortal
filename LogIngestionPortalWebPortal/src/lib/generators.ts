@@ -146,7 +146,7 @@ export function generateDeployReadme(
       ? '<table>'
       : tables.map((t) => `"${t.name}"`).join(', ');
   const tableWord = tables.length > 1 ? 'tables' : 'table';
-  const fnRg = config.functionResourceGroup?.trim() || 'rg-loging-prod';
+  const fnRg = config.functionResourceGroup?.trim() || 'rg-logging-prod';
   const loc = config.location?.trim() || 'eastus';
   const dcrRg = config.dcrResourceGroup?.trim();
   const wsRg = config.existingWorkspaceResourceGroup?.trim();
