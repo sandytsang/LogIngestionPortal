@@ -80,7 +80,6 @@ var schema = loadJsonContent('../schema/columns.json')
 var tables = schema.tables
 // Comma-separated list of table names; the Function derives the stream name
 // (Custom-<tableName>) for each and routes the matching payload group to it.
-var dcrStreams = join(map(tables, t => t.tableName), ',')
 
 // ---------------------------------------------------------------------------
 // Resource group resolution
@@ -140,7 +139,6 @@ module functionApp 'modules/functionApp.bicep' = if (!schemaOnly) {
     workspaceResourceId: logAnalytics.outputs.workspaceId
     dcrEndpoint: dcr.outputs.logsIngestionEndpoint
     dcrImmutableId: dcr.outputs.immutableId
-    dcrStreams: dcrStreams
     jwtExpectedAudience: jwtExpectedAudience
     jwtAllowedTenantId: jwtAllowedTenantId
     jwtRequireEntraDevice: jwtRequireEntraDevice

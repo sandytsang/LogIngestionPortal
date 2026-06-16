@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "14282578526860746581"
+      "templateHash": "5282306944137139567"
     }
   },
   "parameters": {
@@ -250,7 +250,6 @@
     },
     "schema": "[variables('$fxv#0')]",
     "tables": "[variables('schema').tables]",
-    "dcrStreams": "[join(map(variables('tables'), lambda('t', lambdaVariables('t').tableName)), ',')]",
     "createWorkspace": "[empty(parameters('existingWorkspaceName'))]",
     "primaryRg": "[resourceGroup().name]",
     "dcrRg": "[if(empty(parameters('dcrResourceGroup')), variables('primaryRg'), parameters('dcrResourceGroup'))]",
@@ -550,9 +549,6 @@
           "dcrImmutableId": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.immutableId.value]"
           },
-          "dcrStreams": {
-            "value": "[variables('dcrStreams')]"
-          },
           "jwtExpectedAudience": {
             "value": "[parameters('jwtExpectedAudience')]"
           },
@@ -570,7 +566,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "7950688079843160034"
+              "templateHash": "14783422181334847512"
             }
           },
           "parameters": {
@@ -618,12 +614,6 @@
               "type": "string",
               "metadata": {
                 "description": "DCR immutable id."
-              }
-            },
-            "dcrStreams": {
-              "type": "string",
-              "metadata": {
-                "description": "Comma-separated custom table names. The Function derives each DCR stream as Custom-<tableName>."
               }
             },
             "jwtExpectedAudience": {
@@ -727,7 +717,7 @@
                   "http20Enabled": true,
                   "use32BitWorkerProcess": false,
                   "powerShellVersion": "7.4",
-                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('funcName'))), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1')), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'DCR_STREAMS', 'value', parameters('dcrStreams')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
+                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('funcName'))), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1')), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
                 }
               },
               "dependsOn": [
@@ -813,7 +803,7 @@
                   "scmMinTlsVersion": "1.2",
                   "ftpsState": "Disabled",
                   "http20Enabled": true,
-                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'DCR_STREAMS', 'value', parameters('dcrStreams')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
+                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
                 }
               },
               "dependsOn": [

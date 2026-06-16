@@ -85,19 +85,22 @@ function Get-RecordBatches {
 # --- Read configuration injected by the Bicep deployment --------------------
 $dcrEndpoint    = $env:DCR_ENDPOINT
 $dcrImmutableId = $env:DCR_IMMUTABLE_ID
-# DCR_STREAMS is a comma-separated list of custom table names. The single-value
+# DCR_STREAMS is OPTIONAL. Table-keyed bodies route each key to its
+# Custom-<table> stream directly, so the only thing DCR_STREAMS does is pick a
+# default table for a bare array / single-object body. The single-value
 # DCR_STREAM app setting is still honoured for backward compatibility.
 $dcrStreamsRaw  = $env:DCR_STREAMS
 if (-not $dcrStreamsRaw) { $dcrStreamsRaw = $env:DCR_STREAM }
 
-if (-not $dcrEndpoint -or -not $dcrImmutableId -or -not $dcrStreamsRaw) {
-    Write-Error 'DCR_ENDPOINT, DCR_IMMUTABLE_ID and DCR_STREAMS app settings must be configured.'
+if (-not $dcrEndpoint -or -not $dcrImmutableId) {
+    Write-Error 'DCR_ENDPOINT and DCR_IMMUTABLE_ID app settings must be configured.'
     Write-HttpResponse -StatusCode ([HttpStatusCode]::InternalServerError) -Body @{ error = 'Server not configured.' }
     return
 }
 
-# Map each configured table to its DCR stream (Custom-<tableName>). Entries may
-# be given as a bare table name or an explicit Custom-* stream name.
+# Map any configured table to its DCR stream (Custom-<tableName>). Entries may be
+# given as a bare table name or an explicit Custom-* stream name. When
+# DCR_STREAMS is absent the map is simply empty (no default table).
 $streamByTable = [ordered]@{}
 foreach ($entry in ($dcrStreamsRaw -split ',')) {
     $name = $entry.Trim()
@@ -106,12 +109,7 @@ foreach ($entry in ($dcrStreamsRaw -split ',')) {
     $table  = $stream -replace '^Custom-', ''
     $streamByTable[$table] = $stream
 }
-if ($streamByTable.Count -eq 0) {
-    Write-Error 'DCR_STREAMS did not contain any table names.'
-    Write-HttpResponse -StatusCode ([HttpStatusCode]::InternalServerError) -Body @{ error = 'Server not configured.' }
-    return
-}
-$defaultTable = @($streamByTable.Keys)[0]
+$defaultTable = if ($streamByTable.Count -gt 0) { @($streamByTable.Keys)[0] } else { $null }
 
 # --- Device authentication (always required) --------------------------------
 # Every caller must present a device-signed JWT (Authorization: Bearer <jwt>)
@@ -154,6 +152,12 @@ if (Test-TableKeyed $payload) {
     }
 }
 else {
+    if (-not $defaultTable) {
+        Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{
+            error = "Send a table-keyed body, e.g. { 'MyTable_CL': [ { ... } ] }. No DCR_STREAMS default table is configured for a bare array."
+        }
+        return
+    }
     $records = @($payload)
     $groups.Add([pscustomobject]@{ Table = $defaultTable; Stream = $streamByTable[$defaultTable]; Records = $records })
 }
