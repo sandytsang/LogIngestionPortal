@@ -8,6 +8,10 @@ name: Deploy LogIngestionAPI
 # .github/workflows at the repository root, so paths below (infra/, function/,
 # scripts/) are relative to this folder.
 #
+# Pick what to do with the "action" input:
+#   - deploy        : create/update the full stack (Function App + table + DCR).
+#   - updateColumns : schema-only update (table + DCR only; Function App left as-is).
+#
 # Pick how you want to deploy with the "method" input:
 #   - native : no PowerShell script. Bicep + Azure/functions-action only.
 #   - script : run scripts/deploy.ps1 in CI (same path as deploying locally).
@@ -21,6 +25,11 @@ name: Deploy LogIngestionAPI
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: 'deploy = full stack (Function App + table + DCR). updateColumns = schema-only (table + DCR; Function App untouched).'
+        type: choice
+        options: [deploy, updateColumns]
+        default: deploy
       method:
         description: 'Deployment method'
         type: choice
@@ -49,7 +58,15 @@ on:
         options: [Consumption, Flex]
         default: Consumption
       existingWorkspaceName:
-        description: 'Existing Log Analytics workspace name (leave blank to create a new one)'
+        description: 'Existing Log Analytics workspace name (leave blank to create a new one). Required for updateColumns.'
+        type: string
+        default: ''
+      existingWorkspaceResourceGroup:
+        description: 'Resource group of the existing workspace (blank = same as target resource group)'
+        type: string
+        default: ''
+      dcrName:
+        description: 'DCR name to update (updateColumns only; blank = dcr-<baseName>-<environment>)'
         type: string
         default: ''
       requireEntraDevice:
@@ -96,25 +113,34 @@ jobs:
         with:
           azcliversion: latest
           inlineScript: |
+            params=(
+              location="${{ inputs.location }}"
+              baseName="${{ inputs.baseName }}"
+              environment="${{ inputs.environment }}"
+              functionPlanType="${{ inputs.functionPlanType }}"
+              existingWorkspaceName="${{ inputs.existingWorkspaceName }}"
+              existingWorkspaceResourceGroup="${{ inputs.existingWorkspaceResourceGroup }}"
+              jwtRequireEntraDevice=${{ inputs.requireEntraDevice }}
+            )
+            # Schema-only update: regenerate just the table + DCR (by name) and
+            # leave the Function App alone. Matches the portal's "Update data
+            # columns only" action.
+            if [ "${{ inputs.action }}" = "updateColumns" ]; then
+              params+=( schemaOnly=true dcrName="${{ inputs.dcrName }}" )
+            fi
             appName=$(az deployment group create \
               --resource-group "${{ inputs.resourceGroup }}" \
               --name "logapi-$(date +%Y%m%d%H%M%S)" \
               --template-file infra/main.bicep \
               --parameters infra/main.bicepparam \
-              --parameters \
-                location="${{ inputs.location }}" \
-                baseName="${{ inputs.baseName }}" \
-                environment="${{ inputs.environment }}" \
-                functionPlanType="${{ inputs.functionPlanType }}" \
-                existingWorkspaceName="${{ inputs.existingWorkspaceName }}" \
-                jwtRequireEntraDevice=${{ inputs.requireEntraDevice }} \
+              --parameters "${params[@]}" \
               --query properties.outputs.functionAppName.value \
               --output tsv)
-            echo "Function App: $appName"
+            echo "Function App: ${appName:-<unchanged - schema-only>}"
             echo "functionAppName=$appName" >> "$GITHUB_OUTPUT"
 
       - name: Publish function code
-        if: ${{ inputs.method == 'native' }}
+        if: ${{ inputs.method == 'native' && inputs.action == 'deploy' }}
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ steps.infra.outputs.functionAppName }}
@@ -134,20 +160,27 @@ jobs:
         run: |
           # CI has no Entra admin to grant Graph Device.Read.All, so skip that
           # step here and grant it once separately (see README). Everything else
-          # (infra + function publish) runs exactly like a local deploy.
+          # runs exactly like a local deploy.
+          $opt = @('-SkipDeviceGraphPermission')
+          if ('${{ inputs.action }}' -eq 'updateColumns') {
+            # Schema-only: update just the table + DCR, leave the Function App alone.
+            $opt += '-SchemaOnly'
+            if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
+          }
+          if ('${{ inputs.existingWorkspaceName }}') { $opt += @('-ExistingWorkspaceName', '${{ inputs.existingWorkspaceName }}') }
+          if ('${{ inputs.existingWorkspaceResourceGroup }}') { $opt += @('-ExistingWorkspaceResourceGroup', '${{ inputs.existingWorkspaceResourceGroup }}') }
           ./deploy.ps1 `
             -FunctionResourceGroup '${{ inputs.resourceGroup }}' `
             -Location '${{ inputs.location }}' `
             -BaseName '${{ inputs.baseName }}' `
             -Environment '${{ inputs.environment }}' `
             -FunctionPlanType '${{ inputs.functionPlanType }}' `
-            $(if ('${{ inputs.existingWorkspaceName }}') { "-ExistingWorkspaceName", '${{ inputs.existingWorkspaceName }}' }) `
-            -SkipDeviceGraphPermission
+            @opt
 
       - name: Summary
         if: ${{ always() }}
         run: |
-          echo "### LogIngestionAPI deploy (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "### LogIngestionAPI ${{ inputs.action }} (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Resource group: ${{ inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Region: ${{ inputs.location }}" >> "$GITHUB_STEP_SUMMARY"
