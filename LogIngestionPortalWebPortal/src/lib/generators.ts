@@ -22,11 +22,15 @@ export function tableFields(catalog: Catalog, table: TableConfig): CatalogField[
   return catalog.fields.filter((f) => f.locked || ids.has(f.id));
 }
 
-/** The array-returning field a table expands into rows, or undefined for a normal table. */
+/**
+ * The array field a table expands into rows, or undefined for a normal table.
+ * Derived automatically: a table becomes "one row per item" as soon as a field
+ * that carries a per-item (`element`) schema is assigned to it. The first such
+ * field by catalog order wins (assigning more than one is flagged in the UI).
+ */
 export function rowSourceField(catalog: Catalog, table: TableConfig): CatalogField | undefined {
-  if (!table.rowSourceFieldId) return undefined;
-  const f = catalog.fields.find((x) => x.id === table.rowSourceFieldId);
-  return f && f.element && f.element.length ? f : undefined;
+  const ids = new Set(table.fieldIds);
+  return catalog.fields.find((f) => f.element && f.element.length > 0 && ids.has(f.id));
 }
 
 /** Builds the multi-table columns.json document from the configured tables. */
@@ -78,12 +82,8 @@ export function generateScript(
   config: PortalConfig,
 ): string {
   // The union of fields needed across every table (locked fields are always in).
-  // A table's row-source field is included too so its array is collected once.
   const assigned = new Set<string>();
-  for (const t of tables) {
-    for (const id of t.fieldIds) assigned.add(id);
-    if (t.rowSourceFieldId) assigned.add(t.rowSourceFieldId);
-  }
+  for (const t of tables) for (const id of t.fieldIds) assigned.add(id);
   const usedFields = catalog.fields.filter((f) => f.locked || assigned.has(f.id));
 
   // Collect the shared setup snippets actually needed, de-duplicated. Emit those

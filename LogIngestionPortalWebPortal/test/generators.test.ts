@@ -127,13 +127,14 @@ describe('generateScript', () => {
 });
 
 describe('row-source tables', () => {
+  // A table becomes "one row per item" automatically when a per-item field
+  // (one with an element schema, e.g. Drivers) is assigned to it.
   const driverTable: TableConfig[] = [
     {
       id: 't-drv',
       name: 'Drivers_CL',
       description: 'one row per driver',
-      fieldIds: ['DeviceName'],
-      rowSourceFieldId: 'Drivers',
+      fieldIds: ['DeviceName', 'Drivers'],
     },
   ];
 

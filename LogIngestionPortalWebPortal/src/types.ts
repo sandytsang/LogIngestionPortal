@@ -113,13 +113,6 @@ export interface TableConfig {
   description: string;
   /** Ids of the non-locked catalog fields assigned to this table. */
   fieldIds: string[];
-  /**
-   * Optional. When set to an array-returning field id (one with an `element`
-   * schema), this table emits ONE ROW PER ITEM of that field's array instead of
-   * one row per device. `fieldIds` then holds the device-level columns stamped
-   * on every row; the per-item columns come from the field's `element`.
-   */
-  rowSourceFieldId?: string;
 }
 
 /** One table's serialized schema (a single entry in columns.json's tables[]). */

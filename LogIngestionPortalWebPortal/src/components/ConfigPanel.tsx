@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react';
 import type { PortalConfig, TableConfig } from '../types';
 import { catalog } from '../data/catalog';
-
-// Fields that return an array and declare a per-item schema can drive a
-// "row-source" table (one row per array item).
-const rowSourceOptions = catalog.fields.filter((f) => f.element && f.element.length);
+import { rowSourceField } from '../lib/generators';
 
 interface Props {
   config: PortalConfig;
@@ -448,7 +445,15 @@ export function ConfigPanel({
             IntuneScriptVersion are added to every table automatically.
           </p>
           <div className="mt-2 space-y-2">
-            {tables.map((t, i) => (
+            {tables.map((t, i) => {
+              // A table automatically becomes "one row per item" when a per-item
+              // field (e.g. installed drivers/hotfixes) is assigned to it.
+              const rs = rowSourceField(catalog, t);
+              const perItemCount = t.fieldIds.filter((id) => {
+                const f = catalog.fields.find((x) => x.id === id);
+                return Boolean(f?.element && f.element.length);
+              }).length;
+              return (
               <div
                 key={t.id}
                 className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40"
@@ -478,31 +483,15 @@ export function ConfigPanel({
                   placeholder="Table description (optional)"
                   aria-label={`Table ${i + 1} description`}
                 />
-                {rowSourceOptions.length > 0 && (
-                  <div className="mt-2">
-                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      Rows
-                    </label>
-                    <select
-                      className={`${field} mt-1`}
-                      value={t.rowSourceFieldId ?? ''}
-                      onChange={(e) =>
-                        onUpdateTable(t.id, { rowSourceFieldId: e.target.value || undefined })
-                      }
-                      aria-label={`Table ${i + 1} row source`}
-                    >
-                      <option value="">One row per device</option>
-                      {rowSourceOptions.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          One row per item of: {f.label}
-                        </option>
-                      ))}
-                    </select>
-                    {t.rowSourceFieldId && (
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        This table emits one row per item; the item columns are added automatically.
-                        Assign Identity fields in the catalog to stamp them on every row.
-                      </p>
+                {rs && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200">
+                      One row per {rs.label}
+                    </span>
+                    {perItemCount > 1 && (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        Only one per-item dataset per table — using {rs.label}.
+                      </span>
                     )}
                   </div>
                 )}
@@ -511,7 +500,8 @@ export function ConfigPanel({
                   TimeGenerated &amp; IntuneScriptVersion).
                 </p>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </details>
