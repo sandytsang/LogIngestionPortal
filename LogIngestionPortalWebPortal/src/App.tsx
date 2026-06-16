@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { catalog } from './data/catalog';
 import { apiFiles } from './data/apiFiles';
-import type { MultiTableColumnsDocument, PortalConfig, TableConfig } from './types';
+import type { CatalogField, MultiTableColumnsDocument, PortalConfig, TableConfig } from './types';
 import type { ZipEntry } from './lib/zip';
 import { CatalogBrowser } from './components/CatalogBrowser';
 import { ConfigPanel } from './components/ConfigPanel';
@@ -38,39 +38,70 @@ const defaultConfig = (): PortalConfig => ({
 
 const newTableId = (): string => `t-${Math.random().toString(36).slice(2, 9)}`;
 
-const defaultFieldIds = (): string[] =>
-  catalog.fields.filter((f) => f.default && !f.locked).map((f) => f.id);
+// Topic categories that get their own table; everything else (Identity aside)
+// lands in DeviceInventory_CL.
+const CATEGORY_TABLE: Record<string, string> = {
+  'Windows Update': 'WindowsUpdate_CL',
+  'Delivery Optimization': 'WindowsUpdate_CL',
+  'Secure Boot': 'SecureBoot_CL',
+};
+// Per-item datasets (fields with an element schema) each get a one-row-per-item
+// table; map the field id to a friendly table name.
+const PER_ITEM_TABLE: Record<string, string> = {
+  Drivers: 'Drivers_CL',
+  Hotfixes: 'Hotfixes_CL',
+  DeliveryOptimizationContentStats: 'DOContentStats_CL',
+};
+const TABLE_DESCRIPTION: Record<string, string> = {
+  DeviceInventory_CL: 'Device hardware, operating system, security and inventory.',
+  WindowsUpdate_CL: 'Windows Update, Delivery Optimization and diagnostic data.',
+  SecureBoot_CL: 'Secure Boot 2023 certificate update status.',
+  Drivers_CL: 'One row per installed driver (with device identity).',
+  Hotfixes_CL: 'One row per installed hotfix (with device identity).',
+  DOContentStats_CL: 'One row per Delivery Optimization content file (with device identity).',
+};
 
-/** Non-locked catalog field ids belonging to any of the given categories. */
-const categoryFieldIds = (categories: string[]): string[] =>
-  catalog.fields
-    .filter((f) => !f.locked && categories.includes(f.category))
-    .map((f) => f.id);
+// The portal starts with EVERY catalog field selected, auto-grouped into tables:
+// the device-level fields are bucketed by topic (Identity columns added to every
+// table so each can be correlated to the device), and each per-item dataset
+// (drivers, hotfixes, DO content) gets its own one-row-per-item table.
+const defaultTables = (): TableConfig[] => {
+  const nonLocked = catalog.fields.filter((f) => !f.locked);
+  const identityIds = nonLocked.filter((f) => f.category === 'Identity').map((f) => f.id);
+  const isPerItem = (f: CatalogField) => Boolean(f.element && f.element.length);
 
-// The portal starts with three tables: the standard device-inventory table (the
-// catalog defaults), plus dedicated WindowsUpdate_CL and SecureBoot_CL tables
-// preselected with their category fields (and Identity) so each topic lands in
-// its own table while still carrying the device-identity columns to correlate on.
-const defaultTables = (): TableConfig[] => [
-  {
-    id: newTableId(),
-    name: catalog.tableName,
-    description: catalog.description,
-    fieldIds: defaultFieldIds(),
-  },
-  {
-    id: newTableId(),
-    name: 'WindowsUpdate_CL',
-    description: 'Windows Update, diagnostic data and telemetry upload status, with device identity.',
-    fieldIds: categoryFieldIds(['Identity', 'Windows Update']),
-  },
-  {
-    id: newTableId(),
-    name: 'SecureBoot_CL',
-    description: 'Secure Boot 2023 certificate update status, with device identity.',
-    fieldIds: categoryFieldIds(['Identity', 'Secure Boot']),
-  },
-];
+  // Bucket non-identity, non-per-item fields by topic table.
+  const buckets = new Map<string, string[]>();
+  for (const f of nonLocked) {
+    if (f.category === 'Identity' || isPerItem(f)) continue;
+    const name = CATEGORY_TABLE[f.category] ?? 'DeviceInventory_CL';
+    buckets.set(name, [...(buckets.get(name) ?? []), f.id]);
+  }
+
+  const tables: TableConfig[] = [];
+  for (const name of ['DeviceInventory_CL', 'WindowsUpdate_CL', 'SecureBoot_CL']) {
+    const ids = buckets.get(name);
+    if (!ids?.length) continue;
+    tables.push({
+      id: newTableId(),
+      name,
+      description: TABLE_DESCRIPTION[name] ?? '',
+      fieldIds: [...identityIds, ...ids],
+    });
+  }
+  // One row-per-item table per per-item dataset.
+  for (const f of nonLocked.filter(isPerItem)) {
+    const name = PER_ITEM_TABLE[f.id] ?? `${f.id}_CL`;
+    tables.push({
+      id: newTableId(),
+      name,
+      description:
+        TABLE_DESCRIPTION[name] ?? `One row per ${f.label.toLowerCase()} (with device identity).`,
+      fieldIds: [...identityIds, f.id],
+    });
+  }
+  return tables;
+};
 
 interface Persisted {
   tables?: TableConfig[];
