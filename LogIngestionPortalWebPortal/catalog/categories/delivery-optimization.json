@@ -52,6 +52,31 @@
         "type": "dynamic",
         "description": "Delivery Optimization month-to-date performance snapshot (Get-DeliveryOptimizationPerfSnapThisMonth) as a JSON object."
       }
+    },
+    {
+      "id": "DeliveryOptimizationContentStats",
+      "label": "Delivery Optimization content stats",
+      "order": 71,
+      "default": false,
+      "setups": [],
+      "collector": "Get-DeliveryOptimizationStatus -ErrorAction Stop | Select-Object FileId, Status, SourceURL, DownloadMode, CacheHost, NumPeers, ExpireOn, Priority, DownloadDuration, PredefinedCallerApplication",
+      "column": {
+        "name": "DeliveryOptimizationContentStats",
+        "type": "dynamic",
+        "description": "Delivery Optimization per-file download status (Get-DeliveryOptimizationStatus) as a JSON array. Use it as a row source to get one row per cached file."
+      },
+      "element": [
+        { "expression": "$item.FileId", "column": { "name": "FileId", "type": "string", "description": "Content file id (Get-DeliveryOptimizationStatus.FileId)." } },
+        { "expression": "\"$($item.Status)\"", "column": { "name": "DownloadStatus", "type": "string", "description": "Download state of the file (Get-DeliveryOptimizationStatus.Status)." } },
+        { "expression": "$item.SourceURL", "column": { "name": "SourceUrl", "type": "string", "description": "Source URL of the content (Get-DeliveryOptimizationStatus.SourceURL)." } },
+        { "expression": "\"$($item.DownloadMode)\"", "column": { "name": "DownloadMode", "type": "string", "description": "Delivery Optimization download mode (Get-DeliveryOptimizationStatus.DownloadMode)." } },
+        { "expression": "$item.CacheHost", "column": { "name": "CacheHost", "type": "string", "description": "Connected cache host, if any (Get-DeliveryOptimizationStatus.CacheHost)." } },
+        { "expression": "[int]$item.NumPeers", "column": { "name": "NumPeers", "type": "int", "description": "Number of peers used (Get-DeliveryOptimizationStatus.NumPeers)." } },
+        { "expression": "\"$($item.ExpireOn)\"", "column": { "name": "ExpireOn", "type": "string", "description": "When the cached content expires (Get-DeliveryOptimizationStatus.ExpireOn)." } },
+        { "expression": "\"$($item.Priority)\"", "column": { "name": "Priority", "type": "string", "description": "Download priority (Get-DeliveryOptimizationStatus.Priority)." } },
+        { "expression": "\"$($item.DownloadDuration)\"", "column": { "name": "DownloadDuration", "type": "string", "description": "Total download duration (Get-DeliveryOptimizationStatus.DownloadDuration)." } },
+        { "expression": "$item.PredefinedCallerApplication", "column": { "name": "CallerApplication", "type": "string", "description": "Caller application that requested the content (Get-DeliveryOptimizationStatus.PredefinedCallerApplication)." } }
+      ]
     }
   ]
 }
