@@ -149,6 +149,19 @@
         "type": "string",
         "description": "BitLocker protection status for the system drive (Get-BitLockerVolume.ProtectionStatus). Mirrors the system-volume entry already in BitLockerStatus."
       }
+    },
+    {
+      "id": "LocalAdministrators",
+      "label": "Local administrators",
+      "order": 62,
+      "default": false,
+      "setups": [],
+      "collector": "$groupName = (Get-LocalGroup -SID 'S-1-5-32-544').Name\n$members = net localgroup $groupName\nif ($members.Length -gt 8) {\n    $members[6..($members.Length - 3)] | Where-Object { $_ -and $_.Trim() }\n}",
+      "column": {
+        "name": "LocalAdministrators",
+        "type": "dynamic",
+        "description": "Members of the local Administrators group (well-known SID S-1-5-32-544) as a JSON array of account names."
+      }
     }
   ]
 }
