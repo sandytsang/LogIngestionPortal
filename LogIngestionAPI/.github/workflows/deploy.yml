@@ -91,7 +91,10 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}   # add protection rules here for approval gates
+    # Branch-based OIDC: the token subject is repo:<owner>/<repo>:ref:refs/heads/<branch>,
+    # so a single "Branch" federated credential covers this and update-columns.yml.
+    # To require manual approval per environment, add `environment: ${{ inputs.environment }}`
+    # here and register an "Environment" federated credential instead.
     steps:
       - name: Checkout
         uses: actions/checkout@v4

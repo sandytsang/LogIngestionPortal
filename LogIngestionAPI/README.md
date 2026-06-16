@@ -128,23 +128,22 @@ so no secrets/keys are stored.
    credential** for your repo. In the app registration → *Certificates &
    secrets* → *Federated credentials* → *Add*, choose **GitHub Actions** and set:
    - Organization/owner = your GitHub user/org, Repository = your repo
-   - Entity type = **Environment**, value = the environment you deploy
-     (`dev`, `test` or `prod` — match the `environment` input you pick when you
-     run the workflow).
+   - Entity type = **Branch**, value = your default branch (e.g. `main`).
 
-   > **Important — use Environment, not Branch.** The `deploy` job binds to a
-   > GitHub Environment (`environment: ${{ inputs.environment }}`), so the OIDC
-   > token GitHub presents has the subject
-   > `repo:<owner>/<repo>:environment:<env>` (e.g.
-   > `repo:sandytsang/LogIngestionAPI:environment:prod`) — **not** a branch
-   > subject. If you create the credential as **Branch = `main`**, login fails
-   > with `AADSTS700213: No matching federated identity record found …
-   > environment:prod`. A federated credential matches exactly one subject, so
-   > add one credential per environment you use (`dev`, `test`, `prod`).
-   > Keep **Audience** = `api://AzureADTokenExchange` (the default).
+   > **Use Branch (default).** Both workflows run with branch-based OIDC, so the
+   > token subject is `repo:<owner>/<repo>:ref:refs/heads/<branch>` (e.g.
+   > `repo:sandytsang/LogIngestionAPI:ref:refs/heads/main`). One **Branch**
+   > credential covers both `deploy.yml` and `update-columns.yml`. Keep
+   > **Audience** = `api://AzureADTokenExchange` (the default).
    >
-   > Only if you remove the `environment:` line from `deploy.yml` should you use
-   > Entity type = **Branch** (value `main`) instead.
+   > If `AADSTS700213: No matching federated identity record found …
+   > ref:refs/heads/main` appears, the credential's subject doesn't match — make
+   > sure it's a **Branch** credential for the branch you run from.
+   >
+   > **Want per-environment approval gates?** Add
+   > `environment: ${{ inputs.environment }}` back to the job in `deploy.yml`;
+   > the subject then becomes `…:environment:<env>` and you register one
+   > **Environment** credential per environment (`dev`, `test`, `prod`) instead.
 
    New to this? Microsoft's step-by-step guide:
    [Configure a federated identity credential on an app](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#configure-a-federated-identity-credential-on-an-app).
