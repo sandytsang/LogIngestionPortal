@@ -6,6 +6,7 @@ import type {
   TableConfig,
 } from '../types';
 import scriptTemplate from './scriptTemplate.ps1?raw';
+import { sortColumns } from './sampleToColumns';
 
 /** Returns the catalog fields that are selected, preserving catalog order. */
 export function selectedFields(catalog: Catalog, selectedIds: Set<string>): CatalogField[] {
@@ -51,13 +52,13 @@ export function generateColumns(
         return {
           tableName: t.name,
           description: t.description,
-          columns: [...deviceCols, ...elementCols],
+          columns: sortColumns([...deviceCols, ...elementCols]),
         };
       }
       return {
         tableName: t.name,
         description: t.description,
-        columns: tableFields(catalog, t).map((f) => ({ ...f.column })),
+        columns: sortColumns(tableFields(catalog, t).map((f) => ({ ...f.column }))),
       };
     }),
   };

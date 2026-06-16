@@ -10,44 +10,14 @@
           "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
         },
         {
-          "name": "DeviceName",
+          "name": "AutopilotHardwareHash",
           "type": "string",
-          "description": "Hostname of the reporting device."
+          "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
         },
         {
-          "name": "UserName",
+          "name": "BiosVersion",
           "type": "string",
-          "description": "Currently logged-on user (UPN or sAMAccountName)."
-        },
-        {
-          "name": "OSVersion",
-          "type": "string",
-          "description": "Operating system build/version string."
-        },
-        {
-          "name": "IntuneScriptVersion",
-          "type": "string",
-          "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
-        },
-        {
-          "name": "Manufacturer",
-          "type": "string",
-          "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
-        },
-        {
-          "name": "Model",
-          "type": "string",
-          "description": "System model (Win32_ComputerSystem.Model)."
-        },
-        {
-          "name": "SerialNumber",
-          "type": "string",
-          "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
-        },
-        {
-          "name": "TotalMemoryGB",
-          "type": "real",
-          "description": "Installed physical memory in GB."
+          "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
         },
         {
           "name": "BitLockerStatus",
@@ -65,14 +35,34 @@
           "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
         },
         {
-          "name": "BiosVersion",
+          "name": "DeviceName",
           "type": "string",
-          "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
+          "description": "Hostname of the reporting device."
         },
         {
-          "name": "AutopilotHardwareHash",
+          "name": "IntuneScriptVersion",
           "type": "string",
-          "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
+          "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
+        },
+        {
+          "name": "Manufacturer",
+          "type": "string",
+          "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
+        },
+        {
+          "name": "Model",
+          "type": "string",
+          "description": "System model (Win32_ComputerSystem.Model)."
+        },
+        {
+          "name": "OSVersion",
+          "type": "string",
+          "description": "Operating system build/version string."
+        },
+        {
+          "name": "SerialNumber",
+          "type": "string",
+          "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
         },
         {
           "name": "SystemDriveFreeGB",
@@ -83,6 +73,16 @@
           "name": "SystemDriveSizeGB",
           "type": "real",
           "description": "Total size of the system drive in GB."
+        },
+        {
+          "name": "TotalMemoryGB",
+          "type": "real",
+          "description": "Installed physical memory in GB."
+        },
+        {
+          "name": "UserName",
+          "type": "string",
+          "description": "Currently logged-on user (UPN or sAMAccountName)."
         }
       ]
     },
@@ -96,14 +96,19 @@
           "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
         },
         {
+          "name": "BitLockerStatus",
+          "type": "dynamic",
+          "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+        },
+        {
           "name": "IntuneScriptVersion",
           "type": "string",
           "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
         },
         {
-          "name": "BitLockerStatus",
-          "type": "dynamic",
-          "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+          "name": "SecureBootEnabled",
+          "type": "boolean",
+          "description": "Whether UEFI Secure Boot is enabled."
         },
         {
           "name": "TpmPresent",
@@ -114,11 +119,6 @@
           "name": "TpmReady",
           "type": "boolean",
           "description": "Whether the TPM is ready for use."
-        },
-        {
-          "name": "SecureBootEnabled",
-          "type": "boolean",
-          "description": "Whether UEFI Secure Boot is enabled."
         }
       ]
     }

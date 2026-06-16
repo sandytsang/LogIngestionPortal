@@ -27,6 +27,16 @@ export function inferType(value: unknown): ColumnType {
   return 'dynamic';
 }
 
+/** Sorts columns alphabetically by name, keeping TimeGenerated pinned first. */
+export function sortColumns(columns: CatalogColumn[]): CatalogColumn[] {
+  return [...columns].sort((a, b) => {
+    if (a.name === b.name) return 0;
+    if (a.name === 'TimeGenerated') return -1;
+    if (b.name === 'TimeGenerated') return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 /** Returns the first record from a sample that may be a single object or array. */
 function firstRecord(parsed: unknown): Record<string, unknown> {
   const obj = Array.isArray(parsed) ? parsed[0] : parsed;
@@ -81,7 +91,7 @@ function tableFromRecord(
     });
   }
 
-  return { tableName, description, columns };
+  return { tableName, description, columns: sortColumns(columns) };
 }
 
 /**
