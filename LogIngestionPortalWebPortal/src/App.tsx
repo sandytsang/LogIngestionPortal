@@ -42,7 +42,7 @@ const newTableId = (): string => `t-${Math.random().toString(36).slice(2, 9)}`;
 // lands in DeviceInventory_CL.
 const CATEGORY_TABLE: Record<string, string> = {
   'Windows Update': 'WindowsUpdate_CL',
-  'Delivery Optimization': 'WindowsUpdate_CL',
+  'Delivery Optimization': 'DeliveryOptimization_CL',
   'Secure Boot': 'SecureBoot_CL',
 };
 // Per-item datasets (fields with an element schema) each get a one-row-per-item
@@ -50,15 +50,16 @@ const CATEGORY_TABLE: Record<string, string> = {
 const PER_ITEM_TABLE: Record<string, string> = {
   Drivers: 'Drivers_CL',
   Hotfixes: 'Hotfixes_CL',
-  DeliveryOptimizationContentStats: 'DOContentStats_CL',
+  DeliveryOptimizationContentStats: 'DeliveryOptimizationContentStats_CL',
 };
 const TABLE_DESCRIPTION: Record<string, string> = {
   DeviceInventory_CL: 'Device hardware, operating system, security and inventory.',
-  WindowsUpdate_CL: 'Windows Update, Delivery Optimization and diagnostic data.',
+  WindowsUpdate_CL: 'Windows Update settings, diagnostic data and telemetry upload status.',
+  DeliveryOptimization_CL: 'Delivery Optimization settings, config and performance stats.',
   SecureBoot_CL: 'Secure Boot 2023 certificate update status.',
-  Drivers_CL: 'One row per installed driver (with device identity).',
-  Hotfixes_CL: 'One row per installed hotfix (with device identity).',
-  DOContentStats_CL: 'One row per Delivery Optimization content file (with device identity).',
+  Drivers_CL: 'Installed device drivers (non-Microsoft).',
+  Hotfixes_CL: 'Installed Windows hotfixes (QFE).',
+  DeliveryOptimizationContentStats_CL: 'Delivery Optimization content download status.',
 };
 
 // The portal starts with EVERY catalog field selected, auto-grouped into tables:
@@ -79,7 +80,7 @@ const defaultTables = (): TableConfig[] => {
   }
 
   const tables: TableConfig[] = [];
-  for (const name of ['DeviceInventory_CL', 'WindowsUpdate_CL', 'SecureBoot_CL']) {
+  for (const name of ['DeviceInventory_CL', 'WindowsUpdate_CL', 'DeliveryOptimization_CL', 'SecureBoot_CL']) {
     const ids = buckets.get(name);
     if (!ids?.length) continue;
     tables.push({
@@ -95,8 +96,7 @@ const defaultTables = (): TableConfig[] => {
     tables.push({
       id: newTableId(),
       name,
-      description:
-        TABLE_DESCRIPTION[name] ?? `One row per ${f.label.toLowerCase()} (with device identity).`,
+      description: TABLE_DESCRIPTION[name] ?? f.label,
       fieldIds: [...identityIds, f.id],
     });
   }

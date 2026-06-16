@@ -9,6 +9,19 @@
       "setups": [],
       "collector": "(Get-TimeZone -ErrorAction Stop).Id",
       "column": { "name": "TimeZone", "type": "string", "description": "Current system time zone id (Get-TimeZone)." }
+    },
+    {
+      "id": "TimeSyncStatus",
+      "label": "Time sync status (w32tm)",
+      "order": 93,
+      "default": false,
+      "setups": [],
+      "collector": "$out = w32tm /query /status 2>$null\n$o = [ordered]@{}\nforeach ($line in $out) {\n    if ($line -match '^\\s*([^:]+):\\s*(.*)$') {\n        $o[$matches[1].Trim()] = $matches[2].Trim()\n    }\n}\n[pscustomobject]$o",
+      "column": {
+        "name": "TimeSyncStatus",
+        "type": "dynamic",
+        "description": "Windows Time service status (w32tm /query /status) parsed into a JSON object: source, stratum, last successful sync time, poll interval, etc."
+      }
     }
   ]
 }
