@@ -1,0 +1,18 @@
+{
+  "category": "Video controller",
+  "fields": [
+    {
+      "id": "VideoControllers",
+      "label": "Video controllers",
+      "order": 89,
+      "default": false,
+      "setups": [],
+      "collector": "Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop | Select-Object Name, AdapterRAM, AdapterDACType, DriverVersion, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, PNPDeviceID",
+      "column": {
+        "name": "VideoControllers",
+        "type": "dynamic",
+        "description": "Display adapters as a JSON array (name, adapter RAM, DAC type, driver version, resolution) from Win32_VideoController."
+      }
+    }
+  ]
+}

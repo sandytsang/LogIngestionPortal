@@ -1,0 +1,32 @@
+{
+  "category": "BIOS",
+  "fields": [
+    {
+      "id": "BiosName",
+      "label": "BIOS name",
+      "order": 79,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "$bios.Name",
+      "column": { "name": "BiosName", "type": "string", "description": "BIOS name/caption (Win32_BIOS.Name)." }
+    },
+    {
+      "id": "SmbiosVersion",
+      "label": "SMBIOS version",
+      "order": 80,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "\"$($bios.SMBIOSMajorVersion).$($bios.SMBIOSMinorVersion)\"",
+      "column": { "name": "SmbiosVersion", "type": "string", "description": "SMBIOS specification version (Win32_BIOS.SMBIOSMajorVersion.MinorVersion)." }
+    },
+    {
+      "id": "TargetOperatingSystem",
+      "label": "Target operating system",
+      "order": 81,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "$bios.TargetOperatingSystem",
+      "column": { "name": "TargetOperatingSystem", "type": "int", "description": "BIOS target operating system code (Win32_BIOS.TargetOperatingSystem)." }
+    }
+  ]
+}

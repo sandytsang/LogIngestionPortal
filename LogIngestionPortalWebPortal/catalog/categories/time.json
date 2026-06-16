@@ -1,0 +1,14 @@
+{
+  "category": "Time",
+  "fields": [
+    {
+      "id": "TimeZone",
+      "label": "Time zone",
+      "order": 88,
+      "default": false,
+      "setups": [],
+      "collector": "(Get-TimeZone -ErrorAction Stop).Id",
+      "column": { "name": "TimeZone", "type": "string", "description": "Current system time zone id (Get-TimeZone)." }
+    }
+  ]
+}

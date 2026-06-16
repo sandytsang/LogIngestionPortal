@@ -1,0 +1,18 @@
+{
+  "category": "Logical drive",
+  "fields": [
+    {
+      "id": "LogicalDrives",
+      "label": "Logical drives",
+      "order": 91,
+      "default": false,
+      "setups": [],
+      "collector": "Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction Stop | Select-Object DeviceID, DriveType, FileSystem, VolumeName, Size, FreeSpace, Description",
+      "column": {
+        "name": "LogicalDrives",
+        "type": "dynamic",
+        "description": "Logical drives/volumes as a JSON array (drive letter, type, file system, label, size, free space) from Win32_LogicalDisk."
+      }
+    }
+  ]
+}
