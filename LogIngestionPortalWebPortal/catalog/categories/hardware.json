@@ -70,6 +70,149 @@
         "type": "string",
         "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
       }
+    },
+    {
+      "id": "PCSystemType",
+      "label": "PC system type",
+      "order": 33,
+      "default": false,
+      "setups": [],
+      "collector": "$t = (Get-CimInstance -ClassName Win32_ComputerSystem).PCSystemType\nswitch ($t) {\n    1 { 'Desktop' }\n    2 { 'Laptop' }\n    3 { 'Workstation' }\n    4 { 'EnterpriseServer' }\n    5 { 'SOHOServer' }\n    6 { 'AppliancePC' }\n    7 { 'PerformanceServer' }\n    8 { 'Maximum' }\n    default { 'Unspecified' }\n}",
+      "column": {
+        "name": "PCSystemType",
+        "type": "string",
+        "description": "Form-factor label from Win32_ComputerSystem.PCSystemType (Desktop, Laptop, Workstation, ...)."
+      }
+    },
+    {
+      "id": "PCSystemTypeEx",
+      "label": "PC system type (extended)",
+      "order": 34,
+      "default": false,
+      "setups": [],
+      "collector": "$t = (Get-CimInstance -ClassName Win32_ComputerSystem).PCSystemTypeEx\nswitch ($t) {\n    1 { 'Desktop' }\n    2 { 'Laptop' }\n    3 { 'Workstation' }\n    4 { 'EnterpriseServer' }\n    5 { 'SOHOServer' }\n    6 { 'AppliancePC' }\n    7 { 'PerformanceServer' }\n    8 { 'Slate' }\n    9 { 'Maximum' }\n    default { 'Unspecified' }\n}",
+      "column": {
+        "name": "PCSystemTypeEx",
+        "type": "string",
+        "description": "Extended form-factor label from Win32_ComputerSystem.PCSystemTypeEx (adds Slate)."
+      }
+    },
+    {
+      "id": "SystemSkuNumber",
+      "label": "System SKU number",
+      "order": 35,
+      "default": false,
+      "setups": ["cs"],
+      "expression": "$cs.SystemSKUNumber",
+      "column": {
+        "name": "SystemSkuNumber",
+        "type": "string",
+        "description": "OEM system SKU number (Win32_ComputerSystem.SystemSKUNumber)."
+      }
+    },
+    {
+      "id": "SystemSku",
+      "label": "System SKU (WMI)",
+      "order": 36,
+      "default": false,
+      "setups": [],
+      "collector": "(Get-CimInstance -ClassName MS_SystemInformation -Namespace root\\WMI -ErrorAction Stop | Select-Object -ExpandProperty SystemSku).Trim()",
+      "column": {
+        "name": "SystemSku",
+        "type": "string",
+        "description": "OEM system SKU from root\\WMI MS_SystemInformation.SystemSku."
+      }
+    },
+    {
+      "id": "SmBiosUuid",
+      "label": "SMBIOS UUID",
+      "order": 37,
+      "default": false,
+      "setups": [],
+      "collector": "Get-CimInstance -ClassName Win32_ComputerSystemProduct | Select-Object -ExpandProperty UUID",
+      "column": {
+        "name": "SmBiosUuid",
+        "type": "string",
+        "description": "SMBIOS hardware UUID (Win32_ComputerSystemProduct.UUID)."
+      }
+    },
+    {
+      "id": "BiosDate",
+      "label": "BIOS release date",
+      "order": 38,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "if ($bios.ReleaseDate) { $bios.ReleaseDate.ToUniversalTime().ToString('o') } else { $null }",
+      "column": {
+        "name": "BiosDate",
+        "type": "datetime",
+        "description": "BIOS firmware release date (Win32_BIOS.ReleaseDate, UTC)."
+      }
+    },
+    {
+      "id": "FirmwareType",
+      "label": "Firmware type",
+      "order": 39,
+      "default": false,
+      "setups": [],
+      "expression": "$env:firmware_type",
+      "column": {
+        "name": "FirmwareType",
+        "type": "string",
+        "description": "Platform firmware type (UEFI or Legacy BIOS) from $env:firmware_type."
+      }
+    },
+    {
+      "id": "CpuManufacturer",
+      "label": "CPU manufacturer",
+      "order": 40,
+      "default": false,
+      "setups": ["cpu"],
+      "expression": "$cpu.Manufacturer",
+      "column": {
+        "name": "CpuManufacturer",
+        "type": "string",
+        "description": "Processor manufacturer (Win32_Processor.Manufacturer)."
+      }
+    },
+    {
+      "id": "CpuName",
+      "label": "CPU name",
+      "order": 41,
+      "default": false,
+      "setups": ["cpu"],
+      "expression": "$cpu.Name",
+      "column": {
+        "name": "CpuName",
+        "type": "string",
+        "description": "Processor model name (Win32_Processor.Name)."
+      }
+    },
+    {
+      "id": "CpuCores",
+      "label": "CPU cores",
+      "order": 42,
+      "default": false,
+      "setups": ["cpu"],
+      "expression": "$cpu.NumberOfCores",
+      "column": {
+        "name": "CpuCores",
+        "type": "int",
+        "description": "Number of physical CPU cores (Win32_Processor.NumberOfCores)."
+      }
+    },
+    {
+      "id": "CpuLogical",
+      "label": "CPU logical processors",
+      "order": 43,
+      "default": false,
+      "setups": ["cpu"],
+      "expression": "$cpu.NumberOfLogicalProcessors",
+      "column": {
+        "name": "CpuLogical",
+        "type": "int",
+        "description": "Number of logical processors (Win32_Processor.NumberOfLogicalProcessors)."
+      }
     }
   ]
 }

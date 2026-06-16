@@ -18,6 +18,19 @@
       "setups": ["disk"],
       "expression": "if ($sysDrive) { [math]::Round($sysDrive.Size / 1GB, 1) } else { $null }",
       "column": { "name": "SystemDriveSizeGB", "type": "real", "description": "Total size of the system drive in GB." }
+    },
+    {
+      "id": "DiskHealth",
+      "label": "Physical disk health",
+      "order": 58,
+      "default": false,
+      "setups": [],
+      "collector": "$disks = @()\nforeach ($d in (Get-PhysicalDisk -ErrorAction Stop | Where-Object { $_.BusType -match 'NVMe|SATA|SAS|ATAPI|RAID' } | Sort-Object DeviceID)) {\n    $rc = Get-PhysicalDisk -UniqueId $d.UniqueId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue\n    $disks += [pscustomobject]@{\n        DiskNumber             = $d.DeviceID\n        FriendlyName           = $d.FriendlyName\n        HealthStatus           = \"$($d.HealthStatus)\"\n        MediaType              = \"$($d.MediaType)\"\n        Wear                   = [int]$rc.Wear\n        ReadErrorsTotal        = [int]$rc.ReadErrorsTotal\n        ReadErrorsUncorrected  = [int]$rc.ReadErrorsUncorrected\n        WriteErrorsTotal       = [int]$rc.WriteErrorsTotal\n        WriteErrorsUncorrected = [int]$rc.WriteErrorsUncorrected\n        Temperature            = [int]$rc.Temperature\n        TemperatureMax         = [int]$rc.TemperatureMax\n    }\n}\n$disks",
+      "column": {
+        "name": "DiskHealth",
+        "type": "dynamic",
+        "description": "Per-physical-disk health (wear, read/write errors, temperature, media type, health status) as a JSON array."
+      }
     }
   ]
 }

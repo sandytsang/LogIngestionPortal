@@ -72,6 +72,97 @@
       }
     },
     {
+      "id": "ComputerUpTimeDays",
+      "label": "Computer uptime (days)",
+      "order": 44,
+      "default": false,
+      "setups": ["os"],
+      "expression": "if ($os.LastBootUpTime) { [int](New-TimeSpan -Start $os.LastBootUpTime -End (Get-Date)).Days } else { $null }",
+      "column": {
+        "name": "ComputerUpTimeDays",
+        "type": "int",
+        "description": "Days since last boot (derived from Win32_OperatingSystem.LastBootUpTime)."
+      }
+    },
+    {
+      "id": "InstallDate",
+      "label": "OS install date",
+      "order": 45,
+      "default": false,
+      "setups": ["os"],
+      "expression": "if ($os.InstallDate) { $os.InstallDate.ToUniversalTime().ToString('o') } else { $null }",
+      "column": {
+        "name": "InstallDate",
+        "type": "datetime",
+        "description": "Operating system install date (Win32_OperatingSystem.InstallDate, UTC)."
+      }
+    },
+    {
+      "id": "WindowsVersion",
+      "label": "Windows version (display)",
+      "order": 46,
+      "default": false,
+      "setups": [],
+      "collector": "$cv = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion'\n$dv = (Get-ItemProperty -Path $cv -Name DisplayVersion -ErrorAction SilentlyContinue).DisplayVersion\nif ([string]::IsNullOrEmpty($dv)) { (Get-ItemProperty -Path $cv -Name ReleaseId -ErrorAction SilentlyContinue).ReleaseId } else { $dv }",
+      "column": {
+        "name": "WindowsVersion",
+        "type": "string",
+        "description": "Windows feature-update version (e.g. 22H2) from CurrentVersion\\DisplayVersion (fallback ReleaseId)."
+      }
+    },
+    {
+      "id": "OSName",
+      "label": "OS name",
+      "order": 47,
+      "default": false,
+      "setups": ["os"],
+      "expression": "$os.Caption",
+      "column": {
+        "name": "OSName",
+        "type": "string",
+        "description": "Operating system product name (Win32_OperatingSystem.Caption)."
+      }
+    },
+    {
+      "id": "OSRevision",
+      "label": "OS revision (UBR)",
+      "order": 48,
+      "default": false,
+      "setups": [],
+      "collector": "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -Name UBR -ErrorAction SilentlyContinue).UBR",
+      "column": {
+        "name": "OSRevision",
+        "type": "int",
+        "description": "OS update build revision (CurrentVersion\\UBR), the patch number after the build."
+      }
+    },
+    {
+      "id": "DefaultAUService",
+      "label": "Default update service",
+      "order": 49,
+      "default": false,
+      "setups": [],
+      "collector": "(New-Object -ComObject 'Microsoft.Update.ServiceManager').Services | Where-Object { $_.IsDefaultAUService } | Select-Object -First 1 -ExpandProperty Name",
+      "column": {
+        "name": "DefaultAUService",
+        "type": "string",
+        "description": "Default Windows Update service (e.g. Microsoft Update, Windows Server Update Service)."
+      }
+    },
+    {
+      "id": "AUMetered",
+      "label": "Updates over metered networks",
+      "order": 50,
+      "default": false,
+      "setups": [],
+      "collector": "$v = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings' -Name AllowAutoWindowsUpdateDownloadOverMeteredNetwork -ErrorAction SilentlyContinue).AllowAutoWindowsUpdateDownloadOverMeteredNetwork\n[bool]($v -eq 1)",
+      "column": {
+        "name": "AUMetered",
+        "type": "boolean",
+        "description": "Whether automatic update downloads over metered networks are allowed."
+      }
+    },
+    {
       "id": "ComputerInfo",
       "label": "Computer info",
       "order": 100,

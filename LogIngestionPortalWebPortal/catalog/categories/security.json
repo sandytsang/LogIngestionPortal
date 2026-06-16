@@ -79,6 +79,76 @@
         "type": "boolean",
         "description": "Microsoft Defender antivirus enabled (Get-MpComputerStatus.AntivirusEnabled)."
       }
+    },
+    {
+      "id": "TpmEnabled",
+      "label": "TPM enabled",
+      "order": 51,
+      "default": false,
+      "setups": ["tpm"],
+      "expression": "[bool]$tpm.TpmEnabled",
+      "column": { "name": "TpmEnabled", "type": "boolean", "description": "Whether the TPM is enabled (Get-Tpm.TpmEnabled)." }
+    },
+    {
+      "id": "TpmActivated",
+      "label": "TPM activated",
+      "order": 52,
+      "default": false,
+      "setups": ["tpm"],
+      "expression": "[bool]$tpm.TpmActivated",
+      "column": { "name": "TpmActivated", "type": "boolean", "description": "Whether the TPM is activated (Get-Tpm.TpmActivated)." }
+    },
+    {
+      "id": "TpmThumbprint",
+      "label": "TPM endorsement key thumbprint",
+      "order": 53,
+      "default": false,
+      "setups": [],
+      "collector": "(Get-TpmEndorsementKeyInfo).AdditionalCertificates.Thumbprint",
+      "column": {
+        "name": "TpmThumbprint",
+        "type": "string",
+        "description": "TPM endorsement key certificate thumbprint (Get-TpmEndorsementKeyInfo)."
+      }
+    },
+    {
+      "id": "BitLockerCipher",
+      "label": "BitLocker cipher",
+      "order": 54,
+      "default": false,
+      "setups": ["bitLockerSys"],
+      "expression": "\"$($bitLockerSys.EncryptionMethod)\"",
+      "column": {
+        "name": "BitLockerCipher",
+        "type": "string",
+        "description": "BitLocker encryption method/cipher for the system drive (Get-BitLockerVolume.EncryptionMethod)."
+      }
+    },
+    {
+      "id": "BitLockerVolumeStatus",
+      "label": "BitLocker volume status",
+      "order": 55,
+      "default": false,
+      "setups": ["bitLockerSys"],
+      "expression": "\"$($bitLockerSys.VolumeStatus)\"",
+      "column": {
+        "name": "BitLockerVolumeStatus",
+        "type": "string",
+        "description": "BitLocker volume status for the system drive (Get-BitLockerVolume.VolumeStatus)."
+      }
+    },
+    {
+      "id": "BitLockerProtectionStatus",
+      "label": "BitLocker protection status",
+      "order": 56,
+      "default": false,
+      "setups": ["bitLockerSys"],
+      "expression": "\"$($bitLockerSys.ProtectionStatus)\"",
+      "column": {
+        "name": "BitLockerProtectionStatus",
+        "type": "string",
+        "description": "BitLocker protection status for the system drive (Get-BitLockerVolume.ProtectionStatus)."
+      }
     }
   ]
 }

@@ -31,6 +31,45 @@
         "type": "string",
         "description": "Currently logged-on user (UPN or sAMAccountName)."
       }
+    },
+    {
+      "id": "ManagedDeviceName",
+      "label": "Intune managed device name",
+      "order": 30,
+      "default": false,
+      "setups": [],
+      "collector": "$key = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq 'MS DM Server' } | Select-Object -First 1\nif ($key) { (Get-ItemProperty -LiteralPath \"Registry::$key\" -ErrorAction SilentlyContinue).EntDeviceName }",
+      "column": {
+        "name": "ManagedDeviceName",
+        "type": "string",
+        "description": "Intune managed device name (Enrollments\\MS DM Server\\EntDeviceName)."
+      }
+    },
+    {
+      "id": "ManagedDeviceId",
+      "label": "Intune managed device id",
+      "order": 31,
+      "default": false,
+      "setups": [],
+      "collector": "$key = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq 'MS DM Server' } | Select-Object -First 1\nif ($key) { (Get-ItemProperty -LiteralPath \"Registry::$key\" -ErrorAction SilentlyContinue).EntDMID }",
+      "column": {
+        "name": "ManagedDeviceId",
+        "type": "string",
+        "description": "Intune MDM device id (Enrollments\\MS DM Server\\EntDMID)."
+      }
+    },
+    {
+      "id": "AzureADDeviceId",
+      "label": "Entra (Azure AD) device id",
+      "order": 32,
+      "default": false,
+      "setups": [],
+      "collector": "$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CloudDomainJoin\\JoinInfo'\n$joinKey = Get-ChildItem -Path $path -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PSChildName\nif ($joinKey) {\n    if ([guid]::TryParse($joinKey, [ref][guid]::Empty)) {\n        $cert = Get-ChildItem -Path 'Cert:\\LocalMachine\\My' -Recurse | Where-Object { $_.Subject -like \"CN=$joinKey\" } | Select-Object -First 1\n    } else {\n        $cert = Get-ChildItem -Path 'Cert:\\LocalMachine\\My' -Recurse | Where-Object { $_.Thumbprint -eq $joinKey } | Select-Object -First 1\n    }\n    if ($cert) { ($cert.Subject -replace 'CN=', '') }\n}",
+      "column": {
+        "name": "AzureADDeviceId",
+        "type": "string",
+        "description": "Entra (Azure AD) device id resolved from the MS-Organization-Access join certificate."
+      }
     }
   ]
 }

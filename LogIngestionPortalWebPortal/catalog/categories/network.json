@@ -9,6 +9,19 @@
       "setups": ["net"],
       "expression": "if ($net) { $net.IPv4Address.IPAddress } else { $null }",
       "column": { "name": "IPv4Address", "type": "string", "description": "Primary IPv4 address of the device." }
+    },
+    {
+      "id": "NetworkAdapters",
+      "label": "Network adapters",
+      "order": 57,
+      "default": false,
+      "setups": [],
+      "collector": "$adapters = @()\nforeach ($a in (Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' })) {\n    $cfg = Get-NetIPConfiguration -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue\n    $adapters += [pscustomobject]@{\n        InterfaceDescription = $a.InterfaceDescription\n        ProfileName          = $cfg.NetProfile.Name\n        IPv4Address          = $cfg.IPv4Address.IPAddress\n        InterfaceAlias       = $a.InterfaceAlias\n        IPv4DefaultGateway   = $cfg.IPv4DefaultGateway.NextHop\n        MacAddress           = $a.MacAddress\n    }\n}\n$adapters",
+      "column": {
+        "name": "NetworkAdapters",
+        "type": "dynamic",
+        "description": "Per-NIC details for adapters that are Up (description, profile, IPv4, alias, gateway, MAC) as a JSON array."
+      }
     }
   ]
 }
