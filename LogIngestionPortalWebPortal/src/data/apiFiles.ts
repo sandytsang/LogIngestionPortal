@@ -11,6 +11,16 @@ const modules = import.meta.glob('../../../LogIngestionAPI/**/*', {
   eager: true,
 }) as Record<string, string>;
 
+// The pattern above does not match dot-directories (e.g. `.github`), so the
+// GitHub Actions workflows are globbed explicitly. Shipping them means a user
+// who unzips the bundle and pushes this folder as their own repo gets working
+// CI/CD out of the box.
+const dotModules = import.meta.glob('../../../LogIngestionAPI/.github/**/*', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
 export interface BundledFile {
   /** Path inside the zip, e.g. "LogIngestionAPI/function/host.json". */
   name: string;
@@ -19,6 +29,6 @@ export interface BundledFile {
 
 // Glob keys are relative to this module (e.g. "../../../LogIngestionAPI/..."),
 // so strip the leading "../" segments to get a clean zip path.
-export const apiFiles: BundledFile[] = Object.entries(modules)
+export const apiFiles: BundledFile[] = Object.entries({ ...modules, ...dotModules })
   .map(([key, content]) => ({ name: key.replace(/^(\.\.\/)+/, ''), content }))
   .sort((a, b) => a.name.localeCompare(b.name));

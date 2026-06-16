@@ -1,0 +1,156 @@
+name: Deploy LogIngestionAPI
+
+# Portable deployment workflow.
+#
+# This file is meant to run from a repository whose ROOT is this LogIngestionAPI
+# folder (for example, the folder you get when you unzip the portal's download
+# bundle and push it as your own repo). GitHub only runs workflows found in
+# .github/workflows at the repository root, so paths below (infra/, function/,
+# scripts/) are relative to this folder.
+#
+# Pick how you want to deploy with the "method" input:
+#   - native : no PowerShell script. Bicep + Azure/functions-action only.
+#   - script : run scripts/deploy.ps1 in CI (same path as deploying locally).
+#
+# One-time setup (see README "Deploy from your own GitHub"):
+#   1. Create an Entra app registration with a federated credential for this repo.
+#   2. Add repo secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+#   3. Give that identity Contributor (+ User Access Administrator for the DCR
+#      role assignment) on the target subscription/resource group.
+
+on:
+  workflow_dispatch:
+    inputs:
+      method:
+        description: 'Deployment method'
+        type: choice
+        options: [native, script]
+        default: native
+      resourceGroup:
+        description: 'Target resource group (created if missing)'
+        type: string
+        default: rg-logingestion
+      location:
+        description: 'Azure region'
+        type: string
+        default: eastus
+      baseName:
+        description: 'Base name for resources (3-17 lowercase chars)'
+        type: string
+        default: logapi
+      environment:
+        description: 'Environment'
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+      functionPlanType:
+        description: 'Hosting plan'
+        type: choice
+        options: [Consumption, Flex]
+        default: Consumption
+      existingWorkspaceName:
+        description: 'Existing Log Analytics workspace name (leave blank to create a new one)'
+        type: string
+        default: ''
+      requireEntraDevice:
+        description: 'Validate device against its Entra record (needs Graph Device.Read.All granted separately)'
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write   # required for OIDC (passwordless) Azure login
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}   # add protection rules here for approval gates
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure resource group
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az group create \
+              --name "${{ inputs.resourceGroup }}" \
+              --location "${{ inputs.location }}" \
+              --output none
+
+      # ----------------------------------------------------------------------
+      # Method A: native (no deploy.ps1) — Bicep + functions-action
+      # ----------------------------------------------------------------------
+      - name: Deploy infrastructure (Bicep)
+        if: ${{ inputs.method == 'native' }}
+        id: infra
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            appName=$(az deployment group create \
+              --resource-group "${{ inputs.resourceGroup }}" \
+              --name "logapi-$(date +%Y%m%d%H%M%S)" \
+              --template-file infra/main.bicep \
+              --parameters infra/main.bicepparam \
+              --parameters \
+                location="${{ inputs.location }}" \
+                baseName="${{ inputs.baseName }}" \
+                environment="${{ inputs.environment }}" \
+                functionPlanType="${{ inputs.functionPlanType }}" \
+                existingWorkspaceName="${{ inputs.existingWorkspaceName }}" \
+                jwtRequireEntraDevice=${{ inputs.requireEntraDevice }} \
+              --query properties.outputs.functionAppName.value \
+              --output tsv)
+            echo "Function App: $appName"
+            echo "functionAppName=$appName" >> "$GITHUB_OUTPUT"
+
+      - name: Publish function code
+        if: ${{ inputs.method == 'native' }}
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ steps.infra.outputs.functionAppName }}
+          package: function
+
+      # ----------------------------------------------------------------------
+      # Method B: script — run scripts/deploy.ps1 (same as deploying locally)
+      # ----------------------------------------------------------------------
+      - name: Install Azure Functions Core Tools
+        if: ${{ inputs.method == 'script' }}
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+      - name: Deploy with deploy.ps1
+        if: ${{ inputs.method == 'script' }}
+        shell: pwsh
+        working-directory: scripts
+        run: |
+          # CI has no Entra admin to grant Graph Device.Read.All, so skip that
+          # step here and grant it once separately (see README). Everything else
+          # (infra + function publish) runs exactly like a local deploy.
+          ./deploy.ps1 `
+            -FunctionResourceGroup '${{ inputs.resourceGroup }}' `
+            -Location '${{ inputs.location }}' `
+            -BaseName '${{ inputs.baseName }}' `
+            -Environment '${{ inputs.environment }}' `
+            -FunctionPlanType '${{ inputs.functionPlanType }}' `
+            $(if ('${{ inputs.existingWorkspaceName }}') { "-ExistingWorkspaceName", '${{ inputs.existingWorkspaceName }}' }) `
+            -SkipDeviceGraphPermission
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          echo "### LogIngestionAPI deploy (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Resource group: ${{ inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Region: ${{ inputs.location }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Plan: ${{ inputs.functionPlanType }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "If \`requireEntraDevice\` is true, grant the Function's managed identity Graph **Device.Read.All** once (scripts/AssignMSIPermisison.ps1), then copy the function key + URL from the Azure portal into your Intune script." >> "$GITHUB_STEP_SUMMARY"

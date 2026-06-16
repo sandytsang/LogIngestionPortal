@@ -104,6 +104,54 @@ left untouched). You can also set `existingWorkspaceName` /
 [infra/main.bicepparam](infra/main.bicepparam) instead of passing them on the
 command line.
 
+## Deploy from your own GitHub (Actions)
+
+Prefer a pipeline over running the script by hand? This folder ships two
+ready-to-use GitHub Actions workflows in
+[.github/workflows](.github/workflows). When you push **this `LogIngestionAPI`
+folder as the root of your own repository** (for example, the folder you get
+from the portal's download bundle), GitHub picks them up automatically:
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| [validate.yml](.github/workflows/validate.yml) | PR / push | Compiles the Bicep and sanity-checks `schema/columns.json`. No Azure login needed. |
+| [deploy.yml](.github/workflows/deploy.yml) | Manual (**Run workflow**) | Deploys infra + publishes the Function. Pick `method: native` (Bicep + `functions-action`, no script) or `method: script` (runs `scripts/deploy.ps1` in CI). |
+
+You choose how to deploy — the **same `deploy.ps1`** you'd run locally, or a
+fully native pipeline. Both authenticate to Azure with **OIDC (passwordless)**,
+so no secrets/keys are stored.
+
+### One-time setup
+
+1. **Create an Entra app registration** (or reuse one) and add a **federated
+   credential** for your repo. In the app registration → *Certificates &
+   secrets* → *Federated credentials* → *Add*, choose **GitHub Actions** and set:
+   - Organization/owner = your GitHub user/org, Repository = your repo
+   - Entity = **Environment**, value = `dev` (match the `environment` input), or
+     use **Branch** = `main` if you remove the `environment:` line.
+2. **Assign Azure roles** to that app's service principal on the target
+   subscription or resource group:
+   - **Contributor** — create the Function App, storage, workspace and DCR.
+   - **User Access Administrator** — the Bicep assigns the Function's managed
+     identity *Monitoring Metrics Publisher* on the DCR, which requires this.
+3. **Add three repo secrets** (Settings → Secrets and variables → Actions):
+   `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
+4. Run **Actions → Deploy LogIngestionAPI → Run workflow** and fill in the
+   resource group, region, base name, environment and plan.
+
+### After it runs
+
+- If you left `requireEntraDevice` on (the default), grant the Function's
+  managed identity Graph **Device.Read.All** once — CI usually can't because that
+  needs an Entra admin. Run [scripts/AssignMSIPermisison.ps1](scripts/AssignMSIPermisison.ps1)
+  (or set `requireEntraDevice: false` to skip device-record validation).
+- Copy the **function key** and **URL** from the Azure portal (Function App →
+  Functions → `DCRLogIngestionAPI` → *Function Keys*) into your Intune script.
+
+> Tip: to require manual approval before a `prod` deploy, create a GitHub
+> **Environment** named `prod` with a required reviewer — the `deploy.yml` job
+> already binds to the selected `environment`.
+
 ## Device authentication (device-signed JWT)
 
 Every request must prove possession of the device's **Entra-join

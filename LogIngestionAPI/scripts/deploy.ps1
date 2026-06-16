@@ -442,8 +442,14 @@ if (-not $SkipFunctionPublish) {
             --resource-group $FunctionResourceGroup `
             --query state `
             --output tsv 2>$null
-        if ($LASTEXITCODE -eq 0 -and $appState) {
-            Write-Host "    OK - Function App is available (state: $appState)." -ForegroundColor Green
+        # A zero exit code means the app is queryable (discoverable) on the
+        # management plane, which is all we need before publishing. Don't also
+        # require a non-empty 'state': Flex Consumption (FC1) apps often report
+        # an empty/null state for a while after provisioning, which would
+        # otherwise spin this loop until it times out even though the app is up.
+        if ($LASTEXITCODE -eq 0) {
+            $stateLabel = if ($appState) { $appState } else { 'provisioning' }
+            Write-Host "    OK - Function App is available (state: $stateLabel)." -ForegroundColor Green
             break
         }
         if ($readyAttempt -eq $maxReadyAttempts) {
@@ -572,14 +578,7 @@ if (-not $SkipDeviceGraphPermission) {
     }
 }
 
-# --- 6. Retrieve the function key and print next steps ----------------------
-Write-Host '==> Retrieving function key' -ForegroundColor Cyan
-$functionKey = az functionapp function keys list `
-    --resource-group $FunctionResourceGroup `
-    --name $functionAppName `
-    --function-name DCRLogIngestionAPI `
-    --query default --output tsv 2>$null
-
+# --- 6. Print next steps ---------------------------------------------------
 $ingestUrl = "https://$functionHost/api/DCRLogIngestionAPI"
 
 Write-Host ''
@@ -587,24 +586,17 @@ Write-Host '============================================================' -Foreg
 Write-Host ' Deployment complete' -ForegroundColor Yellow
 Write-Host '============================================================' -ForegroundColor Yellow
 Write-Host "Function URL : $ingestUrl"
-if ($functionKey) {
-    Write-Host "Function key : $functionKey"
-    Write-Host ''
-    Write-Host 'Set these two values at the top of scripts/IntuneScript.ps1 before packaging for Intune.'
-    Write-Host ''
-    Write-Host 'Quick test (PowerShell):' -ForegroundColor Cyan
-    $sample = '[{ \"TimeGenerated\": \"' + (Get-Date).ToUniversalTime().ToString('o') + '\", \"DeviceName\": \"test-host\", \"Status\": \"Remediated\", \"Details\": \"manual test\" }]'
-    Write-Host "Invoke-RestMethod -Method Post -Uri '$ingestUrl?code=$functionKey' -ContentType 'application/json' -Body '$sample'"
-} else {
-    Write-Host 'Function key not available yet.' -ForegroundColor Yellow
-    Write-Host 'Common reasons:' -ForegroundColor Cyan
-    Write-Host '    - The code is still deploying/restarting; the DCRLogIngestionAPI function is' -ForegroundColor White
-    Write-Host '      not registered yet. Wait ~1-2 minutes, then retry the command below.' -ForegroundColor White
-    Write-Host '    - The publish step was skipped (-SkipFunctionPublish), so no function exists yet.' -ForegroundColor White
-    Write-Host '    - Your account lacks rights to list function keys (needs Contributor or the' -ForegroundColor White
-    Write-Host '      Function App key reader role on the Function App).' -ForegroundColor White
-    Write-Host 'Retrieve it later with:' -ForegroundColor Cyan
-    Write-Host "    az functionapp function keys list -g $FunctionResourceGroup -n $functionAppName --function-name DCRLogIngestionAPI --query default -o tsv" -ForegroundColor White
-}
+Write-Host ''
+Write-Host 'Get the function key from the Azure portal:' -ForegroundColor Cyan
+Write-Host "    Function App '$functionAppName' -> Functions -> DCRLogIngestionAPI ->" -ForegroundColor White
+Write-Host "    Function Keys -> copy 'default' (or use an App key under 'App keys')." -ForegroundColor White
+Write-Host '    (Right after a deploy the key may take a minute to appear, and on Flex' -ForegroundColor White
+Write-Host '    Consumption the CLI can return null while the portal shows it.)' -ForegroundColor White
+Write-Host ''
+Write-Host 'Paste that key and the URL above into scripts/IntuneScript.ps1 before packaging for Intune.' -ForegroundColor White
+Write-Host ''
+Write-Host 'Quick test once you have the key (PowerShell):' -ForegroundColor Cyan
+$sample = '[{ \"TimeGenerated\": \"' + (Get-Date).ToUniversalTime().ToString('o') + '\", \"DeviceName\": \"test-host\", \"Status\": \"Remediated\", \"Details\": \"manual test\" }]'
+Write-Host "Invoke-RestMethod -Method Post -Uri '$ingestUrl?code=<FUNCTION_KEY>' -ContentType 'application/json' -Body '$sample'"
 Write-Host ''
 Write-Host "Query results in Log Analytics:  $(($tables | ForEach-Object { "$($_.tableName) | take 20" }) -join '   /   ')"
