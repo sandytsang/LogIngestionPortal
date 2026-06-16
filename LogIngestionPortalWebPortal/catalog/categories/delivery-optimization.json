@@ -1,0 +1,57 @@
+{
+  "category": "Delivery Optimization",
+  "fields": [
+    {
+      "id": "DeliveryOptimizationSettings",
+      "label": "Delivery Optimization settings",
+      "order": 67,
+      "default": false,
+      "setups": [],
+      "collector": "$key = 'HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\Current\\Device\\DeliveryOptimization'\n$item = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue\n$o = [ordered]@{}\nif ($item) {\n    foreach ($p in $item.PSObject.Properties) {\n        if ($p.Name -like 'PS*') { continue }\n        $o[$p.Name] = \"$($p.Value)\"\n    }\n}\n[pscustomobject]$o",
+      "column": {
+        "name": "DeliveryOptimizationSettings",
+        "type": "dynamic",
+        "description": "Delivery Optimization policy settings as a JSON object: all configured values under the PolicyManager DeliveryOptimization key. Values are strings."
+      }
+    },
+    {
+      "id": "DeliveryOptimizationConfig",
+      "label": "Delivery Optimization config",
+      "order": 68,
+      "default": false,
+      "setups": [],
+      "collector": "$cfg = Get-DOConfig -ErrorAction Stop | Select-Object -Property *\n$o = [ordered]@{}\nforeach ($p in $cfg.PSObject.Properties) {\n    if ($p.Name -like 'PS*' -or $p.Name -like 'Cim*') { continue }\n    $o[$p.Name] = \"$($p.Value)\"\n}\n[pscustomobject]$o",
+      "column": {
+        "name": "DeliveryOptimizationConfig",
+        "type": "dynamic",
+        "description": "Effective Delivery Optimization configuration (Get-DOConfig) as a JSON object of name/value pairs."
+      }
+    },
+    {
+      "id": "DeliveryOptimizationPerfStats",
+      "label": "Delivery Optimization perf stats",
+      "order": 69,
+      "default": false,
+      "setups": [],
+      "collector": "$snap = Get-DeliveryOptimizationPerfSnap -ErrorAction Stop | Select-Object -Property *\n$o = [ordered]@{}\nforeach ($p in $snap.PSObject.Properties) {\n    if ($p.Name -like 'PS*' -or $p.Name -like 'Cim*') { continue }\n    $o[$p.Name] = \"$($p.Value)\"\n}\n[pscustomobject]$o",
+      "column": {
+        "name": "DeliveryOptimizationPerfStats",
+        "type": "dynamic",
+        "description": "Delivery Optimization performance snapshot (Get-DeliveryOptimizationPerfSnap) as a JSON object: bytes from HTTP/peers/cache server, etc."
+      }
+    },
+    {
+      "id": "DeliveryOptimizationMonthlyPerfStats",
+      "label": "Delivery Optimization monthly perf stats",
+      "order": 70,
+      "default": false,
+      "setups": [],
+      "collector": "$snap = Get-DeliveryOptimizationPerfSnapThisMonth -ErrorAction Stop | Select-Object -Property *\n$o = [ordered]@{}\nforeach ($p in $snap.PSObject.Properties) {\n    if ($p.Name -like 'PS*' -or $p.Name -like 'Cim*') { continue }\n    $o[$p.Name] = \"$($p.Value)\"\n}\n[pscustomobject]$o",
+      "column": {
+        "name": "DeliveryOptimizationMonthlyPerfStats",
+        "type": "dynamic",
+        "description": "Delivery Optimization month-to-date performance snapshot (Get-DeliveryOptimizationPerfSnapThisMonth) as a JSON object."
+      }
+    }
+  ]
+}
