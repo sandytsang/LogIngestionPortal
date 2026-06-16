@@ -213,6 +213,84 @@
         "type": "int",
         "description": "Number of logical processors (Win32_Processor.NumberOfLogicalProcessors)."
       }
+    },
+    {
+      "id": "CpuMaxClockSpeedMHz",
+      "label": "CPU max clock speed (MHz)",
+      "order": 73,
+      "default": false,
+      "setups": ["cpu"],
+      "expression": "$cpu.MaxClockSpeed",
+      "column": {
+        "name": "CpuMaxClockSpeedMHz",
+        "type": "int",
+        "description": "Maximum processor clock speed in MHz (Win32_Processor.MaxClockSpeed)."
+      }
+    },
+    {
+      "id": "CpuSocketCount",
+      "label": "CPU sockets",
+      "order": 74,
+      "default": false,
+      "setups": ["cs"],
+      "expression": "$cs.NumberOfProcessors",
+      "column": {
+        "name": "CpuSocketCount",
+        "type": "int",
+        "description": "Number of physical processor sockets (Win32_ComputerSystem.NumberOfProcessors)."
+      }
+    },
+    {
+      "id": "Drivers",
+      "label": "Installed drivers (non-Microsoft)",
+      "order": 75,
+      "default": false,
+      "setups": [],
+      "collector": "Get-CimInstance -ClassName Win32_PnPSignedDriver -ErrorAction Stop | Where-Object { $_.Manufacturer -ne 'Microsoft' -and $_.DriverProviderName -ne 'Microsoft' -and $_.DeviceName } | Select-Object DeviceName, DriverVersion, DriverDate, DeviceClass, Manufacturer, DriverProviderName, InfName",
+      "column": {
+        "name": "Drivers",
+        "type": "dynamic",
+        "description": "Non-Microsoft signed PnP drivers as a JSON array (device name, version, date, class, manufacturer, provider, INF) from Win32_PnPSignedDriver."
+      }
+    },
+    {
+      "id": "Monitors",
+      "label": "Connected monitors",
+      "order": 76,
+      "default": false,
+      "setups": [],
+      "collector": "$dec = { param($a) if ($a) { ([Text.Encoding]::ASCII.GetString($a)).Trim([char]0) } else { $null } }\nGet-CimInstance -Namespace root\\wmi -ClassName WMIMonitorID -ErrorAction Stop | ForEach-Object {\n    [pscustomobject]@{\n        Manufacturer      = & $dec $_.ManufacturerName\n        Model             = & $dec $_.UserFriendlyName\n        SerialNumber      = & $dec $_.SerialNumberID\n        WeekOfManufacture = $_.WeekOfManufacture\n        YearOfManufacture = $_.YearOfManufacture\n    }\n}",
+      "column": {
+        "name": "Monitors",
+        "type": "dynamic",
+        "description": "Connected monitors as a JSON array (manufacturer, model, serial number, week/year of manufacture) decoded from WMIMonitorID."
+      }
+    },
+    {
+      "id": "BatteryHealth",
+      "label": "Battery health",
+      "order": 77,
+      "default": false,
+      "setups": [],
+      "collector": "$static = Get-CimInstance -Namespace root\\wmi -ClassName BatteryStaticData -ErrorAction SilentlyContinue | Select-Object -First 1\n$full = Get-CimInstance -Namespace root\\wmi -ClassName BatteryFullChargedCapacity -ErrorAction SilentlyContinue | Select-Object -First 1\nif ($static -or $full) {\n    $designed = $static.DesignedCapacity\n    $charged = $full.FullChargedCapacity\n    [pscustomobject]@{\n        DesignedCapacity    = $designed\n        FullChargedCapacity = $charged\n        HealthPercent       = if ($designed -and $charged) { [math]::Round(($charged / $designed) * 100, 1) } else { $null }\n    }\n}",
+      "column": {
+        "name": "BatteryHealth",
+        "type": "dynamic",
+        "description": "Battery health as a JSON object: designed capacity, full-charge capacity and health percent (root\\wmi BatteryStaticData / BatteryFullChargedCapacity). Empty on desktops."
+      }
+    },
+    {
+      "id": "Chassis",
+      "label": "Chassis type",
+      "order": 78,
+      "default": false,
+      "setups": [],
+      "collector": "$types = @{ 3 = 'Desktop'; 4 = 'LowProfileDesktop'; 5 = 'PizzaBox'; 6 = 'MiniTower'; 7 = 'Tower'; 8 = 'Portable'; 9 = 'Laptop'; 10 = 'Notebook'; 11 = 'HandHeld'; 12 = 'DockingStation'; 13 = 'AllInOne'; 14 = 'SubNotebook'; 15 = 'SpaceSaving'; 16 = 'LunchBox'; 17 = 'MainSystemChassis'; 18 = 'ExpansionChassis'; 21 = 'PeripheralChassis'; 22 = 'StorageChassis'; 23 = 'RackMountChassis'; 24 = 'SealedCasePC'; 30 = 'Tablet'; 31 = 'Convertible'; 32 = 'Detachable' }\nGet-CimInstance -ClassName Win32_SystemEnclosure -ErrorAction Stop | ForEach-Object {\n    $tag = $_.SMBIOSAssetTag\n    foreach ($code in $_.ChassisTypes) {\n        [pscustomobject]@{\n            ChassisTypeCode = [int]$code\n            ChassisType     = $types[[int]$code]\n            AssetTag        = $tag\n        }\n    }\n}",
+      "column": {
+        "name": "Chassis",
+        "type": "dynamic",
+        "description": "System chassis entries as a JSON array (chassis type code, decoded type, and SMBIOS asset tag) from Win32_SystemEnclosure."
+      }
     }
   ]
 }

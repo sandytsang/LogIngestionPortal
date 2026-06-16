@@ -2,7 +2,7 @@
   "cs": "    $cs = Get-CimInstance -ClassName Win32_ComputerSystem",
   "os": "    $os = Get-CimInstance -ClassName Win32_OperatingSystem",
   "bios": "    $bios = Invoke-Safe 'BIOS' { Get-CimInstance -ClassName Win32_BIOS }",
-  "cpu": "    $cpu = Invoke-Safe 'CPU' { Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors }",
+  "cpu": "    $cpu = Invoke-Safe 'CPU' { Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 Name, Manufacturer, MaxClockSpeed, NumberOfCores, NumberOfLogicalProcessors }",
   "mp": "    $mp = Invoke-Safe 'Defender' { Get-MpComputerStatus }",
   "tpm": "    $tpm = Invoke-Safe 'TPM' { Get-Tpm }",
   "secureBoot": "    $secureBoot = Invoke-Safe 'SecureBoot' { Confirm-SecureBootUEFI }",
