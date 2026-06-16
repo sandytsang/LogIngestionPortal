@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "13266649667068147384"
+      "templateHash": "14282578526860746581"
     }
   },
   "parameters": {
@@ -111,6 +111,13 @@
       "defaultValue": true,
       "metadata": {
         "description": "When true, resolve the device in Entra and validate its certificate against the device record (needs Graph Device.Read.All). When false, validate signature + MS-Organization-Access issuer only."
+      }
+    },
+    "assignDcrPublisherRole": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "When true, the deployment grants the Function App's managed identity Monitoring Metrics Publisher on the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately."
       }
     }
   },
@@ -868,7 +875,7 @@
       ]
     },
     {
-      "condition": "[not(parameters('schemaOnly'))]",
+      "condition": "[and(not(parameters('schemaOnly')), parameters('assignDcrPublisherRole'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "dcrRoleAssignment",
@@ -949,6 +956,10 @@
       "type": "string",
       "value": "[if(parameters('schemaOnly'), '', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppHostName.value)]"
     },
+    "functionPrincipalId": {
+      "type": "string",
+      "value": "[if(parameters('schemaOnly'), '', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value)]"
+    },
     "functionResourceGroup": {
       "type": "string",
       "value": "[variables('primaryRg')]"
@@ -956,6 +967,10 @@
     "dcrResourceGroup": {
       "type": "string",
       "value": "[variables('dcrRg')]"
+    },
+    "dcrName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.dcrName.value]"
     },
     "logAnalyticsResourceGroup": {
       "type": "string",
@@ -988,6 +1003,14 @@
     "schemaOnly": {
       "type": "bool",
       "value": "[parameters('schemaOnly')]"
+    },
+    "dcrRoleAssigned": {
+      "type": "bool",
+      "value": "[and(not(parameters('schemaOnly')), parameters('assignDcrPublisherRole'))]"
+    },
+    "monitoringMetricsPublisherRoleId": {
+      "type": "string",
+      "value": "[variables('monitoringMetricsPublisherRoleId')]"
     }
   }
 }

@@ -73,6 +73,10 @@ on:
         description: 'Validate device against its Entra record (needs Graph Device.Read.All granted separately)'
         type: boolean
         default: true
+      skipRoleAssignment:
+        description: 'Do not create the DCR role assignment (use when the login identity only has Contributor; grant Monitoring Metrics Publisher separately)'
+        type: boolean
+        default: false
 
 permissions:
   id-token: write   # required for OIDC (passwordless) Azure login
@@ -128,6 +132,11 @@ jobs:
             if [ "${{ inputs.action }}" = "updateColumns" ]; then
               params+=( schemaOnly=true dcrName="${{ inputs.dcrName }}" )
             fi
+            # Contributor-only login: skip the DCR role assignment (grant it
+            # separately). Contributor cannot create role assignments.
+            if [ "${{ inputs.skipRoleAssignment }}" = "true" ]; then
+              params+=( assignDcrPublisherRole=false )
+            fi
             appName=$(az deployment group create \
               --resource-group "${{ inputs.resourceGroup }}" \
               --name "logapi-$(date +%Y%m%d%H%M%S)" \
@@ -169,6 +178,8 @@ jobs:
           }
           if ('${{ inputs.existingWorkspaceName }}') { $opt += @('-ExistingWorkspaceName', '${{ inputs.existingWorkspaceName }}') }
           if ('${{ inputs.existingWorkspaceResourceGroup }}') { $opt += @('-ExistingWorkspaceResourceGroup', '${{ inputs.existingWorkspaceResourceGroup }}') }
+          # Contributor-only login: don't create the DCR role assignment here.
+          if ('${{ inputs.skipRoleAssignment }}' -eq 'true') { $opt += '-SkipDcrRoleAssignment' }
           ./deploy.ps1 `
             -FunctionResourceGroup '${{ inputs.resourceGroup }}' `
             -Location '${{ inputs.location }}' `
@@ -187,3 +198,5 @@ jobs:
           echo "- Plan: ${{ inputs.functionPlanType }}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "If \`requireEntraDevice\` is true, grant the Function's managed identity Graph **Device.Read.All** once (scripts/AssignMSIPermisison.ps1), then copy the function key + URL from the Azure portal into your Intune script." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "If \`skipRoleAssignment\` was true, also grant the Function's managed identity **Monitoring Metrics Publisher** on the DCR (the deploy.ps1 log prints the exact \`az role assignment create\` command)." >> "$GITHUB_STEP_SUMMARY"

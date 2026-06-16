@@ -66,6 +66,9 @@ param jwtAllowedTenantId string = ''
 @description('When true, resolve the device in Entra and validate its certificate against the device record (needs Graph Device.Read.All). When false, validate signature + MS-Organization-Access issuer only.')
 param jwtRequireEntraDevice bool = true
 
+@description('When true, the deployment grants the Function App\'s managed identity Monitoring Metrics Publisher on the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately.')
+param assignDcrPublisherRole bool = true
+
 // ---------------------------------------------------------------------------
 // Schema - single source of truth
 //
@@ -144,7 +147,7 @@ module functionApp 'modules/functionApp.bicep' = if (!schemaOnly) {
   }
 }
 
-module dcrRoleAssignment 'modules/dcrRoleAssignment.bicep' = if (!schemaOnly) {
+module dcrRoleAssignment 'modules/dcrRoleAssignment.bicep' = if (!schemaOnly && assignDcrPublisherRole) {
   name: 'dcrRoleAssignment'
   scope: resourceGroup(dcrRg)
   params: {
@@ -162,8 +165,11 @@ module dcrRoleAssignment 'modules/dcrRoleAssignment.bicep' = if (!schemaOnly) {
 output functionAppName string = schemaOnly ? '' : functionApp.outputs.functionAppName
 #disable-next-line BCP318
 output functionAppHostName string = schemaOnly ? '' : functionApp.outputs.functionAppHostName
+#disable-next-line BCP318
+output functionPrincipalId string = schemaOnly ? '' : functionApp.outputs.principalId
 output functionResourceGroup string = primaryRg
 output dcrResourceGroup string = dcrRg
+output dcrName string = dcr.outputs.dcrName
 output logAnalyticsResourceGroup string = laRg
 output dcrImmutableId string = dcr.outputs.immutableId
 output dcrIngestionEndpoint string = dcr.outputs.logsIngestionEndpoint
@@ -172,3 +178,7 @@ output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceCustomerId
 output customTableNames array = map(tables, t => t.tableName)
 output functionPlanType string = functionPlanType
 output schemaOnly bool = schemaOnly
+// True when the deployment created the DCR role assignment itself. When false
+// (Contributor-only deploy), grant Monitoring Metrics Publisher separately.
+output dcrRoleAssigned bool = !schemaOnly && assignDcrPublisherRole
+output monitoringMetricsPublisherRoleId string = monitoringMetricsPublisherRoleId

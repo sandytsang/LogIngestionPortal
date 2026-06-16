@@ -134,6 +134,11 @@ so no secrets/keys are stored.
    - **Contributor** — create the Function App, storage, workspace and DCR.
    - **User Access Administrator** — the Bicep assigns the Function's managed
      identity *Monitoring Metrics Publisher* on the DCR, which requires this.
+     *Contributor-only option:* if you can't grant this, set the
+     **`skipRoleAssignment`** input to `true` when you run the workflow — the
+     deploy then needs only **Contributor**, and you grant *Monitoring Metrics
+     Publisher* on the DCR separately afterwards (the run log / `deploy.ps1`
+     prints the exact `az role assignment create` command).
 3. **Add three repo secrets** (Settings → Secrets and variables → Actions):
    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 4. Run **Actions → Deploy LogIngestionAPI → Run workflow** and fill in the

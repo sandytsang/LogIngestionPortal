@@ -47,6 +47,12 @@
     needed) or you grant the permission separately. Note: with the default
     jwtRequireEntraDevice=true, skipping this makes every request return 401.
 
+.PARAMETER SkipDcrRoleAssignment
+    Do not let the deployment create the DCR role assignment (Monitoring Metrics
+    Publisher for the Function's managed identity). Use this when the deployer
+    only has Contributor (which cannot create role assignments). The script then
+    prints the exact 'az role assignment create' command to grant it separately.
+
 .PARAMETER ExistingWorkspaceName
     Name of an existing Log Analytics workspace to reuse instead of creating a
     new one. If the workspace is in a different resource group, also pass
@@ -104,6 +110,7 @@ param(
     # default); use -SkipDeviceGraphPermission to opt out.
     [switch]$EnableDeviceJwt,
     [switch]$SkipDeviceGraphPermission,
+    [switch]$SkipDcrRoleAssignment,
     [switch]$SkipFunctionPublish
 )
 
@@ -340,6 +347,10 @@ if ($FunctionPlanType) {
     $paramOverrides += "functionPlanType=$FunctionPlanType"
     Write-Host "    Function App hosting plan: $FunctionPlanType." -ForegroundColor Green
 }
+if ($SkipDcrRoleAssignment) {
+    $paramOverrides += 'assignDcrPublisherRole=false'
+    Write-Host '    Skipping the DCR role assignment (Contributor-only deploy); grant it separately afterwards.' -ForegroundColor Yellow
+}
 if ($ExistingWorkspaceName) {
     Write-Host "    Reusing existing Log Analytics workspace '$ExistingWorkspaceName'." -ForegroundColor Green
 }
@@ -416,6 +427,31 @@ $outputs = $outputJson | ConvertFrom-Json
 $functionAppName = $outputs.functionAppName.value
 $functionHost = $outputs.functionAppHostName.value
 Write-Host "    OK - Function App '$functionAppName'." -ForegroundColor Green
+
+# When the deployment was told NOT to create the DCR role assignment (Contributor-
+# only deploy), the Function cannot push logs until someone with role-assignment
+# rights grants it. Print the exact command so an admin can run it once.
+if ($SkipDcrRoleAssignment) {
+    $subId = az account show --query id -o tsv
+    $dcrRgOut = $outputs.dcrResourceGroup.value
+    $dcrNameOut = $outputs.dcrName.value
+    $miPrincipalId = $outputs.functionPrincipalId.value
+    $dcrScope = "/subscriptions/$subId/resourceGroups/$dcrRgOut/providers/Microsoft.Insights/dataCollectionRules/$dcrNameOut"
+    Write-Host ''
+    Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
+    Write-Host ' Action needed: grant the Function access to the DCR' -ForegroundColor Yellow
+    Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
+    Write-Host 'You deployed with -SkipDcrRoleAssignment, so the role was NOT created.' -ForegroundColor Yellow
+    Write-Host "Until it is, the Function returns errors when pushing logs. Have someone with" -ForegroundColor Yellow
+    Write-Host 'Owner / User Access Administrator / RBAC Administrator run this once:' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host "  az role assignment create ``" -ForegroundColor White
+    Write-Host "    --assignee-object-id $miPrincipalId ``" -ForegroundColor White
+    Write-Host '    --assignee-principal-type ServicePrincipal `' -ForegroundColor White
+    Write-Host "    --role 'Monitoring Metrics Publisher' ``" -ForegroundColor White
+    Write-Host "    --scope $dcrScope" -ForegroundColor White
+    Write-Host ''
+}
 
 # --- 4. Publish the Function App code ---------------------------------------
 if (-not $SkipFunctionPublish) {
