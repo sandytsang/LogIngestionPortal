@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "3157685981360602801"
+      "templateHash": "13266649667068147384"
     }
   },
   "parameters": {
@@ -147,19 +147,9 @@
               "description": "Operating system build/version string."
             },
             {
-              "name": "RemediationName",
+              "name": "IntuneScriptVersion",
               "type": "string",
-              "description": "Name of the remediation package that produced this record."
-            },
-            {
-              "name": "Status",
-              "type": "string",
-              "description": "Result status reported by the script (e.g. Compliant, Remediated, Failed)."
-            },
-            {
-              "name": "Details",
-              "type": "string",
-              "description": "Free-form details or JSON payload describing what was collected/changed."
+              "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
             },
             {
               "name": "Manufacturer",
@@ -195,6 +185,62 @@
               "name": "DefenderSignatureVersion",
               "type": "string",
               "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
+            },
+            {
+              "name": "BiosVersion",
+              "type": "string",
+              "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
+            },
+            {
+              "name": "AutopilotHardwareHash",
+              "type": "string",
+              "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
+            },
+            {
+              "name": "SystemDriveFreeGB",
+              "type": "real",
+              "description": "Free space on the system drive in GB."
+            },
+            {
+              "name": "SystemDriveSizeGB",
+              "type": "real",
+              "description": "Total size of the system drive in GB."
+            }
+          ]
+        },
+        {
+          "tableName": "TPM_CL",
+          "description": "",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime",
+              "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
+            },
+            {
+              "name": "IntuneScriptVersion",
+              "type": "string",
+              "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
+            },
+            {
+              "name": "BitLockerStatus",
+              "type": "dynamic",
+              "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+            },
+            {
+              "name": "TpmPresent",
+              "type": "boolean",
+              "description": "Whether a TPM is present on the device."
+            },
+            {
+              "name": "TpmReady",
+              "type": "boolean",
+              "description": "Whether the TPM is ready for use."
+            },
+            {
+              "name": "SecureBootEnabled",
+              "type": "boolean",
+              "description": "Whether UEFI Secure Boot is enabled."
             }
           ]
         }
@@ -522,7 +568,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "6897314074994810183"
+              "templateHash": "7950688079843160034"
             }
           },
           "parameters": {
@@ -671,9 +717,13 @@
               "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
                 "httpsOnly": true,
+                "clientAffinityEnabled": false,
                 "siteConfig": {
                   "minTlsVersion": "1.2",
+                  "scmMinTlsVersion": "1.2",
                   "ftpsState": "Disabled",
+                  "http20Enabled": true,
+                  "use32BitWorkerProcess": false,
                   "powerShellVersion": "7.4",
                   "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('funcName'))), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1')), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'DCR_STREAMS', 'value', parameters('dcrStreams')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
                 }
@@ -682,6 +732,30 @@
                 "[resourceId('Microsoft.Insights/components', variables('aiName'))]",
                 "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+              ]
+            },
+            {
+              "condition": "[not(variables('isFlex'))]",
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}/{1}', variables('funcName'), 'scm')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('funcName'))]"
+              ]
+            },
+            {
+              "condition": "[not(variables('isFlex'))]",
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}/{1}', variables('funcName'), 'ftp')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('funcName'))]"
               ]
             },
             {
@@ -734,7 +808,9 @@
                 },
                 "siteConfig": {
                   "minTlsVersion": "1.2",
+                  "scmMinTlsVersion": "1.2",
                   "ftpsState": "Disabled",
+                  "http20Enabled": true,
                   "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'DCR_STREAMS', 'value', parameters('dcrStreams')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
                 }
               },
@@ -743,6 +819,30 @@
                 "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[0], split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[1], split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[2])]",
                 "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+              ]
+            },
+            {
+              "condition": "[variables('isFlex')]",
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}/{1}', variables('funcName'), 'scm')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('funcName'))]"
+              ]
+            },
+            {
+              "condition": "[variables('isFlex')]",
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}/{1}', variables('funcName'), 'ftp')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('funcName'))]"
               ]
             }
           ],

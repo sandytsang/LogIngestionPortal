@@ -175,12 +175,36 @@ resource functionAppConsumption 'Microsoft.Web/sites@2023-12-01' = if (!isFlex) 
   properties: {
     serverFarmId: consumptionPlan.id
     httpsOnly: true
+    clientAffinityEnabled: false
     siteConfig: {
       minTlsVersion: '1.2'
+      scmMinTlsVersion: '1.2'
       ftpsState: 'Disabled'
+      http20Enabled: true
+      use32BitWorkerProcess: false
       powerShellVersion: '7.4'
       appSettings: consumptionAppSettings
     }
+  }
+}
+
+// Disable basic (username/password) auth on the SCM (Kudu) and FTP publishing
+// endpoints. Deployments authenticate with Entra tokens (az login / func
+// publish), so the legacy publishing credentials are unnecessary and are a
+// common attack surface flagged by security baselines.
+resource consumptionScmBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2023-12-01' = if (!isFlex) {
+  parent: functionAppConsumption
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
+resource consumptionFtpBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2023-12-01' = if (!isFlex) {
+  parent: functionAppConsumption
+  name: 'ftp'
+  properties: {
+    allow: false
   }
 }
 
@@ -230,13 +254,32 @@ resource functionAppFlex 'Microsoft.Web/sites@2023-12-01' = if (isFlex) {
     }
     siteConfig: {
       minTlsVersion: '1.2'
+      scmMinTlsVersion: '1.2'
       ftpsState: 'Disabled'
+      http20Enabled: true
       appSettings: flexAppSettings
     }
   }
   dependsOn: [
     flexDeploymentContainer
   ]
+}
+
+// Disable basic-auth publishing on the Flex app too (see note above).
+resource flexScmBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2023-12-01' = if (isFlex) {
+  parent: functionAppFlex
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
+resource flexFtpBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2023-12-01' = if (isFlex) {
+  parent: functionAppFlex
+  name: 'ftp'
+  properties: {
+    allow: false
+  }
 }
 
 #disable-next-line BCP318

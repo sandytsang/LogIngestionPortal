@@ -194,6 +194,22 @@ Because JWT already gives per-device proof-of-possession, mTLS mainly adds a
 network-edge gate (DoS/surface reduction). It is documented here as an optional
 hardening, not enabled by default.
 
+## Function App hardening
+
+The Bicep applies a security baseline to the Function App: 64-bit worker,
+HTTP/2, TLS 1.2 floor (site **and** SCM), HTTPS-only, FTP disabled, and ARR
+affinity off. It also **disables basic (username/password) auth on the SCM
+(Kudu) and FTP publishing endpoints** — a surface commonly flagged by security
+scanners.
+
+With basic-auth publishing disabled, deployments authenticate with **Entra
+(`az login`)** instead of publishing credentials. `deploy.ps1` /
+`func azure functionapp publish` handle this automatically with current Azure
+Functions Core Tools v4. If a publish ever returns `401`, update Core Tools
+(`winget upgrade Microsoft.Azure.FunctionsCoreTools`), publish the zip via
+`az functionapp deployment source config-zip` (AAD), or temporarily re-enable
+SCM basic auth just for that publish.
+
 ## Add or remove a collected field
 
 1. Edit [schema/columns.json](schema/columns.json) (add/remove a column).
