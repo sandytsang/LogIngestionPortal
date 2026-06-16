@@ -11,15 +11,6 @@
       "column": { "name": "DeviceName", "type": "string", "description": "Hostname of the reporting device." }
     },
     {
-      "id": "EnrollmentId",
-      "label": "Intune enrollment id",
-      "order": 3,
-      "default": true,
-      "setups": ["deviceId"],
-      "expression": "$deviceId",
-      "column": { "name": "EnrollmentId", "type": "string", "description": "Intune MDM enrollment id (Enrollments registry key name for the MS DM Server provider)." }
-    },
-    {
       "id": "UserName",
       "label": "Logged-on user",
       "order": 4,

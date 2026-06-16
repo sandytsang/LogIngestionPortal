@@ -176,13 +176,6 @@ function Get-DeviceData {
     $cs = Get-CimInstance -ClassName Win32_ComputerSystem
     $os = Get-CimInstance -ClassName Win32_OperatingSystem
     $bios = Invoke-Safe 'BIOS' { Get-CimInstance -ClassName Win32_BIOS }
-    $deviceId = ''
-    try {
-        $enrollKey = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Enrollments' -ErrorAction SilentlyContinue |
-            Where-Object { $_.GetValue('ProviderID') -eq 'MS DM Server' } | Select-Object -First 1
-        if ($enrollKey) { $deviceId = $enrollKey.PSChildName }
-    }
-    catch { }
     $mp = Invoke-Safe 'Defender' { Get-MpComputerStatus }
     $bitLocker = Invoke-Safe 'BitLocker' {
         Get-BitLockerVolume | ForEach-Object {
@@ -198,7 +191,6 @@ function Get-DeviceData {
     [pscustomobject]@{
         TimeGenerated            = (Get-Date).ToUniversalTime().ToString('o')
         DeviceName               = $env:COMPUTERNAME
-        EnrollmentId             = $deviceId
         UserName                 = $cs.UserName
         OSVersion                = "$($os.Caption) $($os.Version)"
         RemediationName          = $RemediationName

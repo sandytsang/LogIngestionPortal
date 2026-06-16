@@ -111,5 +111,4 @@ Rules for this style:
 | `secureBoot` | `$secureBoot` | `Confirm-SecureBootUEFI` |
 | `net` | `$net` | `Get-NetIPConfiguration` (first IPv4) |
 | `disk` | `$sysDrive` | `Win32_LogicalDisk` (system drive) |
-| `deviceId` | `$deviceId` | Intune enrollment id |
 | `bitLocker` | `$bitLocker` | `Get-BitLockerVolume` |

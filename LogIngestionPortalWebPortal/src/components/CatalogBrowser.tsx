@@ -164,6 +164,13 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
                         >
                           {f.label}
                         </span>
+                        <span className="shrink-0 text-[10px] text-slate-300 dark:text-slate-600">→</span>
+                        <code
+                          title="Log Analytics column name"
+                          className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                        >
+                          {f.column.name}
+                        </code>
                         <code className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                           {f.column.type}
                         </code>

@@ -15,11 +15,6 @@
           "description": "Hostname of the reporting device."
         },
         {
-          "name": "EnrollmentId",
-          "type": "string",
-          "description": "Intune MDM enrollment id (Enrollments registry key name for the MS DM Server provider)."
-        },
-        {
           "name": "UserName",
           "type": "string",
           "description": "Currently logged-on user (UPN or sAMAccountName)."
