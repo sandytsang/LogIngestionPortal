@@ -59,9 +59,9 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
   }, [catalog.fields, query]);
 
   const chip = (active: boolean) =>
-    `rounded-full border px-2 py-0.5 text-[11px] font-medium transition ${
+    `rounded-full border px-2.5 py-1 text-[13px] font-medium transition ${
       active
-        ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
+        ? 'border-indigo-400 bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:border-indigo-500/60 dark:bg-indigo-500/25 dark:text-indigo-100'
         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
     }`;
 
@@ -74,9 +74,9 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search fields (e.g. bitlocker, serial, network)…"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
         />
-        <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
           <div className="flex gap-3">
             <button
               type="button"
@@ -94,7 +94,7 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
             </button>
           </div>
           {!singleTable && (
-            <span className="text-[11px] text-slate-400">
+            <span className="text-xs text-slate-500">
               Click a table chip to add/remove a field from that table.
             </span>
           )}
@@ -116,7 +116,7 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
               {singleTable && (
                 <input
                   type="checkbox"
-                  className="h-4 w-4 shrink-0 accent-indigo-600"
+                  className="h-5 w-5 shrink-0 accent-indigo-600"
                   checked={allInT0}
                   ref={(el) => {
                     if (el) el.indeterminate = someInT0;
@@ -132,15 +132,15 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
                 onClick={() => toggleCat(category)}
                 className="flex flex-1 items-center justify-between text-left"
               >
-                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-200">
                   <span
-                    className={`text-[9px] transition-transform ${collapsed.has(category) ? '' : 'rotate-90'}`}
+                    className={`text-[10px] transition-transform ${collapsed.has(category) ? '' : 'rotate-90'}`}
                   >
                     ▶
                   </span>
                   {category}
                 </span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   {assignedCount}/{fields.length}
                 </span>
               </button>
@@ -161,32 +161,32 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
                       {singleTable && (
                         <input
                           type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-indigo-600"
+                          className="h-5 w-5 shrink-0 accent-indigo-600"
                           checked={inT0(f)}
                           onChange={() => onToggleAssignment(f.id, t0.id)}
                         />
                       )}
                       <span className="flex min-w-0 flex-1 items-baseline gap-2">
                         <span
-                          className={`shrink-0 text-sm ${
+                          className={`shrink-0 text-base ${
                             assigned
-                              ? 'font-medium text-slate-900 dark:text-slate-100'
+                              ? 'font-semibold text-slate-900 dark:text-slate-100'
                               : 'text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {f.label}
                         </span>
-                        <span className="shrink-0 text-[10px] text-slate-300 dark:text-slate-600">→</span>
+                        <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">→</span>
                         <code
                           title="Log Analytics column name"
-                          className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                          className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200"
                         >
                           {f.column.name}
                         </code>
-                        <code className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        <code className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                           {f.column.type}
                         </code>
-                        <span className="truncate text-xs text-slate-400 dark:text-slate-500">
+                        <span className="truncate text-sm text-slate-600 dark:text-slate-400">
                           {f.column.description}
                         </span>
                       </span>
