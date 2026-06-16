@@ -161,6 +161,24 @@ so no secrets/keys are stored.
      Publisher* on the DCR separately afterwards (the run log / `deploy.ps1`
      prints the exact `az role assignment create` command).
 
+   > **Grant the roles on *every* resource group the deploy touches, not just
+   > the target RG.** Contributor on the target RG only covers resources created
+   > there. If you **reuse an existing workspace** in another RG, or put the
+   > **DCR in its own RG**, the deploy writes into those RGs too and needs
+   > **Contributor** on each — otherwise you get `Authorization failed … does not
+   > have permission to perform action 'Microsoft.OperationalInsights/workspaces/tables/write'`
+   > (or `Microsoft.Resources/deployments/write`). Roles to assign:
+   >
+   > | Resource group | Role |
+   > | --- | --- |
+   > | Target / Function RG | Contributor |
+   > | Existing workspace RG (only when reusing a workspace in another RG) | Contributor |
+   > | DCR RG (only when the DCR is in its own RG) | Contributor |
+   > | DCR scope — for the publisher role assignment | User Access Administrator / Owner, or use `skipRoleAssignment` |
+   >
+   > Simplest option: assign **Contributor** (plus **User Access Administrator**)
+   > once at the **subscription** scope — it covers every RG automatically.
+
    > The device check's Graph **Device.Read.All** is granted to the Function
    > App's **managed identity** (a separate identity created at deploy time), not
    > to this app registration — so don't add any Graph application permissions to
