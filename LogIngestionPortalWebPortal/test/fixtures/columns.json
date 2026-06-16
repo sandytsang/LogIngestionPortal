@@ -61,6 +61,11 @@
       "name": "DefenderSignatureVersion",
       "type": "string",
       "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
+    },
+    {
+      "name": "WindowsUpdateSettings",
+      "type": "dynamic",
+      "description": "Windows Update posture as a JSON object: co-management state (CoMgmtWorkload, CoMgmtValue) plus the WindowsUpdate and WindowsUpdate\\AU policy registry values. Values are strings; an empty string means not configured."
     }
   ]
 }
