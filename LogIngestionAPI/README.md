@@ -307,7 +307,7 @@ With basic-auth publishing disabled, deployments authenticate with **Entra
 `func azure functionapp publish` handle this automatically with current Azure
 Functions Core Tools v4. If a publish ever returns `401`, update Core Tools
 (`winget upgrade Microsoft.Azure.FunctionsCoreTools`), publish the zip via
-`az functionapp deployment source config-zip` (AAD), or temporarily re-enable
+`az functionapp deployment source config-zip` (Entra), or temporarily re-enable
 SCM basic auth just for that publish.
 
 ## Add or remove a collected field

@@ -59,16 +59,16 @@
       }
     },
     {
-      "id": "AzureADDeviceId",
-      "label": "Entra (Azure AD) device id",
+      "id": "EntraDeviceId",
+      "label": "Entra device id",
       "order": 32,
       "default": false,
       "setups": [],
       "collector": "$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CloudDomainJoin\\JoinInfo'\n$joinKey = Get-ChildItem -Path $path -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PSChildName\nif ($joinKey) {\n    if ([guid]::TryParse($joinKey, [ref][guid]::Empty)) {\n        $cert = Get-ChildItem -Path 'Cert:\\LocalMachine\\My' -Recurse | Where-Object { $_.Subject -like \"CN=$joinKey\" } | Select-Object -First 1\n    } else {\n        $cert = Get-ChildItem -Path 'Cert:\\LocalMachine\\My' -Recurse | Where-Object { $_.Thumbprint -eq $joinKey } | Select-Object -First 1\n    }\n    if ($cert) { ($cert.Subject -replace 'CN=', '') }\n}",
       "column": {
-        "name": "AzureADDeviceId",
+        "name": "EntraDeviceId",
         "type": "string",
-        "description": "Entra (Azure AD) device id resolved from the MS-Organization-Access join certificate."
+        "description": "Entra device id resolved from the MS-Organization-Access join certificate."
       }
     }
   ]
