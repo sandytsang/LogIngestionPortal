@@ -1,12 +1,15 @@
 using namespace System.Net
 
-# Generic Logs Ingestion forwarder.
+# Generic Logs Ingestion forwarder (multi-table).
 #
-# Accepts a JSON body (a single object or an array of objects), obtains a token
-# from the Function's managed identity, and POSTs the records to the DCR's
-# direct logsIngestion endpoint. The function is schema-agnostic: the DCR's
-# transformKql decides which columns land in the table, so adding/removing a
-# column in schema/columns.json never requires changing this code.
+# Accepts a JSON body that is either:
+#   - a table-keyed object  { "Table1_CL": [ {...} ], "Table2_CL": [ {...} ] }
+#   - a bare array / single object (routed to the first configured table)
+# obtains a token from the Function's managed identity, and POSTs each table's
+# records to its DCR stream (Custom-<tableName>) on the direct logsIngestion
+# endpoint. The function is schema-agnostic: each DCR stream's transformKql
+# decides which columns land in its table, so adding/removing a column (or a
+# whole table) in schema/columns.json never requires changing this code.
 
 param($Request, $TriggerMetadata)
 
@@ -20,6 +23,28 @@ function Write-HttpResponse {
         Headers     = @{ 'Content-Type' = 'application/json' }
         Body        = ($Body | ConvertTo-Json -Depth 10)
     })
+}
+
+# Returns the member name/value pairs of an object, transparently handling both
+# PSCustomObject (the usual JSON deserialization) and Hashtable/dictionary.
+function Get-Members {
+    param($Obj)
+    if ($Obj -is [System.Collections.IDictionary]) {
+        return @($Obj.Keys | ForEach-Object { [pscustomobject]@{ Name = $_; Value = $Obj[$_] } })
+    }
+    return @($Obj.PSObject.Properties | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Value = $_.Value } })
+}
+
+# True when the body is a table-keyed object (an object whose every value is an
+# array). A single record never matches because it always has scalar members
+# such as TimeGenerated.
+function Test-TableKeyed {
+    param($Body)
+    if ($null -eq $Body -or $Body -is [System.Array]) { return $false }
+    $members = Get-Members $Body
+    if ($members.Count -eq 0) { return $false }
+    foreach ($m in $members) { if ($m.Value -isnot [System.Array]) { return $false } }
+    return $true
 }
 
 function Get-RecordBatches {
@@ -58,15 +83,35 @@ function Get-RecordBatches {
 }
 
 # --- Read configuration injected by the Bicep deployment --------------------
-$dcrEndpoint   = $env:DCR_ENDPOINT
+$dcrEndpoint    = $env:DCR_ENDPOINT
 $dcrImmutableId = $env:DCR_IMMUTABLE_ID
-$dcrStream     = $env:DCR_STREAM
+# DCR_STREAMS is a comma-separated list of custom table names. The single-value
+# DCR_STREAM app setting is still honoured for backward compatibility.
+$dcrStreamsRaw  = $env:DCR_STREAMS
+if (-not $dcrStreamsRaw) { $dcrStreamsRaw = $env:DCR_STREAM }
 
-if (-not $dcrEndpoint -or -not $dcrImmutableId -or -not $dcrStream) {
-    Write-Error 'DCR_ENDPOINT, DCR_IMMUTABLE_ID and DCR_STREAM app settings must be configured.'
+if (-not $dcrEndpoint -or -not $dcrImmutableId -or -not $dcrStreamsRaw) {
+    Write-Error 'DCR_ENDPOINT, DCR_IMMUTABLE_ID and DCR_STREAMS app settings must be configured.'
     Write-HttpResponse -StatusCode ([HttpStatusCode]::InternalServerError) -Body @{ error = 'Server not configured.' }
     return
 }
+
+# Map each configured table to its DCR stream (Custom-<tableName>). Entries may
+# be given as a bare table name or an explicit Custom-* stream name.
+$streamByTable = [ordered]@{}
+foreach ($entry in ($dcrStreamsRaw -split ',')) {
+    $name = $entry.Trim()
+    if (-not $name) { continue }
+    $stream = if ($name -like 'Custom-*') { $name } else { "Custom-$name" }
+    $table  = $stream -replace '^Custom-', ''
+    $streamByTable[$table] = $stream
+}
+if ($streamByTable.Count -eq 0) {
+    Write-Error 'DCR_STREAMS did not contain any table names.'
+    Write-HttpResponse -StatusCode ([HttpStatusCode]::InternalServerError) -Body @{ error = 'Server not configured.' }
+    return
+}
+$defaultTable = @($streamByTable.Keys)[0]
 
 # --- Device authentication (always required) --------------------------------
 # Every caller must present a device-signed JWT (Authorization: Bearer <jwt>)
@@ -90,21 +135,48 @@ if (-not $payload) {
     return
 }
 
-# Normalise to an array of records (the Logs Ingestion API expects an array).
-if ($payload -isnot [System.Array]) {
-    $payload = @($payload)
+# Build per-table groups from the body. A table-keyed object routes each key to
+# the matching stream; anything else goes to the default (first) table.
+$groups = New-Object System.Collections.Generic.List[object]
+if (Test-TableKeyed $payload) {
+    foreach ($m in (Get-Members $payload)) {
+        $table = [string]$m.Name
+        if (-not $streamByTable.Contains($table)) {
+            Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{
+                error           = "Unknown table '$table'."
+                configuredTables = @($streamByTable.Keys)
+            }
+            return
+        }
+        $records = @($m.Value)
+        if ($records.Count -eq 0) { continue }
+        $groups.Add([pscustomobject]@{ Table = $table; Stream = $streamByTable[$table]; Records = $records })
+    }
+}
+else {
+    $records = @($payload)
+    $groups.Add([pscustomobject]@{ Table = $defaultTable; Stream = $streamByTable[$defaultTable]; Records = $records })
 }
 
-if ($payload.Count -eq 0) {
+$totalRecords = 0
+foreach ($g in $groups) { $totalRecords += $g.Records.Count }
+if ($groups.Count -eq 0 -or $totalRecords -eq 0) {
     Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{ error = 'No records to ingest.' }
     return
 }
 
 # Ensure every record has a TimeGenerated value (required by Log Analytics).
 $nowUtc = (Get-Date).ToUniversalTime().ToString('o')
-foreach ($record in $payload) {
-    if (-not $record.PSObject.Properties['TimeGenerated'] -or [string]::IsNullOrWhiteSpace($record.TimeGenerated)) {
-        $record | Add-Member -NotePropertyName 'TimeGenerated' -NotePropertyValue $nowUtc -Force
+foreach ($group in $groups) {
+    foreach ($record in $group.Records) {
+        if ($record -is [System.Collections.IDictionary]) {
+            if (-not $record.Contains('TimeGenerated') -or [string]::IsNullOrWhiteSpace([string]$record['TimeGenerated'])) {
+                $record['TimeGenerated'] = $nowUtc
+            }
+        }
+        elseif (-not $record.PSObject.Properties['TimeGenerated'] -or [string]::IsNullOrWhiteSpace($record.TimeGenerated)) {
+            $record | Add-Member -NotePropertyName 'TimeGenerated' -NotePropertyValue $nowUtc -Force
+        }
     }
 }
 
@@ -121,55 +193,69 @@ catch {
     return
 }
 
-# --- Forward to the DCR direct ingestion endpoint (batched, <1 MB per call) -
-$ingestUri = "$dcrEndpoint/dataCollectionRules/$dcrImmutableId/streams/$($dcrStream)?api-version=2023-01-01"
 $ingestHeaders = @{
     'Authorization' = "Bearer $accessToken"
     'Content-Type'  = 'application/json'
 }
 
-$oversized = New-Object System.Collections.Generic.List[object]
-$batches = Get-RecordBatches -Records $payload -Oversized ([ref]$oversized)
-
-if ($oversized.Count -gt 0) {
-    Write-Warning "$($oversized.Count) record(s) exceed the 1 MB per-call limit and were skipped."
-}
-
+# --- Forward each table group to its DCR stream (batched, <1 MB per call) ----
 $ingested = 0
-$batchIndex = 0
-foreach ($batch in $batches) {
-    $batchIndex++
-    # Compact JSON: matches the size estimate in Get-RecordBatches and minimizes
-    # the payload so each call stays under the 1 MB Logs Ingestion limit.
-    $body = $batch | ConvertTo-Json -Depth 10 -AsArray -Compress
-    try {
-        Invoke-RestMethod -Method Post -Uri $ingestUri -Body $body -Headers $ingestHeaders
-        $ingested += $batch.Count
+$batchTotal = 0
+$oversizedTotal = 0
+$perTable = [ordered]@{}
+
+foreach ($group in $groups) {
+    $ingestUri = "$dcrEndpoint/dataCollectionRules/$dcrImmutableId/streams/$($group.Stream)?api-version=2023-01-01"
+
+    $oversized = New-Object System.Collections.Generic.List[object]
+    $batches = Get-RecordBatches -Records $group.Records -Oversized ([ref]$oversized)
+    $oversizedTotal += $oversized.Count
+    if ($oversized.Count -gt 0) {
+        Write-Warning "$($oversized.Count) record(s) for table $($group.Table) exceed the 1 MB per-call limit and were skipped."
     }
-    catch {
-        $statusCode = $null
-        try { $statusCode = $_.Exception.Response.StatusCode.value__ } catch { }
-        Write-Error "Ingestion failed for batch $batchIndex/$($batches.Count) (HTTP $statusCode): $($_.Exception.Message)"
-        Write-HttpResponse -StatusCode ([HttpStatusCode]::BadGateway) -Body @{
-            error      = 'Ingestion endpoint rejected the request.'
-            statusCode = $statusCode
-            ingested   = $ingested
-            total      = $payload.Count
+
+    $tableIngested = 0
+    $batchIndex = 0
+    foreach ($batch in $batches) {
+        $batchIndex++
+        # Compact JSON: matches the size estimate in Get-RecordBatches and minimizes
+        # the payload so each call stays under the 1 MB Logs Ingestion limit.
+        $body = $batch | ConvertTo-Json -Depth 10 -AsArray -Compress
+        try {
+            Invoke-RestMethod -Method Post -Uri $ingestUri -Body $body -Headers $ingestHeaders
+            $tableIngested += $batch.Count
         }
-        return
+        catch {
+            $statusCode = $null
+            try { $statusCode = $_.Exception.Response.StatusCode.value__ } catch { }
+            Write-Error "Ingestion failed for table $($group.Table) batch $batchIndex/$($batches.Count) (HTTP $statusCode): $($_.Exception.Message)"
+            Write-HttpResponse -StatusCode ([HttpStatusCode]::BadGateway) -Body @{
+                error      = 'Ingestion endpoint rejected the request.'
+                table      = $group.Table
+                statusCode = $statusCode
+                ingested   = $ingested + $tableIngested
+                total      = $totalRecords
+            }
+            return
+        }
     }
+
+    $ingested += $tableIngested
+    $batchTotal += $batches.Count
+    $perTable[$group.Table] = $tableIngested
+    Write-Information "Ingested $tableIngested record(s) to stream $($group.Stream) in $($batches.Count) batch(es)."
 }
 
-Write-Information "Ingested $ingested record(s) to stream $dcrStream in $($batches.Count) batch(es)."
 $responseBody = @{
     status  = 'accepted'
     records = $ingested
-    batches = $batches.Count
+    batches = $batchTotal
+    tables  = $perTable
 }
-if ($oversized.Count -gt 0) {
-    $responseBody.skipped = $oversized.Count
+if ($oversizedTotal -gt 0) {
+    $responseBody.skipped = $oversizedTotal
     $responseBody.status = 'partial'
 }
-$statusOut = if ($oversized.Count -gt 0) { [HttpStatusCode]::MultiStatus } else { [HttpStatusCode]::OK }
+$statusOut = if ($oversizedTotal -gt 0) { [HttpStatusCode]::MultiStatus } else { [HttpStatusCode]::OK }
 Write-HttpResponse -StatusCode $statusOut -Body $responseBody
 

@@ -14,6 +14,20 @@
         "type": "datetime",
         "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
       }
+    },
+    {
+      "id": "IntuneScriptVersion",
+      "label": "Intune script version",
+      "order": 6,
+      "default": true,
+      "locked": true,
+      "setups": [],
+      "expression": "$ScriptVersion",
+      "column": {
+        "name": "IntuneScriptVersion",
+        "type": "string",
+        "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
+      }
     }
   ]
 }

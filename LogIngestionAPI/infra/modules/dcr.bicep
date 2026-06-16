@@ -12,25 +12,36 @@ param location string
 @description('Resource id of the destination Log Analytics workspace.')
 param workspaceResourceId string
 
-@description('Stream name (Custom-<tableName>).')
-param streamName string
+@description('Custom tables ({ tableName, description, columns[] }). Each becomes a Custom-<tableName> stream.')
+param tables array
 
-@description('Stream column declarations ({ name, type }).')
-param streamColumns array
+// One stream declaration per table, keyed by Custom-<tableName>.
+var streamDeclarations = toObject(
+  tables,
+  t => 'Custom-${t.tableName}',
+  t => {
+    columns: map(t.columns, c => {
+      name: c.name
+      type: c.type
+    })
+  }
+)
 
-@description('transformKql applied to the incoming stream.')
-param transformKql string
+// One data flow per table: pass the stream through (projecting its columns) into
+// the matching custom table.
+var dataFlows = [for t in tables: {
+  streams: [ 'Custom-${t.tableName}' ]
+  destinations: [ 'lawDestination' ]
+  transformKql: 'source | project ${join(map(t.columns, c => c.name), ', ')}'
+  outputStream: 'Custom-${t.tableName}'
+}]
 
 resource dcr 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
   name: dcrName
   location: location
   kind: 'Direct'
   properties: {
-    streamDeclarations: {
-      '${streamName}': {
-        columns: streamColumns
-      }
-    }
+    streamDeclarations: streamDeclarations
     destinations: {
       logAnalytics: [
         {
@@ -39,14 +50,7 @@ resource dcr 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
         }
       ]
     }
-    dataFlows: [
-      {
-        streams: [ streamName ]
-        destinations: [ 'lawDestination' ]
-        transformKql: transformKql
-        outputStream: streamName
-      }
-    ]
+    dataFlows: dataFlows
   }
 }
 

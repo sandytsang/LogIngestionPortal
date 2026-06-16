@@ -71,6 +71,11 @@
     Environment short name: dev (default), test or prod. Appended to every
     resource name (e.g. dcr-logapi-prod). Use the SAME value for later updates.
 
+.PARAMETER DcrName
+    Exact name of the Data Collection Rule to create/update. Overrides the
+    derived dcr-<baseName>-<environment>. For a schema-only update, set this to
+    the existing DCR's name instead of passing -BaseName/-Environment.
+
 .EXAMPLE
     ./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
 
@@ -79,7 +84,7 @@
 
 .EXAMPLE
     # Update data columns only (no Function App changes)
-    ./deploy.ps1 -SchemaOnly -ExistingWorkspaceName log-shared -ExistingWorkspaceResourceGroup rg-logs -DcrResourceGroup rg-dcr
+    ./deploy.ps1 -SchemaOnly -ExistingWorkspaceName log-shared -ExistingWorkspaceResourceGroup rg-logs -DcrResourceGroup rg-dcr -DcrName dcr-logingestion-prod
 #>
 
 [CmdletBinding()]
@@ -93,6 +98,7 @@ param(
     [switch]$SchemaOnly,
     [string]$BaseName = 'logapi',
     [ValidateSet('dev', 'test', 'prod')] [string]$Environment = 'dev',
+    [string]$DcrName,
     # Accepted for backward compatibility. The Graph Device.Read.All grant now
     # runs by default (device-JWT enforcement + Entra device check are on by
     # default); use -SkipDeviceGraphPermission to opt out.
@@ -161,20 +167,42 @@ Write-Host "    OK - signed in to Azure subscription '$account'." -ForegroundCol
 Write-Host '==> Validating schema/columns.json' -ForegroundColor Cyan
 $schema = Get-Content $schemaPath -Raw | ConvertFrom-Json
 
-if (-not $schema.tableName) { throw 'columns.json must define a tableName.' }
-if ($schema.tableName -notmatch '_CL$') { throw "Custom table name must end with '_CL' (got '$($schema.tableName)')." }
-if (-not $schema.columns -or $schema.columns.Count -eq 0) { throw 'columns.json must define at least one column.' }
+# columns.json holds one or more tables ({ tables: [ { tableName, description,
+# columns[] } ] }). A legacy single-table document ({ tableName, columns }) is
+# auto-wrapped so older files keep working.
+if ($schema.PSObject.Properties['tables']) {
+    $tables = @($schema.tables)
+}
+elseif ($schema.PSObject.Properties['tableName']) {
+    $tables = @($schema)
+}
+else {
+    throw 'columns.json must define a "tables" array (or a legacy tableName/columns object).'
+}
+if ($tables.Count -eq 0) { throw 'columns.json must define at least one table.' }
 
 $allowedTypes = @('string', 'int', 'long', 'real', 'boolean', 'datetime', 'dynamic', 'guid')
-$names = @{}
-foreach ($col in $schema.columns) {
-    if (-not $col.name) { throw 'Every column must have a name.' }
-    if ($col.type -notin $allowedTypes) { throw "Column '$($col.name)' has unsupported type '$($col.type)'. Allowed: $($allowedTypes -join ', ')." }
-    if ($names.ContainsKey($col.name)) { throw "Duplicate column name '$($col.name)'." }
-    $names[$col.name] = $true
+$tableNamesSeen = @{}
+$totalColumns = 0
+foreach ($table in $tables) {
+    if (-not $table.tableName) { throw 'Every table in columns.json must define a tableName.' }
+    if ($table.tableName -notmatch '_CL$') { throw "Custom table name must end with '_CL' (got '$($table.tableName)')." }
+    if ($tableNamesSeen.ContainsKey($table.tableName.ToLower())) { throw "Duplicate table name '$($table.tableName)'." }
+    $tableNamesSeen[$table.tableName.ToLower()] = $true
+    if (-not $table.columns -or $table.columns.Count -eq 0) { throw "Table '$($table.tableName)' must define at least one column." }
+
+    $names = @{}
+    foreach ($col in $table.columns) {
+        if (-not $col.name) { throw "Table '$($table.tableName)': every column must have a name." }
+        if ($col.type -notin $allowedTypes) { throw "Table '$($table.tableName)', column '$($col.name)' has unsupported type '$($col.type)'. Allowed: $($allowedTypes -join ', ')." }
+        if ($names.ContainsKey($col.name)) { throw "Table '$($table.tableName)': duplicate column name '$($col.name)'." }
+        $names[$col.name] = $true
+    }
+    if (-not $names.ContainsKey('TimeGenerated')) { throw "Table '$($table.tableName)' must include a 'TimeGenerated' (datetime) column." }
+    $totalColumns += $table.columns.Count
 }
-if (-not $names.ContainsKey('TimeGenerated')) { throw "columns.json must include a 'TimeGenerated' (datetime) column." }
-Write-Host "    OK - $($schema.columns.Count) columns, table '$($schema.tableName)'." -ForegroundColor Green
+$tableSummary = ($tables | ForEach-Object { $_.tableName }) -join ', '
+Write-Host "    OK - $($tables.Count) table(s) ($tableSummary), $totalColumns columns total." -ForegroundColor Green
 
 # ===========================================================================
 # SCHEMA-ONLY MODE — update the custom table + DCR only, no Function App.
@@ -215,7 +243,7 @@ if ($SchemaOnly) {
         throw 'Workspace not found for schema-only update.'
     }
 
-    $dcrName = "dcr-$BaseName-$Environment"
+    $dcrName = if ($DcrName) { $DcrName } else { "dcr-$BaseName-$Environment" }
     Write-Host "    Checking for DCR '$dcrName' in '$DcrResourceGroup'..." -ForegroundColor Gray
     $dcrFound = az resource show `
         --resource-group $DcrResourceGroup `
@@ -224,7 +252,7 @@ if ($SchemaOnly) {
         --query name --output tsv 2>$null
     if (-not $dcrFound) {
         Write-Warning "Data Collection Rule '$dcrName' not found in resource group '$DcrResourceGroup'."
-        Write-Host "If your DCR uses a different name, pass -BaseName/-Environment to match (DCR = dcr-<baseName>-<environment>)." -ForegroundColor Cyan
+        Write-Host "If your DCR uses a different name, pass -DcrName to match it exactly (or -BaseName/-Environment to derive dcr-<baseName>-<environment>)." -ForegroundColor Cyan
         Write-Host 'Or run a FULL deployment first, then use -SchemaOnly for later column updates.' -ForegroundColor Cyan
         throw 'DCR not found for schema-only update.'
     }
@@ -239,6 +267,7 @@ if ($SchemaOnly) {
         "dcrResourceGroup=$DcrResourceGroup"
         "baseName=$BaseName"
         "environment=$Environment"
+        "dcrName=$dcrName"
     )
     Write-Host "==> Deploying schema (table + DCR) to resource group '$DcrResourceGroup'" -ForegroundColor Cyan
     $schemaOutJson = az deployment group create `
@@ -256,7 +285,7 @@ if ($SchemaOnly) {
     Write-Host '============================================================' -ForegroundColor Yellow
     Write-Host ' Schema update complete' -ForegroundColor Yellow
     Write-Host '============================================================' -ForegroundColor Yellow
-    Write-Host "Table '$($schema.tableName)' and DCR '$dcrName' now match schema/columns.json."
+    Write-Host "Table(s) '$tableSummary' and DCR '$dcrName' now match schema/columns.json."
     Write-Host 'The Function App was not changed (its code is schema-agnostic).'
     return
 }
@@ -304,6 +333,7 @@ $deploymentName = "loging-$(Get-Date -Format 'yyyyMMddHHmmss')"
 $paramOverrides = @("location=$Location", "baseName=$BaseName", "environment=$Environment")
 Write-Host "    Naming: baseName='$BaseName', environment='$Environment' (e.g. func-$BaseName-$Environment, dcr-$BaseName-$Environment)." -ForegroundColor Green
 if ($DcrResourceGroup) { $paramOverrides += "dcrResourceGroup=$DcrResourceGroup" }
+if ($DcrName) { $paramOverrides += "dcrName=$DcrName" }
 if ($ExistingWorkspaceName) { $paramOverrides += "existingWorkspaceName=$ExistingWorkspaceName" }
 if ($ExistingWorkspaceResourceGroup) { $paramOverrides += "existingWorkspaceResourceGroup=$ExistingWorkspaceResourceGroup" }
 if ($FunctionPlanType) {
@@ -316,25 +346,69 @@ if ($ExistingWorkspaceName) {
 
 # DCR deployments occasionally fail with a transient 'Data collection rule has
 # been modified before operation completed' conflict. Retry a few times since the
-# deployment is idempotent.
+# deployment is idempotent. Authorization failures (e.g. the operator only has
+# Contributor) are NOT transient, so we detect them and fail fast with a clear,
+# actionable message instead of retrying and printing a generic error.
 $maxDeployAttempts = 3
 $outputJson = $null
 for ($deployAttempt = 1; $deployAttempt -le $maxDeployAttempts; $deployAttempt++) {
     $deployName = "$deploymentName-$deployAttempt"
-    $outputJson = az deployment group create `
-        --resource-group $FunctionResourceGroup `
-        --name $deployName `
-        --template-file $bicepPath `
-        --parameters $paramPath $paramOverrides `
-        --query properties.outputs `
-        --output json
-    if ($LASTEXITCODE -eq 0) { break }
+    $deployErrFile = New-TemporaryFile
+    try {
+        $outputJson = az deployment group create `
+            --resource-group $FunctionResourceGroup `
+            --name $deployName `
+            --template-file $bicepPath `
+            --parameters $paramPath $paramOverrides `
+            --query properties.outputs `
+            --output json 2>$deployErrFile
+        $deployExit = $LASTEXITCODE
+        $deployErr = (Get-Content -Path $deployErrFile -Raw -ErrorAction SilentlyContinue)
+    }
+    finally {
+        Remove-Item $deployErrFile -ErrorAction SilentlyContinue
+    }
+    if ($deployExit -eq 0) { break }
+
+    # Surface the raw Azure error so the operator can see exactly what failed.
+    if ($deployErr) { Write-Host $deployErr.TrimEnd() -ForegroundColor DarkGray }
+
+    # Detect the non-transient "you don't have rights to create the DCR role
+    # assignment" case. Contributor lacks Microsoft.Authorization/*/write.
+    $isAuthFailure = $deployErr -match 'AuthorizationFailed|RoleAssignmentUpdateNotPermitted|does not have authorization|Microsoft\.Authorization/roleAssignments/write'
+    if ($isAuthFailure) {
+        Write-Host ''
+        Write-Host '------------------------------------------------------------' -ForegroundColor Red
+        Write-Host ' Permission problem: cannot grant the Function access to the DCR' -ForegroundColor Red
+        Write-Host '------------------------------------------------------------' -ForegroundColor Red
+        Write-Host "The deployment tried to give the Function App's managed identity the" -ForegroundColor Yellow
+        Write-Host "'Monitoring Metrics Publisher' role on the Data Collection Rule, but your" -ForegroundColor Yellow
+        Write-Host 'account is not allowed to create role assignments.' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host 'Why: the Contributor role cannot create role assignments. You need one of:' -ForegroundColor Cyan
+        Write-Host '    - Owner' -ForegroundColor White
+        Write-Host '    - User Access Administrator' -ForegroundColor White
+        Write-Host '    - Role Based Access Control Administrator' -ForegroundColor White
+        Write-Host "on the DCR resource group ('$dcrRg') or the subscription." -ForegroundColor Cyan
+        Write-Host ''
+        Write-Host 'How to fix (pick one):' -ForegroundColor Cyan
+        Write-Host '  1) Ask an admin to elevate your role, then rerun this script, OR' -ForegroundColor White
+        Write-Host '  2) Ask an admin to assign the role manually once the resources exist:' -ForegroundColor White
+        Write-Host "       az role assignment create ``" -ForegroundColor White
+        Write-Host "         --assignee-object-id <FunctionApp-managed-identity-principalId> ``" -ForegroundColor White
+        Write-Host '         --assignee-principal-type ServicePrincipal `' -ForegroundColor White
+        Write-Host "         --role 'Monitoring Metrics Publisher' ``" -ForegroundColor White
+        Write-Host "         --scope <DCR-resource-id>" -ForegroundColor White
+        Write-Host ''
+        throw "Infrastructure deployment failed: insufficient permission to create the DCR role assignment (need Owner / User Access Administrator / RBAC Administrator)."
+    }
+
     if ($deployAttempt -lt $maxDeployAttempts) {
-        Write-Host "    Deployment attempt $deployAttempt failed (often a transient DCR conflict); retrying..." -ForegroundColor Yellow
+        Write-Host "    Deployment attempt $deployAttempt failed (often a transient DCR conflict); retrying in 15s..." -ForegroundColor Yellow
         Start-Sleep -Seconds 15
     }
     else {
-        throw 'Infrastructure deployment failed.'
+        throw "Infrastructure deployment failed after $maxDeployAttempts attempts. Review the Azure error above, or inspect the deployment in the portal (Resource group '$FunctionResourceGroup' > Deployments > '$deployName')."
     }
 }
 
@@ -347,12 +421,65 @@ Write-Host "    OK - Function App '$functionAppName'." -ForegroundColor Green
 if (-not $SkipFunctionPublish) {
     Write-Host '==> Publishing Function App code' -ForegroundColor Cyan
     if (-not (Get-Command func -ErrorAction SilentlyContinue)) {
-        throw 'Azure Functions Core Tools (func) not found. Install it or rerun with -SkipFunctionPublish and deploy the code manually.'
+        Write-Host ''
+        Write-Host 'Azure Functions Core Tools (the `func` command) is not installed or not on PATH.' -ForegroundColor Yellow
+        Write-Host 'It is required to upload the PowerShell function code to Azure.' -ForegroundColor Yellow
+        Write-Host 'Install it (pick one), then rerun this script:' -ForegroundColor Cyan
+        Write-Host '    winget install Microsoft.Azure.FunctionsCoreTools' -ForegroundColor White
+        Write-Host '    npm  install -g azure-functions-core-tools@4 --unsafe-perm true' -ForegroundColor White
+        Write-Host 'Or rerun with -SkipFunctionPublish and publish the code manually later (see README).' -ForegroundColor Cyan
+        throw 'Azure Functions Core Tools (func) not found.'
     }
+    # The ARM deployment returns before the Function App is fully propagated to
+    # the management plane, so 'func ... publish' can fail with
+    # "Can't find app with name ...". Wait until the app is queryable, then
+    # retry the publish a few times to absorb any remaining propagation lag.
+    Write-Host "    Waiting for Function App '$functionAppName' to be discoverable..." -ForegroundColor Yellow
+    $maxReadyAttempts = 20
+    for ($readyAttempt = 1; $readyAttempt -le $maxReadyAttempts; $readyAttempt++) {
+        $appState = az functionapp show `
+            --name $functionAppName `
+            --resource-group $FunctionResourceGroup `
+            --query state `
+            --output tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $appState) {
+            Write-Host "    OK - Function App is available (state: $appState)." -ForegroundColor Green
+            break
+        }
+        if ($readyAttempt -eq $maxReadyAttempts) {
+            Write-Host ''
+            Write-Host "The Function App '$functionAppName' is still not visible to the management API" -ForegroundColor Yellow
+            Write-Host 'after several minutes. This is usually slow propagation, not a real failure.' -ForegroundColor Yellow
+            Write-Host 'What to do:' -ForegroundColor Cyan
+            Write-Host '    - Wait a couple of minutes and rerun this script (it is idempotent), OR' -ForegroundColor White
+            Write-Host '    - Confirm it exists, then publish manually:' -ForegroundColor White
+            Write-Host "        az functionapp show -g $FunctionResourceGroup -n $functionAppName --query state -o tsv" -ForegroundColor White
+            Write-Host "        cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
+            throw "Function App '$functionAppName' did not become discoverable in time."
+        }
+        Start-Sleep -Seconds 15
+    }
+
     Push-Location $functionPath
     try {
-        func azure functionapp publish $functionAppName --powershell
-        if ($LASTEXITCODE -ne 0) { throw 'Function publish failed.' }
+        $maxPublishAttempts = 5
+        for ($publishAttempt = 1; $publishAttempt -le $maxPublishAttempts; $publishAttempt++) {
+            func azure functionapp publish $functionAppName --powershell
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($publishAttempt -eq $maxPublishAttempts) {
+                Write-Host ''
+                Write-Host "Publishing the function code failed after $maxPublishAttempts attempts." -ForegroundColor Yellow
+                Write-Host 'Things to check:' -ForegroundColor Cyan
+                Write-Host '    - You are signed in with `az login` and have Contributor on the Function App.' -ForegroundColor White
+                Write-Host '    - The Function App is running (not stopped) and finished provisioning.' -ForegroundColor White
+                Write-Host '    - Network/proxy is not blocking the SCM (Kudu) publish endpoint.' -ForegroundColor White
+                Write-Host 'Retry the publish manually to see the full error:' -ForegroundColor Cyan
+                Write-Host "    cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
+                throw 'Function publish failed.'
+            }
+            Write-Host "    Publish attempt $publishAttempt failed (often propagation lag); retrying in 20s..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 20
+        }
     }
     finally {
         Pop-Location
@@ -370,7 +497,14 @@ if (-not $SkipDeviceGraphPermission) {
     Write-Host '==> Granting Graph Device.Read.All to the Function managed identity' -ForegroundColor Cyan
     $miPrincipalId = az functionapp identity show --resource-group $FunctionResourceGroup --name $functionAppName --query principalId --output tsv 2>$null
     if (-not $miPrincipalId) {
-        Write-Warning '    Could not resolve the Function managed identity principalId. Grant Device.Read.All manually (see README).'
+        Write-Host ''
+        Write-Warning "Could not read the Function App's managed identity (principalId)."
+        Write-Host '    The system-assigned managed identity may not be enabled yet, or you may' -ForegroundColor Yellow
+        Write-Host '    lack rights to read it. Without Device.Read.All every request returns 401.' -ForegroundColor Yellow
+        Write-Host '    Fix it manually once the identity exists:' -ForegroundColor Cyan
+        Write-Host "      az functionapp identity show -g $FunctionResourceGroup -n $functionAppName --query principalId -o tsv" -ForegroundColor White
+        Write-Host '    Then grant Graph Device.Read.All to that principalId (see README), or rerun' -ForegroundColor Cyan
+        Write-Host '    with -jwtRequireEntraDevice false if you do not need Entra device validation.' -ForegroundColor Cyan
     }
     else {
         $graphAppId = '00000003-0000-0000-c000-000000000000'
@@ -388,18 +522,48 @@ if (-not $SkipDeviceGraphPermission) {
             # rejects it with 'Unable to read JSON request payload'.
             $body = @{ principalId = $miPrincipalId; resourceId = $graphSpId; appRoleId = $deviceReadAllRoleId } | ConvertTo-Json -Compress
             $bodyFile = New-TemporaryFile
+            $graphErrFile = New-TemporaryFile
             try {
                 Set-Content -Path $bodyFile -Value $body -Encoding utf8
                 az rest --method POST `
                     --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$miPrincipalId/appRoleAssignments" `
                     --headers 'Content-Type=application/json' `
-                    --body "@$bodyFile" --output none
+                    --body "@$bodyFile" --output none 2>$graphErrFile
+                $graphExit = $LASTEXITCODE
+                $graphErr = (Get-Content -Path $graphErrFile -Raw -ErrorAction SilentlyContinue)
             }
             finally {
                 Remove-Item $bodyFile -ErrorAction SilentlyContinue
+                Remove-Item $graphErrFile -ErrorAction SilentlyContinue
             }
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warning '    Failed to assign Device.Read.All (you may lack Graph admin rights). Grant it manually (see README) or set jwtRequireEntraDevice=false.'
+            if ($graphExit -ne 0) {
+                if ($graphErr) { Write-Host $graphErr.TrimEnd() -ForegroundColor DarkGray }
+                Write-Host ''
+                Write-Host '------------------------------------------------------------' -ForegroundColor Red
+                Write-Host ' Could not grant Graph Device.Read.All to the Function identity' -ForegroundColor Red
+                Write-Host '------------------------------------------------------------' -ForegroundColor Red
+                Write-Host 'Why this matters: device-JWT validation is ON by default, so the Function' -ForegroundColor Yellow
+                Write-Host 'must read device records from Microsoft Graph. Without this app role, EVERY' -ForegroundColor Yellow
+                Write-Host 'request to the API returns HTTP 401.' -ForegroundColor Yellow
+                Write-Host ''
+                Write-Host 'Likely cause: granting an application Graph permission requires a directory' -ForegroundColor Cyan
+                Write-Host 'admin. You need one of:' -ForegroundColor Cyan
+                Write-Host '    - Global Administrator' -ForegroundColor White
+                Write-Host '    - Privileged Role Administrator' -ForegroundColor White
+                Write-Host '    - Application Administrator (with admin consent rights)' -ForegroundColor White
+                Write-Host ''
+                Write-Host 'How to fix (pick one):' -ForegroundColor Cyan
+                Write-Host '  1) Ask a directory admin to run this once (principalId already resolved):' -ForegroundColor White
+                Write-Host "       `$mi   = '$miPrincipalId'" -ForegroundColor White
+                Write-Host "       `$graph = az ad sp list --filter \"appId eq '$graphAppId'\" --query '[0].id' -o tsv" -ForegroundColor White
+                Write-Host "       az rest --method POST ``" -ForegroundColor White
+                Write-Host "         --uri https://graph.microsoft.com/v1.0/servicePrincipals/`$mi/appRoleAssignments ``" -ForegroundColor White
+                Write-Host "         --headers 'Content-Type=application/json' ``" -ForegroundColor White
+                Write-Host "         --body '{\"principalId\":\"`$mi\",\"resourceId\":\"`$graph\",\"appRoleId\":\"$deviceReadAllRoleId\"}'" -ForegroundColor White
+                Write-Host '  2) Or, if you do not need Entra device validation, redeploy with' -ForegroundColor White
+                Write-Host '     jwtRequireEntraDevice=false and rerun with -SkipDeviceGraphPermission.' -ForegroundColor White
+                Write-Host ''
+                Write-Warning 'Deployment will continue, but the API will reject requests until Device.Read.All is granted.'
             }
             else {
                 Write-Host '    OK - Device.Read.All assigned (propagation may take a few minutes).' -ForegroundColor Green
@@ -426,14 +590,21 @@ Write-Host "Function URL : $ingestUrl"
 if ($functionKey) {
     Write-Host "Function key : $functionKey"
     Write-Host ''
-    Write-Host 'Set these two values at the top of scripts/remediate.ps1 before packaging for Intune.'
+    Write-Host 'Set these two values at the top of scripts/IntuneScript.ps1 before packaging for Intune.'
     Write-Host ''
     Write-Host 'Quick test (PowerShell):' -ForegroundColor Cyan
     $sample = '[{ \"TimeGenerated\": \"' + (Get-Date).ToUniversalTime().ToString('o') + '\", \"DeviceName\": \"test-host\", \"Status\": \"Remediated\", \"Details\": \"manual test\" }]'
     Write-Host "Invoke-RestMethod -Method Post -Uri '$ingestUrl?code=$functionKey' -ContentType 'application/json' -Body '$sample'"
 } else {
-    Write-Host 'Function key not available yet (code may still be deploying). Retrieve it later with:'
-    Write-Host "az functionapp function keys list -g $FunctionResourceGroup -n $functionAppName --function-name DCRLogIngestionAPI --query default -o tsv"
+    Write-Host 'Function key not available yet.' -ForegroundColor Yellow
+    Write-Host 'Common reasons:' -ForegroundColor Cyan
+    Write-Host '    - The code is still deploying/restarting; the DCRLogIngestionAPI function is' -ForegroundColor White
+    Write-Host '      not registered yet. Wait ~1-2 minutes, then retry the command below.' -ForegroundColor White
+    Write-Host '    - The publish step was skipped (-SkipFunctionPublish), so no function exists yet.' -ForegroundColor White
+    Write-Host '    - Your account lacks rights to list function keys (needs Contributor or the' -ForegroundColor White
+    Write-Host '      Function App key reader role on the Function App).' -ForegroundColor White
+    Write-Host 'Retrieve it later with:' -ForegroundColor Cyan
+    Write-Host "    az functionapp function keys list -g $FunctionResourceGroup -n $functionAppName --function-name DCRLogIngestionAPI --query default -o tsv" -ForegroundColor White
 }
 Write-Host ''
-Write-Host "Query results in Log Analytics:  $($schema.tableName) | take 20"
+Write-Host "Query results in Log Analytics:  $(($tables | ForEach-Object { "$($_.tableName) | take 20" }) -join '   /   ')"

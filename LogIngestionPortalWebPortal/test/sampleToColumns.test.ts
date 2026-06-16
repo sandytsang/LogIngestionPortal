@@ -23,9 +23,11 @@ describe('columnsFromSample', () => {
       'MyTable_CL',
       'desc',
     );
-    expect(doc.tableName).toBe('MyTable_CL');
-    expect(doc.columns[0]).toMatchObject({ name: 'TimeGenerated', type: 'datetime' });
-    const byName = Object.fromEntries(doc.columns.map((c) => [c.name, c.type]));
+    expect(doc.tables).toHaveLength(1);
+    const table = doc.tables[0];
+    expect(table.tableName).toBe('MyTable_CL');
+    expect(table.columns[0]).toMatchObject({ name: 'TimeGenerated', type: 'datetime' });
+    const byName = Object.fromEntries(table.columns.map((c) => [c.name, c.type]));
     expect(byName.DeviceName).toBe('string');
     expect(byName.FreeDiskGB).toBe('real');
     expect(byName.IsCompliant).toBe('boolean');
@@ -34,7 +36,18 @@ describe('columnsFromSample', () => {
 
   it('accepts an array and uses the first record', () => {
     const doc = columnsFromSample('[{"A":1}]', 'T_CL', 'd');
-    expect(doc.columns.some((c) => c.name === 'A' && c.type === 'int')).toBe(true);
+    expect(doc.tables[0].columns.some((c) => c.name === 'A' && c.type === 'int')).toBe(true);
+  });
+
+  it('builds one table per key for a table-keyed sample', () => {
+    const doc = columnsFromSample(
+      '{"Table1_CL":[{"A":1}],"Table2_CL":[{"B":"x"}]}',
+      'Ignored_CL',
+      'd',
+    );
+    expect(doc.tables.map((t) => t.tableName)).toEqual(['Table1_CL', 'Table2_CL']);
+    expect(doc.tables[0].columns.some((c) => c.name === 'A')).toBe(true);
+    expect(doc.tables[1].columns.some((c) => c.name === 'B')).toBe(true);
   });
 
   it('rejects invalid JSON', () => {

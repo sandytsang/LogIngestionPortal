@@ -40,6 +40,9 @@ param schemaOnly bool = false
 @description('Resource group for the Data Collection Rule. Defaults to this deployment\'s RG when empty.')
 param dcrResourceGroup string = ''
 
+@description('Exact name of the Data Collection Rule to create/update. Leave empty to derive dcr-<baseName>-<environment>. Set this for a schema-only update that targets an existing DCR by name.')
+param dcrName string = ''
+
 @description('Log Analytics data retention in days.')
 @minValue(30)
 @maxValue(730)
@@ -65,21 +68,16 @@ param jwtRequireEntraDevice bool = true
 
 // ---------------------------------------------------------------------------
 // Schema - single source of truth
+//
+// columns.json holds one or more custom tables. Each table becomes its own
+// Log Analytics custom table and DCR stream (Custom-<tableName>). TimeGenerated
+// is part of every table's column list.
 // ---------------------------------------------------------------------------
 var schema = loadJsonContent('../schema/columns.json')
-var tableName = schema.tableName
-var streamName = 'Custom-${tableName}'
-
-var streamColumns = [for col in schema.columns: {
-  name: col.name
-  type: col.type
-}]
-var tableColumns = [for col in schema.columns: {
-  name: col.name
-  type: col.type
-}]
-var projectedColumns = join(map(schema.columns, c => c.name), ', ')
-var transformKql = 'source | project ${projectedColumns}'
+var tables = schema.tables
+// Comma-separated list of table names; the Function derives the stream name
+// (Custom-<tableName>) for each and routes the matching payload group to it.
+var dcrStreams = join(map(tables, t => t.tableName), ',')
 
 // ---------------------------------------------------------------------------
 // Resource group resolution
@@ -98,7 +96,7 @@ var laRg = createWorkspace
 // (https://aka.ms/CAF/abbreviations): log- (workspace), dcr- (data collection rule).
 // ---------------------------------------------------------------------------
 var lawName = 'log-${baseName}-${environment}'
-var dcrName = 'dcr-${baseName}-${environment}'
+var effectiveDcrName = empty(dcrName) ? 'dcr-${baseName}-${environment}' : dcrName
 
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
 
@@ -114,9 +112,7 @@ module logAnalytics 'modules/logAnalytics.bicep' = {
     existingWorkspaceName: existingWorkspaceName
     location: location
     retentionInDays: retentionInDays
-    tableName: tableName
-    tableDescription: schema.description
-    tableColumns: tableColumns
+    tables: tables
   }
 }
 
@@ -124,12 +120,10 @@ module dcr 'modules/dcr.bicep' = {
   name: 'dcr'
   scope: resourceGroup(dcrRg)
   params: {
-    dcrName: dcrName
+    dcrName: effectiveDcrName
     location: logAnalytics.outputs.workspaceLocation
     workspaceResourceId: logAnalytics.outputs.workspaceId
-    streamName: streamName
-    streamColumns: streamColumns
-    transformKql: transformKql
+    tables: tables
   }
 }
 
@@ -143,7 +137,7 @@ module functionApp 'modules/functionApp.bicep' = if (!schemaOnly) {
     workspaceResourceId: logAnalytics.outputs.workspaceId
     dcrEndpoint: dcr.outputs.logsIngestionEndpoint
     dcrImmutableId: dcr.outputs.immutableId
-    dcrStream: streamName
+    dcrStreams: dcrStreams
     jwtExpectedAudience: jwtExpectedAudience
     jwtAllowedTenantId: jwtAllowedTenantId
     jwtRequireEntraDevice: jwtRequireEntraDevice
@@ -173,8 +167,8 @@ output dcrResourceGroup string = dcrRg
 output logAnalyticsResourceGroup string = laRg
 output dcrImmutableId string = dcr.outputs.immutableId
 output dcrIngestionEndpoint string = dcr.outputs.logsIngestionEndpoint
-output dcrStreamName string = streamName
+output dcrStreamNames array = map(tables, t => 'Custom-${t.tableName}')
 output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceCustomerId
-output customTableName string = tableName
+output customTableNames array = map(tables, t => t.tableName)
 output functionPlanType string = functionPlanType
 output schemaOnly bool = schemaOnly

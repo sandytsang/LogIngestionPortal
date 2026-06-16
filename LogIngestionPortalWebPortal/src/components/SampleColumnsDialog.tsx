@@ -48,7 +48,7 @@ export function SampleColumnsDialog({ tableName, tableDescription, onClose }: Pr
           <div>
             <h2 className="text-lg font-semibold">Build columns.json from sample data</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Paste the JSON from <code>remediate.ps1 -PreviewData</code> to generate a matching schema.
+              Paste the JSON from <code>IntuneScript.ps1 -PreviewData</code> to generate a matching schema.
             </p>
           </div>
           <button
@@ -63,7 +63,7 @@ export function SampleColumnsDialog({ tableName, tableDescription, onClose }: Pr
           <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400">
             Run your edited script as SYSTEM to capture the body it would send:
             <br />
-            <code>psexec -s -i powershell.exe -File .\remediate.ps1 -PreviewData</code>
+            <code>psexec -s -i powershell.exe -File .\IntuneScript.ps1 -PreviewData</code>
             <br />
             Paste that JSON below. Column types are inferred (string, int, real, boolean,
             datetime, guid, or dynamic for objects/arrays). TimeGenerated is always added.

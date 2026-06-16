@@ -1,4 +1,10 @@
-import type { Catalog, CatalogField, ColumnsDocument, PortalConfig } from '../types';
+import type {
+  Catalog,
+  CatalogField,
+  MultiTableColumnsDocument,
+  PortalConfig,
+  TableConfig,
+} from '../types';
 import scriptTemplate from './scriptTemplate.ps1?raw';
 
 /** Returns the catalog fields that are selected, preserving catalog order. */
@@ -6,35 +12,58 @@ export function selectedFields(catalog: Catalog, selectedIds: Set<string>): Cata
   return catalog.fields.filter((f) => f.locked || selectedIds.has(f.id));
 }
 
-/** Builds the columns.json document from the selected fields. */
-export function generateColumns(fields: CatalogField[], config: PortalConfig): ColumnsDocument {
+/**
+ * The catalog fields that belong to a single table: every locked field (e.g.
+ * TimeGenerated, implicitly in every table) plus the fields assigned to it,
+ * returned in catalog order so the column order is stable.
+ */
+export function tableFields(catalog: Catalog, table: TableConfig): CatalogField[] {
+  const ids = new Set(table.fieldIds);
+  return catalog.fields.filter((f) => f.locked || ids.has(f.id));
+}
+
+/** Builds the multi-table columns.json document from the configured tables. */
+export function generateColumns(
+  catalog: Catalog,
+  tables: TableConfig[],
+): MultiTableColumnsDocument {
   return {
-    tableName: config.tableName,
-    description: config.tableDescription,
-    columns: fields.map((f) => ({ ...f.column })),
+    tables: tables.map((t) => ({
+      tableName: t.name,
+      description: t.description,
+      columns: tableFields(catalog, t).map((f) => ({ ...f.column })),
+    })),
   };
 }
 
 /** Pretty-prints the columns document the same way the repo stores it (2-space indent). */
-export function columnsToJson(doc: ColumnsDocument): string {
+export function columnsToJson(doc: MultiTableColumnsDocument): string {
   return JSON.stringify(doc, null, 2) + '\n';
 }
 
 /**
- * Generates the Intune detection script: emits each required setup snippet once
- * (in catalog order) followed by the [pscustomobject] payload mapping every
- * selected column name to its collector expression.
+ * Generates the Intune detection script. Each selected field's value is computed
+ * ONCE into a `$<id>` variable (built-in expressions and community collectors
+ * alike), then Get-DeviceData returns a table-keyed object
+ *   [ordered]@{ 'Table1_CL' = @( [pscustomobject]@{...} ); 'Table2_CL' = @( ... ) }
+ * so a field assigned to several tables is never collected twice and the payload
+ * routes each record to the right table.
  */
 export function generateScript(
   catalog: Catalog,
-  fields: CatalogField[],
+  tables: TableConfig[],
   config: PortalConfig,
 ): string {
+  // The union of fields needed across every table (locked fields are always in).
+  const assigned = new Set<string>();
+  for (const t of tables) for (const id of t.fieldIds) assigned.add(id);
+  const usedFields = catalog.fields.filter((f) => f.locked || assigned.has(f.id));
+
   // Collect the shared setup snippets actually needed, de-duplicated. Emit those
   // listed in setupOrder first (stable order), then any others a contributed
   // field references (so new shared setups still work without editing meta.json).
   const needed = new Set<string>();
-  for (const f of fields) {
+  for (const f of usedFields) {
     for (const s of f.setups) needed.add(s);
   }
   const orderedSetupIds = [
@@ -48,32 +77,47 @@ export function generateScript(
 
   // Self-contained community collectors are wrapped in Invoke-Safe so a failure
   // never breaks the whole upload; the result is captured in $<id>.
-  const collectorBlock = fields
+  const collectorBlock = usedFields
     .filter((f) => f.collector)
     .map((f) => wrapCollector(f))
     .join('\n');
 
-  const setupSection = [sharedBlock, collectorBlock].filter(Boolean).join('\n');
+  // Built-in fields: compute each expression once into $<id> (reused by every
+  // table the field is assigned to).
+  const exprBlock = usedFields
+    .filter((f) => f.expression)
+    .map((f) => `    $${f.id} = ${f.expression}`)
+    .join('\n');
 
-  // Align the '=' for readability.
-  const pad = Math.max(...fields.map((f) => f.column.name.length));
-  const objectLines = fields
-    .map((f) => {
-      const value = f.expression ?? `$${f.id}`;
-      return `        ${f.column.name.padEnd(pad)} = ${value}`;
+  const setupSection = [sharedBlock, collectorBlock, exprBlock].filter(Boolean).join('\n\n');
+
+  // The table-keyed payload. Each table gets TimeGenerated + its assigned columns,
+  // every property value referencing the pre-computed $<id> variable.
+  const tableBlocks = tables
+    .map((t) => {
+      const fields = tableFields(catalog, t);
+      const pad = Math.max(0, ...fields.map((f) => f.column.name.length));
+      const lines = fields
+        .map((f) => `                ${f.column.name.padEnd(pad)} = $${f.id}`)
+        .join('\n');
+      return (
+        `        '${escapePsSingleQuote(t.name)}' = @(\n` +
+        `            [pscustomobject]@{\n${lines}\n            }\n` +
+        `        )`
+      );
     })
     .join('\n');
 
   const body =
     (setupSection ? setupSection + '\n\n' : '') +
-    '    [pscustomobject]@{\n' +
-    objectLines +
+    '    [ordered]@{\n' +
+    tableBlocks +
     '\n    }';
 
   return scriptTemplate
     .replace('__FUNCTION_URL__', config.functionUrl)
     .replace('__USE_JWT__', '$true')
-    .replace('__REMEDIATION_NAME__', escapePsSingleQuote(config.remediationName))
+    .replace('__SCRIPT_VERSION__', escapePsSingleQuote(config.scriptVersion))
     .replace('__GET_DEVICE_DATA_BODY__', body);
 }
 
@@ -92,7 +136,16 @@ function wrapCollector(field: CatalogField): string {
  * Builds the README.txt with ONE ready-to-run deploy command tailored to the
  * chosen scenario. Pass workspaceName only for the "existing workspace" path.
  */
-export function generateDeployReadme(config: PortalConfig, workspaceName?: string): string {
+export function generateDeployReadme(
+  config: PortalConfig,
+  tables: TableConfig[],
+  workspaceName?: string,
+): string {
+  const tableList =
+    tables.length === 0
+      ? '<table>'
+      : tables.map((t) => `"${t.name}"`).join(', ');
+  const tableWord = tables.length > 1 ? 'tables' : 'table';
   const fnRg = config.functionResourceGroup?.trim() || 'rg-loging-prod';
   const loc = config.location?.trim() || 'eastus';
   const dcrRg = config.dcrResourceGroup?.trim();
@@ -110,12 +163,13 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
   // --- Update-columns (schema-only) — a single -SchemaOnly command. ---------
   if (config.action === 'updateColumns') {
     const ws = workspaceName?.trim() || '<workspace-name>';
+    const dcrName = config.dcrName?.trim() || '<dcr-name>';
     const updFlags = [
       '-SchemaOnly',
+      `-DcrName ${dcrName}`,
+      `-DcrResourceGroup ${dcrRg || '<dcr-resource-group>'}`,
       `-ExistingWorkspaceName ${ws}`,
       `-ExistingWorkspaceResourceGroup ${wsRg || '<workspace-resource-group>'}`,
-      `-DcrResourceGroup ${dcrRg || '<dcr-resource-group>'}`,
-      ...namingFlags,
     ];
     const updCommand = [
       '  ./scripts/deploy.ps1 `',
@@ -125,10 +179,11 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
       'Log Ingestion Portal — update data columns',
       '==========================================',
       '',
-      'This archive contains:',
-      '  - columns.json   The updated Log Analytics table schema you selected.',
-      '  - remediate.ps1  The matching Intune detection script.',
-      '  - README.txt     This file.',
+      'This archive is a ready-to-deploy copy of the LogIngestionAPI backend with',
+      'your updated schema already applied:',
+      '  - schema/columns.json       The updated Log Analytics table schema you selected.',
+      '  - scripts/IntuneScript.ps1  The matching Intune detection script.',
+      '  - README.txt                This file.',
       '',
       'This updates ONLY the custom table and Data Collection Rule from your new',
       'columns. The Function App is not touched (its code is schema-agnostic), and',
@@ -140,23 +195,21 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
       'The existing workspace and DCR must already exist — if either is missing the',
       'script stops and tells you to run a full deployment first.',
       '',
-      'Step 1 — Get the LogIngestionAPI solution',
-      '-----------------------------------------',
-      '  git clone https://github.com/sandytsang/LogIngestionPortal.git',
-      '  cd LogIngestionPortal/LogIngestionAPI',
+      'Step 1 — Unzip and open the folder',
+      '----------------------------------',
+      '  Extract this archive, then open a PowerShell prompt in the LogIngestionAPI',
+      '  folder (the one containing this README.txt and the scripts/ folder):',
       '',
-      'Step 2 — Drop in your schema',
-      '----------------------------',
-      '  LogIngestionAPI/schema/columns.json   <-- replace this file',
+      '  cd LogIngestionAPI',
       '',
-      'Step 3 — Update (run this)',
+      'Step 2 — Update (run this)',
       '--------------------------',
       ...updCommand,
       '',
-      'If your DCR was deployed with a non-default name, also pass -BaseName and',
-      '-Environment so the script can find it (DCR = dcr-<baseName>-<environment>).',
+      'The DCR name above must match the Data Collection Rule you deployed earlier',
+      '(it is the exact resource name, not derived from the workload name).',
       '',
-      'No Intune changes are needed for a column update — re-upload remediate.ps1',
+      'No Intune changes are needed for a column update — re-upload IntuneScript.ps1',
       'only if you want devices to start sending the new columns.',
       '',
     ].join('\n');
@@ -195,11 +248,15 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
     'Log Ingestion Portal — deployment instructions',
     '==============================================',
     '',
-    'This archive contains:',
-    '  - columns.json   The Log Analytics table schema you selected.',
-    '  - remediate.ps1  The Intune Proactive Remediation detection script that',
-    `                   collects the data and posts it to your "${config.tableName}" table.`,
-    '  - README.txt     This file.',
+    'This archive is a ready-to-deploy copy of the LogIngestionAPI backend',
+    '(Function App code, Bicep/ARM infra, and deploy scripts) with your selections',
+    'already applied:',
+    '  - schema/columns.json       The Log Analytics table schema you selected.',
+    '  - scripts/IntuneScript.ps1  The Intune Proactive Remediation detection script',
+    `                              that collects the data and posts it to your ${tableList} ${tableWord}.`,
+    '  - README.txt                This file.',
+    '',
+    'Everything is already in place — nothing to clone or copy.',
     '',
     ...scenarioSummary,
     '',
@@ -213,18 +270,14 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
     '  - Azure CLI (az) signed in to your tenant:  az login',
     '  - Azure Functions Core Tools (func)',
     '',
-    'Step 1 — Get the LogIngestionAPI solution',
-    '-----------------------------------------',
-    '  git clone https://github.com/sandytsang/LogIngestionPortal.git',
-    '  cd LogIngestionPortal/LogIngestionAPI',
+    'Step 1 — Unzip and open the folder',
+    '----------------------------------',
+    '  Extract this archive, then open a PowerShell prompt in the LogIngestionAPI',
+    '  folder (the one containing this README.txt and the scripts/ folder):',
     '',
-    'Step 2 — Drop in your schema',
-    '----------------------------',
-    'Copy the columns.json from this archive over the repo copy:',
+    '  cd LogIngestionAPI',
     '',
-    '  LogIngestionAPI/schema/columns.json   <-- replace this file',
-    '',
-    'Step 3 — Deploy (run this)',
+    'Step 2 — Deploy (run this)',
     '--------------------------',
     ...command,
     '',
@@ -236,7 +289,7 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
     "portal's \"Update data columns only\" action — it generates a lighter",
     '-SchemaOnly command that updates just the table + DCR.',
     '',
-    'Step 4 — Grant the Function its Graph permission (often a different admin)',
+    'Step 3 — Grant the Function its Graph permission (often a different admin)',
     '------------------------------------------------------------------------',
     'Device authentication looks each device up in Entra, so the Function App\'s',
     'managed identity needs Microsoft Graph "Device.Read.All" (application). Without',
@@ -252,11 +305,11 @@ export function generateDeployReadme(config: PortalConfig, workspaceName?: strin
     '',
     'Propagation can take a few minutes. Until it is assigned, devices get 401.',
     '',
-    'Step 5 — Wire up Intune',
+    'Step 4 — Wire up Intune',
     '-----------------------',
     'The deploy prints the Function URL and key. Set $FunctionUrl at the top of',
-    'remediate.ps1 to that URL (including ?code=<function-key>), then upload',
-    'remediate.ps1 as an Intune Proactive Remediation detection script. Device-',
+    'IntuneScript.ps1 to that URL (including ?code=<function-key>), then upload',
+    'IntuneScript.ps1 as an Intune Proactive Remediation detection script. Device-',
     'signed JWT authentication is always required, so the targeted devices must be',
     'Entra-joined.',
     '',

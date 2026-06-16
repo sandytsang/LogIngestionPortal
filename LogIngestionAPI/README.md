@@ -11,19 +11,26 @@ Azure Function App (PowerShell)
         │  Managed identity token + DCR direct endpoint
         ▼
 Data Collection Rule  (kind = Direct, no DCE)
-        │  transformKql
+        │  transformKql (one stream per table)
         ▼
-Log Analytics custom table  (*_CL)
+Log Analytics custom table(s)  (*_CL)
 ```
 
 ## Why this is easy to maintain
 
 - **One schema file.** [schema/columns.json](schema/columns.json) is the single
-  source of truth. The Bicep template generates **both** the Log Analytics table
-  and the DCR stream from it, so a single redeploy keeps them in sync.
-- **Add/remove columns without touching code.** The Function forwards raw JSON
-  and the DCR's `transformKql` maps columns into the table. Changing the schema
-  only requires editing the JSON and redeploying.
+  source of truth. It defines one or more custom tables (`tables: [ { tableName,
+  description, columns } ]`); the Bicep template generates **both** each Log
+  Analytics table and its DCR stream (`Custom-<tableName>`) from it, so a single
+  redeploy keeps everything in sync.
+- **Multiple tables in one DCR.** Each table becomes its own stream and data
+  flow. The device script sends a table-keyed payload
+  (`{ "Table1_CL": [ … ], "Table2_CL": [ … ] }`) and the Function routes each
+  group to the matching stream. A bare array/object is still accepted and routed
+  to the first table for backward compatibility.
+- **Add/remove columns or tables without touching code.** The Function forwards
+  raw JSON and each DCR stream's `transformKql` maps columns into its table.
+  Changing the schema only requires editing the JSON and redeploying.
 - **No Data Collection Endpoint (DCE).** The DCR uses `kind: Direct`, which
   exposes its own ingestion endpoint — fewer resources to manage.
 - **One command to deploy or update.** [scripts/deploy.ps1](scripts/deploy.ps1)
@@ -55,7 +62,7 @@ cd scripts
 ```
 
 The script prints the **Function URL** and **function key**. Paste the full
-invoke URL into the top of [scripts/remediate.ps1](scripts/remediate.ps1), then
+invoke URL into the top of [scripts/IntuneScript.ps1](scripts/IntuneScript.ps1), then
 upload it as the **detection** script of an Intune Proactive Remediation and
 schedule it (no remediation script is needed - the script does the work and
 reports compliant).
@@ -135,7 +142,7 @@ Set them via Bicep params (`jwtExpectedAudience`,
    ```powershell
    ./deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
    ```
-2. **Client side** in [scripts/remediate.ps1](scripts/remediate.ps1): keep
+2. **Client side** in [scripts/IntuneScript.ps1](scripts/IntuneScript.ps1): keep
    `$UseDeviceJwt = $true` (the default) and package the Proactive Remediation.
 
 > Because enforcement is always on, ensure devices are Entra-joined and sending
@@ -190,7 +197,7 @@ hardening, not enabled by default.
 ## Add or remove a collected field
 
 1. Edit [schema/columns.json](schema/columns.json) (add/remove a column).
-2. Update `Get-DeviceData` in [scripts/remediate.ps1](scripts/remediate.ps1) so
+2. Update `Get-DeviceData` in [scripts/IntuneScript.ps1](scripts/IntuneScript.ps1) so
    the uploaded object includes/excludes that property.
 3. Redeploy — either a full deploy, or a lighter **schema-only** update that
    touches just the table + DCR (the Function App is left untouched):
@@ -235,7 +242,7 @@ DeviceInventory_CL
 | `infra/main.bicepparam` | Deployment parameters |
 | `function/DCRLogIngestionAPI/run.ps1` | Schema-agnostic forwarder to the DCR endpoint |
 | `function/Modules/DeviceJwtAuth/` | Device-JWT request authentication (proof-of-possession) |
-| `scripts/remediate.ps1` | Intune detection-slot script (collects + uploads) |
+| `scripts/IntuneScript.ps1` | Intune detection-slot script (collects + uploads) |
 | `scripts/deploy.ps1` | Validate schema, deploy infra, publish function |
 
 ## Troubleshooting
@@ -257,6 +264,6 @@ DeviceInventory_CL
   `deploy.ps1` (it grants this by default), grant it manually (see "Managed
   identity & Graph permission"), or set `JWT_REQUIRE_ENTRA_DEVICE=false` to skip
   the Graph lookup. Also confirm the device is Entra-joined and
-  `$UseDeviceJwt = $true` in `remediate.ps1`. To see the exact rejection reason,
+  `$UseDeviceJwt = $true` in `IntuneScript.ps1`. To see the exact rejection reason,
   check the Function's log stream / Application Insights for `DeviceJwtAuth`
   entries (e.g. audience mismatch, expired token, device not found).

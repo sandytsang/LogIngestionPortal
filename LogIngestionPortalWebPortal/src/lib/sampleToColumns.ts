@@ -1,4 +1,9 @@
-import type { ColumnType, ColumnsDocument, CatalogColumn } from '../types';
+import type {
+  ColumnType,
+  MultiTableColumnsDocument,
+  ColumnsDocument,
+  CatalogColumn,
+} from '../types';
 
 /** ISO-8601 date/time, e.g. 2026-06-16T12:34:56Z or with offset/fraction. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
@@ -32,27 +37,28 @@ function firstRecord(parsed: unknown): Record<string, unknown> {
 }
 
 /**
- * Builds a columns.json document by inferring column names + types from a sample
- * data object (e.g. the output of `remediate.ps1 -PreviewData`). TimeGenerated is
- * always included (required by Log Analytics).
+ * True when the sample is a table-keyed object — exactly what
+ * `IntuneScript.ps1 -PreviewData` now emits, e.g.
+ *   { "Table1_CL": [ { ... } ], "Table2_CL": [ { ... } ] }
+ * (a plain object whose every value is an array of records). A single record is
+ * never misclassified because it always has at least one scalar (TimeGenerated).
  */
-export function columnsFromSample(
-  sampleJson: string,
+function isTableKeyed(parsed: unknown): parsed is Record<string, unknown[]> {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  const values = Object.values(parsed as Record<string, unknown>);
+  return values.length > 0 && values.every((v) => Array.isArray(v));
+}
+
+/** Builds one table's columns from a sample record (TimeGenerated always first). */
+function tableFromRecord(
   tableName: string,
   description: string,
+  record: Record<string, unknown>,
 ): ColumnsDocument {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(sampleJson);
-  } catch {
-    throw new Error('That is not valid JSON.');
-  }
-  const record = firstRecord(parsed);
-
   const columns: CatalogColumn[] = [];
   const seen = new Set<string>();
 
-  // TimeGenerated first (mandatory). Use the sample's value if present.
+  // TimeGenerated first (mandatory).
   columns.push({
     name: 'TimeGenerated',
     type: 'datetime',
@@ -76,4 +82,35 @@ export function columnsFromSample(
   }
 
   return { tableName, description, columns };
+}
+
+/**
+ * Builds a columns.json document by inferring column names + types from sample
+ * data (e.g. the output of `IntuneScript.ps1 -PreviewData`). Accepts either a
+ * table-keyed object (multiple tables) or a single object/array of objects (one
+ * table, using the supplied name + description). TimeGenerated is always added.
+ */
+export function columnsFromSample(
+  sampleJson: string,
+  tableName: string,
+  description: string,
+): MultiTableColumnsDocument {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(sampleJson);
+  } catch {
+    throw new Error('That is not valid JSON.');
+  }
+
+  if (isTableKeyed(parsed)) {
+    const tables = Object.entries(parsed).map(([name, records]) => {
+      if (!records.length) {
+        throw new Error(`Table "${name}" has no sample records to infer columns from.`);
+      }
+      return tableFromRecord(name, description, firstRecord(records));
+    });
+    return { tables };
+  }
+
+  return { tables: [tableFromRecord(tableName, description, firstRecord(parsed))] };
 }

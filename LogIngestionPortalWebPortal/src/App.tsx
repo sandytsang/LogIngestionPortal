@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { catalog } from './data/catalog';
-import type { ColumnsDocument, PortalConfig } from './types';
+import { apiFiles } from './data/apiFiles';
+import type { MultiTableColumnsDocument, PortalConfig, TableConfig } from './types';
+import type { ZipEntry } from './lib/zip';
 import { CatalogBrowser } from './components/CatalogBrowser';
 import { ConfigPanel } from './components/ConfigPanel';
 import { OutputTabs, type OutputTab } from './components/OutputTabs';
@@ -11,49 +13,87 @@ import {
   generateColumns,
   generateDeployReadme,
   generateScript,
-  selectedFields,
 } from './lib/generators';
 import { validateColumns } from './lib/validation';
 
-const STORAGE_KEY = 'logingestion-portal.v4';
+const STORAGE_KEY = 'logingestion-portal.v5';
+const LEGACY_KEY = 'logingestion-portal.v4';
 
 const defaultConfig = (): PortalConfig => ({
   functionUrl: 'https://<your-function-app>.azurewebsites.net/api/DCRLogIngestionAPI?code=<your-function-key>',
-  remediationName: 'DeviceInventory',
-  tableName: catalog.tableName,
-  tableDescription: catalog.description,
+  scriptVersion: '1.0.0',
   action: 'deploy',
   scenario: 'new',
   baseName: 'logapi',
   environment: 'dev',
   functionResourceGroup: '',
   dcrResourceGroup: '',
+  dcrName: '',
   existingWorkspaceResourceGroup: '',
   location: '',
   functionPlanType: 'Consumption',
 });
 
-const defaultSelected = (): Set<string> =>
-  new Set(catalog.fields.filter((f) => f.default && !f.locked).map((f) => f.id));
+const newTableId = (): string => `t-${Math.random().toString(36).slice(2, 9)}`;
+
+const defaultFieldIds = (): string[] =>
+  catalog.fields.filter((f) => f.default && !f.locked).map((f) => f.id);
+
+const defaultTables = (): TableConfig[] => [
+  {
+    id: newTableId(),
+    name: catalog.tableName,
+    description: catalog.description,
+    fieldIds: defaultFieldIds(),
+  },
+];
 
 interface Persisted {
-  selected?: string[];
+  tables?: TableConfig[];
   config?: PortalConfig;
   workspaceName?: string;
 }
 
 function loadPersisted(): Persisted {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Persisted;
+    const v5 = localStorage.getItem(STORAGE_KEY);
+    if (v5) return JSON.parse(v5) as Persisted;
   } catch {
-    return {};
+    /* storage unavailable — fall through to defaults */
   }
+  // One-time migration from the single-table layout (v4): wrap the old table and
+  // map every selected field into it.
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (raw) {
+      const old = JSON.parse(raw) as {
+        selected?: string[];
+        config?: Record<string, unknown>;
+        workspaceName?: string;
+      };
+      const oldConfig = old.config ?? {};
+      const tables: TableConfig[] = [
+        {
+          id: newTableId(),
+          name: (oldConfig.tableName as string) || catalog.tableName,
+          description: (oldConfig.tableDescription as string) || catalog.description,
+          fieldIds: old.selected ?? defaultFieldIds(),
+        },
+      ];
+      const { tableName: _n, tableDescription: _d, ...rest } = oldConfig;
+      const config = { ...defaultConfig(), ...rest } as PortalConfig;
+      return { tables, config, workspaceName: old.workspaceName };
+    }
+  } catch {
+    /* ignore malformed legacy data */
+  }
+  return {};
 }
 
 export default function App() {
   const persisted = useMemo(loadPersisted, []);
-  const [selected, setSelected] = useState<Set<string>>(() =>
-    persisted.selected ? new Set(persisted.selected) : defaultSelected(),
+  const [tables, setTables] = useState<TableConfig[]>(() =>
+    persisted.tables && persisted.tables.length ? persisted.tables : defaultTables(),
   );
   const [workspaceName, setWorkspaceName] = useState(persisted.workspaceName ?? '');
   const [showContribute, setShowContribute] = useState(false);
@@ -67,19 +107,20 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ selected: [...selected], config, workspaceName }),
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tables, config, workspaceName }));
     } catch {
       /* storage unavailable (private mode) — non-fatal */
     }
-  }, [selected, config, workspaceName]);
+  }, [tables, config, workspaceName]);
 
-
-  const fields = useMemo(() => selectedFields(catalog, selected), [selected]);
-  const columnsDoc = useMemo<ColumnsDocument>(() => generateColumns(fields, config), [fields, config]);
+  const columnsDoc = useMemo<MultiTableColumnsDocument>(
+    () => generateColumns(catalog, tables),
+    [tables],
+  );
   const errors = useMemo(() => validateColumns(columnsDoc), [columnsDoc]);
+
+  // Distinct (non-locked) fields assigned to at least one table.
+  const selectedCount = useMemo(() => new Set(tables.flatMap((t) => t.fieldIds)).size, [tables]);
 
   const tabs = useMemo<OutputTab[]>(
     () => [
@@ -93,9 +134,9 @@ export default function App() {
       {
         id: 'script',
         label: 'Intune script',
-        filename: 'remediate.ps1',
+        filename: 'IntuneScript.ps1',
         language: 'PowerShell · Proactive Remediation detection script',
-        content: generateScript(catalog, fields, config),
+        content: generateScript(catalog, tables, config),
       },
       {
         id: 'deploy',
@@ -104,35 +145,81 @@ export default function App() {
         language: 'Text · how to deploy with these files',
         content: generateDeployReadme(
           config,
+          tables,
           config.action === 'updateColumns' || config.scenario === 'existing'
             ? workspaceName.trim() || undefined
             : undefined,
         ),
       },
     ],
-    [columnsDoc, fields, config, workspaceName],
+    [columnsDoc, tables, config, workspaceName],
   );
 
-  const toggle = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  // The full "Download all" bundle: the entire LogIngestionAPI backend plus the
+  // user's generated files dropped into the exact paths deploy.ps1 expects, so
+  // the unzipped folder is ready to deploy as-is. The portal writes its own
+  // README.txt (deploy guide for this selection) into the folder, so the repo's
+  // generic README.md is left out to avoid two competing readmes.
+  const bundleFiles = useMemo<ZipEntry[]>(() => {
+    const byId = Object.fromEntries(tabs.map((t) => [t.id, t.content]));
+    const overrides: Record<string, string> = {
+      'LogIngestionAPI/schema/columns.json': byId.columns,
+      'LogIngestionAPI/scripts/IntuneScript.ps1': byId.script,
+    };
+    const exclude = new Set(['LogIngestionAPI/README.md']);
+    const files: ZipEntry[] = apiFiles
+      .filter((f) => !exclude.has(f.name))
+      .map((f) => ({ name: f.name, content: overrides[f.name] ?? f.content }));
+    if (byId.deploy) files.push({ name: 'LogIngestionAPI/README.txt', content: byId.deploy });
+    return files;
+  }, [tabs]);
 
-  const selectAll = () => setSelected(new Set(catalog.fields.filter((f) => !f.locked).map((f) => f.id)));
-  const resetDefaults = () => setSelected(defaultSelected());
-  const clearAll = () => setSelected(new Set());
+  // --- Field <-> table assignment -------------------------------------------
+  const toggleAssignment = (fieldId: string, tableId: string) =>
+    setTables((prev) =>
+      prev.map((t) => {
+        if (t.id !== tableId) return t;
+        const has = t.fieldIds.includes(fieldId);
+        return {
+          ...t,
+          fieldIds: has ? t.fieldIds.filter((id) => id !== fieldId) : [...t.fieldIds, fieldId],
+        };
+      }),
+    );
 
-  const setMany = (ids: string[], select: boolean) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) {
-        if (select) next.add(id);
-        else next.delete(id);
-      }
-      return next;
-    });
+  const setManyForTable = (fieldIds: string[], tableId: string, select: boolean) =>
+    setTables((prev) =>
+      prev.map((t) => {
+        if (t.id !== tableId) return t;
+        const next = new Set(t.fieldIds);
+        for (const id of fieldIds) {
+          if (select) next.add(id);
+          else next.delete(id);
+        }
+        return { ...t, fieldIds: [...next] };
+      }),
+    );
+
+  const allNonLockedIds = useMemo(
+    () => catalog.fields.filter((f) => !f.locked).map((f) => f.id),
+    [],
+  );
+  const selectAll = () =>
+    setTables((prev) => prev.map((t) => ({ ...t, fieldIds: [...allNonLockedIds] })));
+  const clearAll = () => setTables((prev) => prev.map((t) => ({ ...t, fieldIds: [] })));
+  const resetDefaults = () => setTables(defaultTables());
+
+  // --- Table (box) CRUD ------------------------------------------------------
+  const addTable = () =>
+    setTables((prev) => [
+      ...prev,
+      { id: newTableId(), name: `Table${prev.length + 1}_CL`, description: '', fieldIds: [] },
+    ]);
+  const removeTable = (id: string) =>
+    setTables((prev) => (prev.length > 1 ? prev.filter((t) => t.id !== id) : prev));
+  const updateTable = (id: string, patch: Partial<TableConfig>) =>
+    setTables((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -165,44 +252,57 @@ export default function App() {
           </div>
         </header>
 
-        <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
-          {/* Left: catalog */}
-          <div>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-                {columnsDoc.columns.length} columns selected
-              </span>
-              <button onClick={resetDefaults} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
-                Reset to defaults
-              </button>
-              <button onClick={selectAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
-                Select all
-              </button>
-              <button onClick={clearAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
-                Clear
-              </button>
+        <main className="mx-auto max-w-7xl px-4 py-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+            {/* Left: catalog */}
+            <div>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                  {selectedCount} {selectedCount === 1 ? 'field' : 'fields'} selected · {tables.length}{' '}
+                  {tables.length === 1 ? 'table' : 'tables'}
+                </span>
+                <button onClick={resetDefaults} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
+                  Reset to defaults
+                </button>
+                <button onClick={selectAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
+                  Select all
+                </button>
+                <button onClick={clearAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
+                  Clear
+                </button>
+              </div>
+              <CatalogBrowser
+                catalog={catalog}
+                tables={tables}
+                onToggleAssignment={toggleAssignment}
+                onSetManyForTable={setManyForTable}
+              />
             </div>
-            <CatalogBrowser catalog={catalog} selected={selected} onToggle={toggle} onSetMany={setMany} />
+
+            {/* Right: configuration (sticky, full column height) */}
+            <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="mb-3 shrink-0 text-sm font-semibold">Configuration</h2>
+                <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pr-1">
+                  <ConfigPanel
+                    config={config}
+                    onChange={(patch) => setConfig((c) => ({ ...c, ...patch }))}
+                    tables={tables}
+                    onAddTable={addTable}
+                    onRemoveTable={removeTable}
+                    onUpdateTable={updateTable}
+                    workspaceName={workspaceName}
+                    onWorkspaceChange={setWorkspaceName}
+                    errors={errors}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Right: config + output (sticky) */}
-          <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
-            <div className="flex h-full flex-col gap-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <h2 className="mb-3 text-sm font-semibold">Configuration</h2>
-                <ConfigPanel
-                  config={config}
-                  onChange={(patch) => setConfig((c) => ({ ...c, ...patch }))}
-                  workspaceName={workspaceName}
-                  onWorkspaceChange={setWorkspaceName}
-                  errors={errors}
-                />
-              </div>
-
-              <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <OutputTabs tabs={tabs} />
-              </div>
-            </div>
+          {/* Output: full width under the catalog + configuration */}
+          <div className="mt-6 flex h-128 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <OutputTabs tabs={tabs} bundle={bundleFiles} />
           </div>
         </main>
 
@@ -217,8 +317,8 @@ export default function App() {
 
         {showSample && (
           <SampleColumnsDialog
-            tableName={config.tableName}
-            tableDescription={config.tableDescription}
+            tableName={tables[0]?.name ?? catalog.tableName}
+            tableDescription={tables[0]?.description ?? catalog.description}
             onClose={() => setShowSample(false)}
           />
         )}

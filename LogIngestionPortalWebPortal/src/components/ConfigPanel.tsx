@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react';
-import type { PortalConfig } from '../types';
+import type { PortalConfig, TableConfig } from '../types';
 
 interface Props {
   config: PortalConfig;
   onChange: (patch: Partial<PortalConfig>) => void;
+  tables: TableConfig[];
+  onAddTable: () => void;
+  onRemoveTable: (id: string) => void;
+  onUpdateTable: (id: string, patch: Partial<TableConfig>) => void;
   workspaceName: string;
   onWorkspaceChange: (value: string) => void;
   errors: string[];
@@ -44,9 +48,44 @@ const azureRegions: { value: string; label: string }[] = [
   { value: 'brazilsouth', label: 'Brazil South' },
 ];
 
-export function ConfigPanel({ config, onChange, workspaceName, onWorkspaceChange, errors }: Props) {
+export function ConfigPanel({
+  config,
+  onChange,
+  tables,
+  onAddTable,
+  onRemoveTable,
+  onUpdateTable,
+  workspaceName,
+  onWorkspaceChange,
+  errors,
+}: Props) {
   const isUpdate = config.action === 'updateColumns';
   const isNew = config.scenario === 'new';
+
+  // Required-field check for the whole panel. Lists the mandatory inputs that
+  // are still empty for the chosen action/scenario so the user gets one clear
+  // warning of everything missing before they download the artifacts.
+  const isBlank = (value?: string): boolean => (value ?? '').trim() === '';
+  const requiredWarnings: string[] = [];
+  if (isBlank(config.scriptVersion)) requiredWarnings.push('Intune script version');
+  tables.forEach((t, i) => {
+    if (isBlank(t.name)) requiredWarnings.push(`Table ${i + 1} name`);
+  });
+  if (isUpdate) {
+    if (isBlank(config.dcrName)) requiredWarnings.push('DCR name');
+    if (isBlank(config.dcrResourceGroup)) requiredWarnings.push('DCR resource group');
+    if (isBlank(workspaceName)) requiredWarnings.push('Existing workspace name');
+    if (isBlank(config.existingWorkspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
+  } else {
+    if (isBlank(config.functionResourceGroup)) {
+      requiredWarnings.push(isNew ? 'Resource group' : 'Function App resource group');
+    }
+    if (isBlank(config.location)) requiredWarnings.push(isNew ? 'Region' : 'Function App region');
+    if (!isNew) {
+      if (isBlank(workspaceName)) requiredWarnings.push('Existing workspace name');
+      if (isBlank(config.existingWorkspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
+    }
+  }
 
   // Cloud Adoption Framework abbreviation suggestion: if a name doesn't start
   // with the recommended prefix, offer a one-click corrected value.
@@ -107,6 +146,17 @@ export function ConfigPanel({ config, onChange, workspaceName, onWorkspaceChange
 
   return (
     <div className="space-y-4">
+      {requiredWarnings.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+          <p className="font-semibold">Required fields missing</p>
+          <ul className="mt-1 space-y-0.5">
+            {requiredWarnings.map((w) => (
+              <li key={w}>• {w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Action selector: full deploy vs schema-only column update. */}
       <div>
         <span className={label}>What do you want to do?</span>
@@ -138,44 +188,76 @@ export function ConfigPanel({ config, onChange, workspaceName, onWorkspaceChange
         </div>
       </div>
 
-      {/* Naming: workload name + environment drive all resource names. */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={label} htmlFor="baseName">
-            Workload name
-          </label>
-          <input
-            id="baseName"
-            className={`${field} mt-1`}
-            value={config.baseName}
-            onChange={(e) => onChange({ baseName: e.target.value })}
-            placeholder="logapi"
-          />
-        </div>
-        <div>
-          <label className={label} htmlFor="environment">
-            Environment
-          </label>
-          <select
-            id="environment"
-            className={`${field} mt-1`}
-            value={config.environment}
-            onChange={(e) => onChange({ environment: e.target.value as 'dev' | 'test' | 'prod' })}
-          >
-            <option value="dev">dev</option>
-            <option value="test">test</option>
-            <option value="prod">prod</option>
-          </select>
-        </div>
-      </div>
-      <p className="text-[11px] text-slate-400">
-        Used for resource names, e.g. func-{config.baseName || 'logapi'}-{config.environment},
-        dcr-{config.baseName || 'logapi'}-{config.environment}. Use the same values when you update later.
-      </p>
+      {/* Naming: workload name + environment drive all resource names (deploy only). */}
+      {!isUpdate && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label} htmlFor="baseName">
+                Workload name
+              </label>
+              <input
+                id="baseName"
+                className={`${field} mt-1`}
+                value={config.baseName}
+                onChange={(e) => onChange({ baseName: e.target.value })}
+                placeholder="logapi"
+              />
+            </div>
+            <div>
+              <label className={label} htmlFor="environment">
+                Environment
+              </label>
+              <select
+                id="environment"
+                className={`${field} mt-1`}
+                value={config.environment}
+                onChange={(e) => onChange({ environment: e.target.value as 'dev' | 'test' | 'prod' })}
+              >
+                <option value="dev">dev</option>
+                <option value="test">test</option>
+                <option value="prod">prod</option>
+              </select>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Used for resource names, e.g. dcr-{config.baseName || 'logapi'}-{config.environment} and
+            log-{config.baseName || 'logapi'}-{config.environment}. The Function App also gets a short
+            unique hash, e.g. func-{config.baseName || 'logapi'}-{config.environment}-x1y2z (required
+            because its name must be globally unique). Use the same workload + environment when you
+            update later.
+          </p>
+        </>
+      )}
 
       {isUpdate ? (
         <>
-          {/* Schema-only: just locate the existing workspace + DCR. */}
+          {/* Schema-only: identify the exact DCR + its workspace to update. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label} htmlFor="dcrName">
+                DCR name
+              </label>
+              <input
+                id="dcrName"
+                className={`${field} mt-1`}
+                value={config.dcrName}
+                onChange={(e) => onChange({ dcrName: e.target.value })}
+                placeholder="dcr-logingestion-prod"
+              />
+              {cafSuggest(config.dcrName, 'dcr-') && (
+                <button
+                  type="button"
+                  onClick={() => onChange({ dcrName: cafSuggest(config.dcrName, 'dcr-') as string })}
+                  className="mt-1 text-[11px] text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-300"
+                  title="Azure naming best practice (Cloud Adoption Framework)"
+                >
+                  Suggested name: {cafSuggest(config.dcrName, 'dcr-')} — click to use
+                </button>
+              )}
+            </div>
+            {rgField('dcrResourceGroup', 'DCR resource group', 'dcrResourceGroup', 'rg-loging-prod')}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label} htmlFor="workspaceName">
@@ -191,11 +273,11 @@ export function ConfigPanel({ config, onChange, workspaceName, onWorkspaceChange
             </div>
             {rgField('existingWorkspaceResourceGroup', 'Workspace resource group', 'existingWorkspaceResourceGroup', 'rg-shared-logs')}
           </div>
-          {rgField('dcrResourceGroup', 'DCR resource group', 'dcrResourceGroup', 'rg-loging-prod')}
           <p className="text-[11px] text-slate-400">
-            Updates only the custom table and Data Collection Rule from your
-            selected columns. The region is taken from the workspace automatically,
-            and the Function App is never changed (its code is schema-agnostic).
+            Enter the exact name of the Data Collection Rule you deployed earlier (it
+            is not derived from the workload name). Updates only that table and DCR
+            from your selected columns. The region is taken from the workspace
+            automatically, and the Function App is never changed.
           </p>
         </>
       ) : isNew ? (
@@ -289,43 +371,6 @@ export function ConfigPanel({ config, onChange, workspaceName, onWorkspaceChange
         </>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={label} htmlFor="tableName">
-            Table name
-          </label>
-          <input
-            id="tableName"
-            className={`${field} mt-1`}
-            value={config.tableName}
-            onChange={(e) => onChange({ tableName: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className={label} htmlFor="remediationName">
-            Remediation name
-          </label>
-          <input
-            id="remediationName"
-            className={`${field} mt-1`}
-            value={config.remediationName}
-            onChange={(e) => onChange({ remediationName: e.target.value })}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className={label} htmlFor="tableDescription">
-          Table description
-        </label>
-        <input
-          id="tableDescription"
-          className={`${field} mt-1`}
-          value={config.tableDescription}
-          onChange={(e) => onChange({ tableDescription: e.target.value })}
-        />
-      </div>
-
       {!isUpdate && (
         <div>
           <label className={label} htmlFor="functionPlanType">
@@ -347,6 +392,90 @@ export function ConfigPanel({ config, onChange, workspaceName, onWorkspaceChange
           </p>
         </div>
       )}
+
+      <details open className="rounded-lg border border-slate-200 dark:border-slate-700">
+        <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2">
+          <span className={label}>
+            Tables <span className="text-slate-400">({tables.length})</span>
+          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onAddTable();
+            }}
+            className="rounded-md border border-indigo-300 px-2 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-50 dark:border-indigo-500/40 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+          >
+            + Add table
+          </button>
+        </summary>
+        <div className="border-t border-slate-200 px-3 pb-3 pt-2 dark:border-slate-700">
+          <p className="text-[11px] text-slate-400">
+            Each table becomes its own custom Log Analytics table (must end in
+            <code className="mx-1 rounded bg-slate-100 px-1 dark:bg-slate-800">_CL</code>) and DCR
+            stream. Assign fields to tables in the catalog on the left. TimeGenerated and
+            IntuneScriptVersion are added to every table automatically.
+          </p>
+          <div className="mt-2 space-y-2">
+            {tables.map((t, i) => (
+              <div
+                key={t.id}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    className={field}
+                    value={t.name}
+                    onChange={(e) => onUpdateTable(t.id, { name: e.target.value })}
+                    placeholder={`Table${i + 1}_CL`}
+                    aria-label={`Table ${i + 1} name`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveTable(t.id)}
+                    disabled={tables.length <= 1}
+                    className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700"
+                    title={tables.length <= 1 ? 'At least one table is required' : 'Remove this table'}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <input
+                  className={`${field} mt-2`}
+                  value={t.description}
+                  onChange={(e) => onUpdateTable(t.id, { description: e.target.value })}
+                  placeholder="Table description (optional)"
+                  aria-label={`Table ${i + 1} description`}
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned (plus
+                  TimeGenerated &amp; IntuneScriptVersion).
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
+
+      <div>
+        <label className={label} htmlFor="scriptVersion">
+          Intune script version <span className="text-rose-500">*</span>
+        </label>
+        <input
+          id="scriptVersion"
+          className={`${field} mt-1 ${isBlank(config.scriptVersion) ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/30' : ''}`}
+          value={config.scriptVersion}
+          onChange={(e) => onChange({ scriptVersion: e.target.value })}
+          placeholder="1.0.0"
+        />
+        <p className="mt-1 text-[11px] text-slate-400">
+          Required. Stamped into the <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">IntuneScriptVersion</code>{' '}
+          column (added to every table automatically) so you can tell whether data came from an older
+          script or the current one (e.g.{' '}
+          <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">where IntuneScriptVersion == "{config.scriptVersion || '1.0.0'}"</code>).
+          Bump it whenever you change the script.
+        </p>
+      </div>
 
       {errors.length > 0 && (
         <ul className="space-y-1 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">

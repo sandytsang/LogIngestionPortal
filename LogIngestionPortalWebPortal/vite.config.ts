@@ -7,6 +7,13 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   base: '/LogIngestionPortal/',
   plugins: [react(), tailwindcss()],
+  // The "Download all" bundle raw-imports files from the sibling LogIngestionAPI
+  // folder (one level above this app), so let the dev server read the parent.
+  server: {
+    fs: {
+      allow: ['..'],
+    },
+  },
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],

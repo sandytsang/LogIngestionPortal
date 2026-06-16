@@ -20,17 +20,17 @@ The repo has two parts:
 
 ```mermaid
 flowchart LR
-  A[Portal: pick data points] --> B[columns.json + remediate.ps1]
+  A[Portal: pick data points] --> B[columns.json + IntuneScript.ps1]
   B --> C[deploy.ps1]
   C --> D[Function App + DCR + LA table]
-  E[Intune Proactive Remediation<br/>runs remediate.ps1 as SYSTEM] -->|device-signed JWT| D
+  E[Intune Proactive Remediation<br/>runs IntuneScript.ps1 as SYSTEM] -->|device-signed JWT| D
   D --> F[(DeviceInventory_CL)]
 ```
 
 1. **Pick** the device properties in the portal and download the bundle.
 2. **Deploy** the infrastructure with `LogIngestionAPI/scripts/deploy.ps1` (it
    builds the table + DCR from `columns.json` and publishes the Function code).
-3. **Upload** `remediate.ps1` as an Intune Proactive Remediation **detection**
+3. **Upload** `IntuneScript.ps1` as an Intune Proactive Remediation **detection**
    script. Devices collect the data and POST it to the Function, which forwards it
    to the DCR and into your Log Analytics table.
 
@@ -44,8 +44,10 @@ of the device's Entra‑join certificate) — this is always required.
 **▶ https://sandytsang.github.io/LogIngestionPortal/**
 
 Pick your data points, set the table/config, then click **Download all (.zip)** —
-you get `columns.json`, `remediate.ps1`, and a `README.txt` with the exact deploy
-command. Nothing to install for this step.
+you get the complete `LogIngestionAPI` backend (function code, Bicep/ARM infra,
+and scripts) with your generated `schema/columns.json` and `scripts/IntuneScript.ps1`
+already in place, plus a top-level `README.txt` with the exact deploy command.
+Nothing to install for this step.
 
 > Prefer to run the portal locally instead of using the hosted page? See
 > [Run the portal locally](#run-the-portal-locally-optional) below — that's the
@@ -58,7 +60,7 @@ cd LogIngestionAPI
 ./scripts/deploy.ps1 -FunctionResourceGroup rg-loging-dev -Location eastus
 ```
 
-**3. Wire up Intune** — set `$FunctionUrl` in `remediate.ps1` to the URL the deploy
+**3. Wire up Intune** — set `$FunctionUrl` in `IntuneScript.ps1` to the URL the deploy
 prints (including `?code=<key>`), then upload it as a Proactive Remediation
 detection script.
 
@@ -97,7 +99,7 @@ npm run dev        # then open the printed localhost URL
 - **Change columns:** re‑pick in the portal, replace `columns.json`, and run the
   portal's **“Update data columns only”** command (`deploy.ps1 -SchemaOnly`) — the
   Function App is left untouched.
-- **Add a property the catalog doesn't have:** edit `remediate.ps1`, run it with
+- **Add a property the catalog doesn't have:** edit `IntuneScript.ps1`, run it with
   `-PreviewData` to capture the JSON, then use the portal's **“Build columns.json
   from data”** tool to generate a matching schema.
 
@@ -120,6 +122,6 @@ LogIngestionPortalWebPortal/   # the web portal (React + Vite)
 LogIngestionAPI/               # Azure solution
   infra/                       # Bicep (modules per resource group)
   function/                    # PowerShell Function App (DCRLogIngestionAPI)
-  scripts/                     # deploy.ps1, remediate.ps1, helpers
+  scripts/                     # deploy.ps1, IntuneScript.ps1, helpers
   schema/columns.json          # table + DCR schema (single source of truth)
 ```

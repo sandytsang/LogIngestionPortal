@@ -28,19 +28,9 @@
       "description": "Operating system build/version string."
     },
     {
-      "name": "RemediationName",
+      "name": "IntuneScriptVersion",
       "type": "string",
-      "description": "Name of the remediation package that produced this record."
-    },
-    {
-      "name": "Status",
-      "type": "string",
-      "description": "Result status reported by the script (e.g. Compliant, Remediated, Failed)."
-    },
-    {
-      "name": "Details",
-      "type": "string",
-      "description": "Free-form details or JSON payload describing what was collected/changed."
+      "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
     },
     {
       "name": "Manufacturer",

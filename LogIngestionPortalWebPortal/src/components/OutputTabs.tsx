@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createZip, downloadBlob } from '../lib/zip';
+import { createZip, downloadBlob, type ZipEntry } from '../lib/zip';
 
 export interface OutputTab {
   id: string;
@@ -11,16 +11,22 @@ export interface OutputTab {
 
 interface Props {
   tabs: OutputTab[];
+  /**
+   * Optional full set of files for "Download all" (e.g. the whole LogIngestionAPI
+   * backend plus the generated files). Falls back to the visible tabs when omitted.
+   */
+  bundle?: ZipEntry[];
 }
 
-export function OutputTabs({ tabs }: Props) {
+export function OutputTabs({ tabs, bundle }: Props) {
   const [active, setActive] = useState(tabs[0]?.id ?? '');
   const current = tabs.find((t) => t.id === active) ?? tabs[0];
 
   if (!current) return null;
 
   const onDownloadZip = () => {
-    const zip = createZip(tabs.map((t) => ({ name: t.filename, content: t.content })));
+    const entries = bundle ?? tabs.map((t) => ({ name: t.filename, content: t.content }));
+    const zip = createZip(entries);
     downloadBlob('logingestion-bundle.zip', zip);
   };
 

@@ -69,23 +69,46 @@ export interface Catalog {
 
 export interface PortalConfig {
   functionUrl: string;
-  remediationName: string;
-  tableName: string;
-  tableDescription: string;
+  scriptVersion: string;
   action: 'deploy' | 'updateColumns';
   scenario: 'new' | 'existing';
   baseName: string;
   environment: 'dev' | 'test' | 'prod';
   functionResourceGroup: string;
   dcrResourceGroup: string;
+  /** Exact DCR name to target in a schema-only update. Empty = derive dcr-<baseName>-<environment>. */
+  dcrName: string;
   existingWorkspaceResourceGroup: string;
   location: string;
   functionPlanType: 'Consumption' | 'Flex';
 }
 
-/** Serialized columns.json structure. */
+/**
+ * One custom table ("box") the user is building. A field may be assigned to
+ * several tables (many-to-many); the locked TimeGenerated column is implicitly
+ * part of every table and is never stored here.
+ */
+export interface TableConfig {
+  /** Stable internal id (independent of the editable table name). */
+  id: string;
+  /** Custom table name, must end in _CL, e.g. "DeviceInventory_CL". */
+  name: string;
+  description: string;
+  /** Ids of the non-locked catalog fields assigned to this table. */
+  fieldIds: string[];
+}
+
+/** One table's serialized schema (a single entry in columns.json's tables[]). */
 export interface ColumnsDocument {
   tableName: string;
   description: string;
   columns: CatalogColumn[];
+}
+
+/**
+ * Serialized columns.json structure. Supports multiple custom tables in one DCR;
+ * a single-table deployment is just `tables` with one entry.
+ */
+export interface MultiTableColumnsDocument {
+  tables: ColumnsDocument[];
 }

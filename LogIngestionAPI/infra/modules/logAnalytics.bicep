@@ -18,14 +18,8 @@ param location string
 @description('Data retention in days.')
 param retentionInDays int
 
-@description('Custom table name (must end in _CL).')
-param tableName string
-
-@description('Custom table description.')
-param tableDescription string
-
-@description('Custom table columns ({ name, type }).')
-param tableColumns array
+@description('Custom tables ({ tableName, description, columns[] }). Each (re)created so the schema stays in sync with schema/columns.json.')
+param tables array
 
 resource newLaw 'Microsoft.OperationalInsights/workspaces@2023-09-01' = if (createWorkspace) {
   name: lawName
@@ -55,20 +49,23 @@ var lawLocation = createWorkspace ? location : existingLaw.location
 #disable-next-line BCP318
 var lawCustomerId = createWorkspace ? newLaw.properties.customerId : existingLaw.properties.customerId
 
-resource customTable 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = {
-  name: '${effectiveLawName}/${tableName}'
+resource customTables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [for t in tables: {
+  name: '${effectiveLawName}/${t.tableName}'
   properties: {
     totalRetentionInDays: retentionInDays
     schema: {
-      name: tableName
-      description: tableDescription
-      columns: tableColumns
+      name: t.tableName
+      description: t.description
+      columns: map(t.columns, c => {
+        name: c.name
+        type: c.type
+      })
     }
   }
   dependsOn: [
     newLaw
   ]
-}
+}]
 
 output workspaceId string = lawId
 output workspaceLocation string = lawLocation

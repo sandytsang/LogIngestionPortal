@@ -26,8 +26,8 @@ param dcrEndpoint string
 @description('DCR immutable id.')
 param dcrImmutableId string
 
-@description('DCR stream name.')
-param dcrStream string
+@description('Comma-separated custom table names. The Function derives each DCR stream as Custom-<tableName>.')
+param dcrStreams string
 
 @description('Optional JWT audience override. Empty = bind to this app hostname.')
 param jwtExpectedAudience string = ''
@@ -92,8 +92,8 @@ var commonAppSettings = [
     value: dcrImmutableId
   }
   {
-    name: 'DCR_STREAM'
-    value: dcrStream
+    name: 'DCR_STREAMS'
+    value: dcrStreams
   }
   {
     // Device-JWT authentication is always required. run.ps1 rejects any request
