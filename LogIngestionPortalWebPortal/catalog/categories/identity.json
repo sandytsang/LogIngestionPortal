@@ -61,6 +61,19 @@
         "type": "string",
         "description": "Entra device id resolved from the MS-Organization-Access join certificate."
       }
+    },
+    {
+      "id": "EntraTenantId",
+      "label": "Entra tenant id",
+      "order": 33,
+      "default": false,
+      "setups": [],
+      "collector": "$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CloudDomainJoin\\TenantInfo'\nGet-ChildItem -Path $path -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PSChildName",
+      "column": {
+        "name": "EntraTenantId",
+        "type": "string",
+        "description": "Entra tenant id the device is joined to (CloudDomainJoin\\TenantInfo key name)."
+      }
     }
   ]
 }
