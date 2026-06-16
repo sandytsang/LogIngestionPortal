@@ -27,7 +27,7 @@
       "id": "IntuneDeviceName",
       "label": "Intune device name",
       "order": 30,
-      "default": false,
+      "default": true,
       "setups": [],
       "collector": "$key = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq 'MS DM Server' } | Select-Object -First 1\nif ($key) { (Get-ItemProperty -LiteralPath \"Registry::$key\" -ErrorAction SilentlyContinue).EntDeviceName }",
       "column": {
@@ -40,7 +40,7 @@
       "id": "IntuneDeviceId",
       "label": "Intune device id",
       "order": 31,
-      "default": false,
+      "default": true,
       "setups": [],
       "collector": "$key = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq 'MS DM Server' } | Select-Object -First 1\nif ($key) { (Get-ItemProperty -LiteralPath \"Registry::$key\" -ErrorAction SilentlyContinue).EntDMID }",
       "column": {
@@ -53,7 +53,7 @@
       "id": "EntraDeviceId",
       "label": "Entra device id",
       "order": 32,
-      "default": false,
+      "default": true,
       "setups": [],
       "collector": "$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CloudDomainJoin\\JoinInfo'\n$joinKey = Get-ChildItem -Path $path -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PSChildName\nif ($joinKey) {\n    if ([guid]::TryParse($joinKey, [ref][guid]::Empty)) {\n        $cert = Get-ChildItem -Path 'Cert:\\LocalMachine\\My' -Recurse | Where-Object { $_.Subject -like \"CN=$joinKey\" } | Select-Object -First 1\n    } else {\n        $cert = Get-ChildItem -Path 'Cert:\\LocalMachine\\My' -Recurse | Where-Object { $_.Thumbprint -eq $joinKey } | Select-Object -First 1\n    }\n    if ($cert) { ($cert.Subject -replace 'CN=', '') }\n}",
       "column": {
@@ -66,7 +66,7 @@
       "id": "EntraTenantId",
       "label": "Entra tenant id",
       "order": 33,
-      "default": false,
+      "default": true,
       "setups": [],
       "collector": "$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CloudDomainJoin\\TenantInfo'\nGet-ChildItem -Path $path -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PSChildName",
       "column": {

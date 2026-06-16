@@ -43,13 +43,19 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
       list.push(f);
       map.set(f.category, list);
     }
-    // Always present fields alphabetically by label (and categories A–Z) so the
-    // list is predictable. This is display-only; the generated column order is
+    // Always present fields alphabetically by label so the list is predictable.
+    // Identity is pinned first (the core device-identity columns); the remaining
+    // categories follow A–Z. This is display-only; the generated column order is
     // driven by each field's `order`, not by this sort.
     for (const list of map.values()) {
       list.sort((a, b) => a.label.localeCompare(b.label));
     }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return [...map.entries()].sort((a, b) => {
+      if (a[0] === b[0]) return 0;
+      if (a[0] === 'Identity') return -1;
+      if (b[0] === 'Identity') return 1;
+      return a[0].localeCompare(b[0]);
+    });
   }, [catalog.fields, query]);
 
   const chip = (active: boolean) =>

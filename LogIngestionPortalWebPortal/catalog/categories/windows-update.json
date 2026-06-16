@@ -5,7 +5,7 @@
       "id": "WindowsUpdateSettings",
       "label": "Windows Update settings",
       "order": 59,
-      "default": true,
+      "default": false,
       "setups": [],
       "collector": "$wuKey = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate'\n$auKey = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU'\n$ccmKey = 'HKLM:\\SOFTWARE\\Microsoft\\CCM'\n$read = {\n    param($Key, $Name)\n    try { \"$((Get-ItemProperty -Path $Key -Name $Name -ErrorAction Stop).$Name)\" } catch { '' }\n}\n$wuNames = @('AutoRestartDeadlinePeriodInDays', 'AutoRestartNotificationSchedule', 'AutoRestartRequiredNotificationDismissal', 'BranchReadinessLevel', 'DeferFeatureUpdates', 'DeferFeatureUpdatesPeriodInDays', 'DeferQualityUpdates', 'DeferQualityUpdatesPeriodInDays', 'DisableDualScan', 'DoNotConnectToWindowsUpdateInternetLocations', 'ElevateNonAdmins', 'EngagedRestartDeadline', 'EngagedRestartSnoozeSchedule', 'EngagedRestartTransitionSchedule', 'PauseFeatureUpdatesStartTime', 'PauseQualityUpdatesStartTime', 'ScheduleImminentRestartWarning', 'ScheduleRestartWarning', 'SetAutoRestartDeadline', 'SetAutoRestartNotificationConfig', 'SetAutoRestartNotificationDisable', 'SetAutoRestartRequiredNotificationDismissal', 'SetEDURestart', 'SetEngagedRestartTransitionSchedule', 'SetRestartWarningSchd', 'WUServer', 'WUStatusServer', 'SetPolicyDrivenUpdateSourceForDriverUpdates', 'SetPolicyDrivenUpdateSourceForFeatureUpdates', 'SetPolicyDrivenUpdateSourceForOtherUpdates', 'SetPolicyDrivenUpdateSourceForQualityUpdates')\n$auNames = @('AutoInstallMinorUpdates', 'EnableFeaturedSoftware', 'IncludeRecommendedUpdates', 'NoAUAsDefaultShutdownOption', 'NoAUShutdownOption', 'NoAutoRebootWithLoggedOnUsers', 'NoAutoUpdate', 'RebootRelaunchTimeout', 'RebootRelaunchTimeoutEnabled', 'RebootWarningTimeout', 'RebootWarningTimeoutEnabled', 'RescheduleWaitTime', 'RescheduleWaitTimeEnabled')\n$coMgmtWorkloadValues = @(17, 19, 21, 23, 25, 27, 29, 31, 49, 51, 53, 55, 57, 59, 61, 63, 81, 83, 85, 87, 89, 91, 93, 95, 113, 115, 117, 119, 121, 123, 125, 127, 145, 147, 149, 151, 153, 155, 157, 159, 177, 179, 181, 183, 185, 187, 189, 191, 209, 211, 213, 215, 217, 219, 221, 223, 241, 243, 245, 247, 249, 251, 253, 255)\n$settings = [ordered]@{}\n$coMgmtValue = & $read $ccmKey 'CoManagementFlags'\n$settings['CoMgmtValue'] = $coMgmtValue\n$settings['CoMgmtWorkload'] = \"$([bool](($coMgmtValue -as [int]) -in $coMgmtWorkloadValues))\"\nforeach ($n in $wuNames) { $settings[$n] = & $read $wuKey $n }\nforeach ($n in $auNames) { $settings[$n] = & $read $auKey $n }\n[pscustomobject]$settings",
       "column": {
@@ -18,7 +18,7 @@
       "id": "DiagnosticDataSettings",
       "label": "Diagnostic data (telemetry) settings",
       "order": 60,
-      "default": true,
+      "default": false,
       "setups": [],
       "collector": "$key = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection'\n$item = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue\n$settings = [ordered]@{}\nif ($item) {\n    foreach ($p in $item.PSObject.Properties) {\n        if ($p.Name -like 'PS*') { continue }\n        $settings[$p.Name] = \"$($p.Value)\"\n    }\n}\n[pscustomobject]$settings",
       "column": {
@@ -31,7 +31,7 @@
       "id": "TelemetryUploadStatus",
       "label": "Telemetry upload status (DiagTrack)",
       "order": 61,
-      "default": true,
+      "default": false,
       "setups": [],
       "collector": "$diagTrack = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Diagnostics\\DiagTrack'\n$dt = Get-ItemProperty -Path $diagTrack -ErrorAction SilentlyContinue\n$ar = Get-ItemProperty -Path \"$diagTrack\\HeartBeats\\Aria\" -ErrorAction SilentlyContinue\n$sv = Get-ItemProperty -Path \"$diagTrack\\SevilleEventlogManager\" -ErrorAction SilentlyContinue\n$rs = Get-ItemProperty -Path \"$diagTrack\\RegionalSettings\" -ErrorAction SilentlyContinue\n$ft = {\n    param($Ticks)\n    if (-not $Ticks -or [int64]$Ticks -le 0) { return $null }\n    [DateTime]::FromFileTimeUtc([int64]$Ticks).ToString('o')\n}\n[pscustomobject]@{\n    LastSuccessfulUploadTime             = & $ft $dt.LastSuccessfulUploadTime\n    LastSuccessfulNormalUploadTime       = & $ft $dt.LastSuccessfulNormalUploadTime\n    LastSuccessfulRealtimeUploadTime     = & $ft $dt.LastSuccessfulRealtimeUploadTime\n    LastSuccessfulCostDeferredUploadTime = & $ft $dt.LastSuccessfulCostDeferredUploadTime\n    LastInvalidHttpCode                  = if ($null -ne $ar.LastInvalidHttpCode) { '0x{0:X8}' -f [uint32]$ar.LastInvalidHttpCode } else { $null }\n    VortexHttpAttempts                   = $ar.VortexHttpAttempts\n    VortexHttpFailures4xx                = $ar.VortexHttpFailures4xx\n    VortexHttpFailures5xx                = $ar.VortexHttpFailures5xx\n    SuccessfulConnections                = $sv.SuccessfulConnections\n    FailedConnections                    = $sv.FailedConnections\n    CollectorFunctionalRegionalUrl       = $rs.CollectorFunctionalRegionalUrl\n    CollectorDiagnosticRegionalUrl       = $rs.CollectorDiagnosticRegionalUrl\n    WatsonRegionalServerName             = $rs.WatsonRegionalServerName\n    LastSettingsUpdateTime               = & $ft $rs.LastSettingsUpdateTime\n}",
       "column": {

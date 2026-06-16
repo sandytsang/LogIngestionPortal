@@ -41,12 +41,28 @@ const newTableId = (): string => `t-${Math.random().toString(36).slice(2, 9)}`;
 const defaultFieldIds = (): string[] =>
   catalog.fields.filter((f) => f.default && !f.locked).map((f) => f.id);
 
+/** Non-locked catalog field ids belonging to any of the given categories. */
+const categoryFieldIds = (categories: string[]): string[] =>
+  catalog.fields
+    .filter((f) => !f.locked && categories.includes(f.category))
+    .map((f) => f.id);
+
+// The portal starts with two tables: the standard device-inventory table (the
+// catalog defaults) and a dedicated WindowsUpdate_CL table preselected with the
+// Identity and Windows Update fields so the WU/telemetry data lands in its own
+// table while still carrying the device-identity columns to correlate on.
 const defaultTables = (): TableConfig[] => [
   {
     id: newTableId(),
     name: catalog.tableName,
     description: catalog.description,
     fieldIds: defaultFieldIds(),
+  },
+  {
+    id: newTableId(),
+    name: 'WindowsUpdate_CL',
+    description: 'Windows Update, diagnostic data and telemetry upload status, with device identity.',
+    fieldIds: categoryFieldIds(['Identity', 'Windows Update']),
   },
 ];
 

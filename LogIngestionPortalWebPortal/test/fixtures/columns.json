@@ -63,19 +63,24 @@
       "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
     },
     {
-      "name": "WindowsUpdateSettings",
-      "type": "dynamic",
-      "description": "Windows Update posture as a JSON object: co-management state (CoMgmtWorkload, CoMgmtValue) plus the WindowsUpdate and WindowsUpdate\\AU policy registry values. Values are strings; an empty string means not configured."
+      "name": "IntuneDeviceName",
+      "type": "string",
+      "description": "Intune-managed device name (Enrollments\\MS DM Server\\EntDeviceName)."
     },
     {
-      "name": "DiagnosticDataSettings",
-      "type": "dynamic",
-      "description": "Windows diagnostic data / telemetry policy as a JSON object: all configured values under the DataCollection policy key (e.g. AllowTelemetry_PolicyManager, AllowDeviceNameInTelemetry, LimitDiagnosticLogCollection, LimitDumpCollection). Values are strings."
+      "name": "IntuneDeviceId",
+      "type": "string",
+      "description": "Intune device id / managed device GUID shown in the Intune portal (Enrollments\\MS DM Server\\EntDMID)."
     },
     {
-      "name": "TelemetryUploadStatus",
-      "type": "dynamic",
-      "description": "DiagTrack telemetry upload health as a JSON object: last successful upload times (UTC), Aria heartbeat counters (attempts, 4xx/5xx failures, last HTTP code), Seville connection counts, and cached regional collector endpoints."
+      "name": "EntraDeviceId",
+      "type": "string",
+      "description": "Entra device id resolved from the MS-Organization-Access join certificate."
+    },
+    {
+      "name": "EntraTenantId",
+      "type": "string",
+      "description": "Entra tenant id the device is joined to (CloudDomainJoin\\TenantInfo key name)."
     }
   ]
 }
