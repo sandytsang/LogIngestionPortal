@@ -152,6 +152,8 @@ so no secrets/keys are stored.
    > the app registration itself. See [After it runs](#after-it-runs) below.
 3. **Add three repo secrets** (Settings → Secrets and variables → Actions):
    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
+   Need help? Microsoft's guide:
+   [Create GitHub secrets](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect#create-github-secrets).
 4. Run **Actions → Deploy LogIngestionAPI → Run workflow** and fill in the
    resource group, region, base name, environment and plan.
 
