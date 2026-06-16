@@ -127,8 +127,23 @@ so no secrets/keys are stored.
    credential** for your repo. In the app registration → *Certificates &
    secrets* → *Federated credentials* → *Add*, choose **GitHub Actions** and set:
    - Organization/owner = your GitHub user/org, Repository = your repo
-   - Entity = **Environment**, value = `dev` (match the `environment` input), or
-     use **Branch** = `main` if you remove the `environment:` line.
+   - Entity type = **Environment**, value = the environment you deploy
+     (`dev`, `test` or `prod` — match the `environment` input you pick when you
+     run the workflow).
+
+   > **Important — use Environment, not Branch.** The `deploy` job binds to a
+   > GitHub Environment (`environment: ${{ inputs.environment }}`), so the OIDC
+   > token GitHub presents has the subject
+   > `repo:<owner>/<repo>:environment:<env>` (e.g.
+   > `repo:sandytsang/LogIngestionAPI:environment:prod`) — **not** a branch
+   > subject. If you create the credential as **Branch = `main`**, login fails
+   > with `AADSTS700213: No matching federated identity record found …
+   > environment:prod`. A federated credential matches exactly one subject, so
+   > add one credential per environment you use (`dev`, `test`, `prod`).
+   > Keep **Audience** = `api://AzureADTokenExchange` (the default).
+   >
+   > Only if you remove the `environment:` line from `deploy.yml` should you use
+   > Entity type = **Branch** (value `main`) instead.
 
    New to this? Microsoft's step-by-step guide:
    [Configure a federated identity credential on an app](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#configure-a-federated-identity-credential-on-an-app).
