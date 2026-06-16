@@ -320,3 +320,61 @@ function escapePsSingleQuote(value: string): string {
   // In a single-quoted PowerShell string a literal single quote is doubled.
   return value.replace(/'/g, "''");
 }
+
+/**
+ * Rewrites the `workflow_dispatch` input defaults in the bundled deploy.yml so
+ * the GitHub Actions "Run workflow" form is pre-filled with exactly what the
+ * user picked in the portal. Only inputs the portal controls are touched; the
+ * rest (method, requireEntraDevice, skipRoleAssignment) keep their file
+ * defaults. Returns the YAML unchanged if its shape isn't what we expect.
+ */
+export function generateWorkflowYaml(
+  baseYaml: string,
+  config: PortalConfig,
+  workspaceName?: string,
+): string {
+  const isUpdate = config.action === 'updateColumns';
+  const useExisting = isUpdate || config.scenario === 'existing';
+  const trimmed = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+  // Single-quoted YAML scalar (a literal single quote is doubled).
+  const yamlStr = (v: string) => `'${v.replace(/'/g, "''")}'`;
+
+  const ws = useExisting ? trimmed(workspaceName) : undefined;
+  // Map each workflow input name to its new default. `undefined` = leave as-is.
+  const overrides: Record<string, string | undefined> = {
+    action: isUpdate ? 'updateColumns' : 'deploy',
+    environment: config.environment,
+    functionPlanType: config.functionPlanType,
+    resourceGroup: trimmed(config.functionResourceGroup) && yamlStr(config.functionResourceGroup.trim()),
+    dcrResourceGroup: trimmed(config.dcrResourceGroup) && yamlStr(config.dcrResourceGroup.trim()),
+    location: trimmed(config.location) && yamlStr(config.location.trim()),
+    baseName: trimmed(config.baseName) && yamlStr(config.baseName.trim()),
+    existingWorkspaceName: ws && yamlStr(ws),
+    existingWorkspaceResourceGroup:
+      trimmed(config.existingWorkspaceResourceGroup) && yamlStr(config.existingWorkspaceResourceGroup.trim()),
+    dcrName: trimmed(config.dcrName) && yamlStr(config.dcrName.trim()),
+  };
+
+  // Input keys are indented 6 spaces; their properties (incl. `default:`) 8.
+  const inputKeyRe = /^ {6}([A-Za-z][A-Za-z0-9]*):\s*$/;
+  const defaultRe = /^( {8}default:).*$/;
+  let currentKey: string | null = null;
+  return baseYaml
+    .split('\n')
+    .map((line) => {
+      const keyMatch = line.match(inputKeyRe);
+      if (keyMatch) {
+        currentKey = keyMatch[1];
+        return line;
+      }
+      if (currentKey && defaultRe.test(line)) {
+        const next = overrides[currentKey];
+        currentKey = null; // each input has a single default line
+        if (next !== undefined) return line.replace(defaultRe, `$1 ${next}`);
+        return line;
+      }
+      return line;
+    })
+    .join('\n');
+}
+

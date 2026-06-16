@@ -39,6 +39,10 @@ on:
         description: 'Target resource group (created if missing)'
         type: string
         default: rg-logingestion
+      dcrResourceGroup:
+        description: 'Resource group for the Data Collection Rule (blank = same as target resource group)'
+        type: string
+        default: ''
       location:
         description: 'Azure region'
         type: string
@@ -132,6 +136,10 @@ jobs:
             if [ "${{ inputs.action }}" = "updateColumns" ]; then
               params+=( schemaOnly=true dcrName="${{ inputs.dcrName }}" )
             fi
+            # Put the DCR in its own resource group when the portal selected one.
+            if [ -n "${{ inputs.dcrResourceGroup }}" ]; then
+              params+=( dcrResourceGroup="${{ inputs.dcrResourceGroup }}" )
+            fi
             # Contributor-only login: skip the DCR role assignment (grant it
             # separately). Contributor cannot create role assignments.
             if [ "${{ inputs.skipRoleAssignment }}" = "true" ]; then
@@ -178,6 +186,7 @@ jobs:
           }
           if ('${{ inputs.existingWorkspaceName }}') { $opt += @('-ExistingWorkspaceName', '${{ inputs.existingWorkspaceName }}') }
           if ('${{ inputs.existingWorkspaceResourceGroup }}') { $opt += @('-ExistingWorkspaceResourceGroup', '${{ inputs.existingWorkspaceResourceGroup }}') }
+          if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
           # Contributor-only login: don't create the DCR role assignment here.
           if ('${{ inputs.skipRoleAssignment }}' -eq 'true') { $opt += '-SkipDcrRoleAssignment' }
           ./deploy.ps1 `

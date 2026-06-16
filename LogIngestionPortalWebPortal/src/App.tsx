@@ -14,6 +14,7 @@ import {
   generateColumns,
   generateDeployReadme,
   generateScript,
+  generateWorkflowYaml,
 } from './lib/generators';
 import { validateColumns } from './lib/validation';
 
@@ -150,13 +151,20 @@ export default function App() {
       'LogIngestionAPI/schema/columns.json': byId.columns,
       'LogIngestionAPI/scripts/IntuneScript.ps1': byId.script,
     };
+    // Pre-fill the GitHub Actions "Run workflow" form with the portal selections
+    // so users who push the zip to their own repo don't have to retype them.
+    const workflowPath = 'LogIngestionAPI/.github/workflows/deploy.yml';
+    const baseWorkflow = apiFiles.find((f) => f.name === workflowPath)?.content;
+    if (baseWorkflow) {
+      overrides[workflowPath] = generateWorkflowYaml(baseWorkflow, config, workspaceName);
+    }
     const exclude = new Set(['LogIngestionAPI/README.md']);
     const files: ZipEntry[] = apiFiles
       .filter((f) => !exclude.has(f.name))
       .map((f) => ({ name: f.name, content: overrides[f.name] ?? f.content }));
     if (byId.deploy) files.push({ name: 'LogIngestionAPI/README.txt', content: byId.deploy });
     return files;
-  }, [tabs]);
+  }, [tabs, config, workspaceName]);
 
   // --- Field <-> table assignment -------------------------------------------
   const toggleAssignment = (fieldId: string, tableId: string) =>

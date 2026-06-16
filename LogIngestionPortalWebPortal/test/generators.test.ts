@@ -5,6 +5,7 @@ import {
   generateColumns,
   generateDeployReadme,
   generateScript,
+  generateWorkflowYaml,
   tableFields,
 } from '../src/lib/generators';
 import { validateColumns } from '../src/lib/validation';
@@ -183,5 +184,103 @@ describe('generateDeployReadme', () => {
     expect(readme).toContain('-DcrResourceGroup rg-dcr');
     expect(readme).not.toContain('-FunctionResourceGroup');
     expect(readme).not.toContain('-Location');
+  });
+});
+
+describe('generateWorkflowYaml', () => {
+  const sampleYaml = [
+    'on:',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      action:',
+    '        type: choice',
+    '        options: [deploy, updateColumns]',
+    '        default: deploy',
+    '      method:',
+    '        type: choice',
+    '        options: [native, script]',
+    '        default: native',
+    '      resourceGroup:',
+    '        type: string',
+    '        default: rg-logingestion',
+    '      dcrResourceGroup:',
+    '        type: string',
+    "        default: ''",
+    '      location:',
+    '        type: string',
+    '        default: eastus',
+    '      baseName:',
+    '        type: string',
+    '        default: logapi',
+    '      environment:',
+    '        type: choice',
+    '        options: [dev, test, prod]',
+    '        default: dev',
+    '      functionPlanType:',
+    '        type: choice',
+    '        options: [Consumption, Flex]',
+    '        default: Consumption',
+    '      existingWorkspaceName:',
+    '        type: string',
+    "        default: ''",
+    '      existingWorkspaceResourceGroup:',
+    '        type: string',
+    "        default: ''",
+    '      dcrName:',
+    '        type: string',
+    "        default: ''",
+    '      requireEntraDevice:',
+    '        type: boolean',
+    '        default: true',
+    '',
+  ].join('\n');
+
+  it('pre-fills input defaults from the portal selections', () => {
+    const cfg: PortalConfig = {
+      ...baseConfig,
+      action: 'deploy',
+      scenario: 'new',
+      baseName: 'logingestion',
+      environment: 'prod',
+      functionResourceGroup: 'rg-logingestion-prod',
+      dcrResourceGroup: 'rg-log-demo',
+      location: 'northeurope',
+      functionPlanType: 'Flex',
+    };
+    const out = generateWorkflowYaml(sampleYaml, cfg);
+    expect(out).toContain('        default: deploy');
+    expect(out).toContain("        default: 'rg-logingestion-prod'");
+    expect(out).toContain("        default: 'rg-log-demo'");
+    expect(out).toContain("        default: 'northeurope'");
+    expect(out).toContain("        default: 'logingestion'");
+    expect(out).toContain('        default: prod');
+    expect(out).toContain('        default: Flex');
+    // method is not portal-controlled, so it keeps its file default.
+    expect(out).toContain('        default: native');
+    // requireEntraDevice is left untouched.
+    expect(out).toContain('        default: true');
+  });
+
+  it('sets updateColumns + workspace + dcr name for a schema-only update', () => {
+    const cfg: PortalConfig = {
+      ...baseConfig,
+      action: 'updateColumns',
+      scenario: 'existing',
+      existingWorkspaceResourceGroup: 'rg-shared-logs',
+      dcrName: 'dcr-logingestion-prod',
+    };
+    const out = generateWorkflowYaml(sampleYaml, cfg, 'log-shared-central');
+    expect(out).toContain('        default: updateColumns');
+    expect(out).toContain("        default: 'log-shared-central'");
+    expect(out).toContain("        default: 'rg-shared-logs'");
+    expect(out).toContain("        default: 'dcr-logingestion-prod'");
+  });
+
+  it('leaves blank optional inputs untouched when not provided', () => {
+    const out = generateWorkflowYaml(sampleYaml, baseConfig);
+    // existingWorkspaceName stays empty for a new-from-zero deploy.
+    expect(out).toContain("      existingWorkspaceName:\n        type: string\n        default: ''");
+    // resourceGroup keeps its file default because the portal field is blank.
+    expect(out).toContain('        default: rg-logingestion');
   });
 });
