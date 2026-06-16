@@ -13,9 +13,9 @@
       "description": "Hostname of the reporting device."
     },
     {
-      "name": "DeviceId",
+      "name": "EnrollmentId",
       "type": "string",
-      "description": "Intune/Entra device identifier."
+      "description": "Intune MDM enrollment id (Enrollments registry key name for the MS DM Server provider)."
     },
     {
       "name": "UserName",

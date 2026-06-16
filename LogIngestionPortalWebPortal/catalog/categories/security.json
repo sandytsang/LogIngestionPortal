@@ -134,7 +134,7 @@
       "column": {
         "name": "BitLockerVolumeStatus",
         "type": "string",
-        "description": "BitLocker volume status for the system drive (Get-BitLockerVolume.VolumeStatus)."
+        "description": "BitLocker volume status for the system drive (Get-BitLockerVolume.VolumeStatus). Mirrors the system-volume entry already in BitLockerStatus."
       }
     },
     {
@@ -147,7 +147,7 @@
       "column": {
         "name": "BitLockerProtectionStatus",
         "type": "string",
-        "description": "BitLocker protection status for the system drive (Get-BitLockerVolume.ProtectionStatus)."
+        "description": "BitLocker protection status for the system drive (Get-BitLockerVolume.ProtectionStatus). Mirrors the system-volume entry already in BitLockerStatus."
       }
     }
   ]

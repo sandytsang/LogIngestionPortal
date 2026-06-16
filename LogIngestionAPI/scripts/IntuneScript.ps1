@@ -198,7 +198,7 @@ function Get-DeviceData {
     [pscustomobject]@{
         TimeGenerated            = (Get-Date).ToUniversalTime().ToString('o')
         DeviceName               = $env:COMPUTERNAME
-        DeviceId                 = $deviceId
+        EnrollmentId             = $deviceId
         UserName                 = $cs.UserName
         OSVersion                = "$($os.Caption) $($os.Version)"
         RemediationName          = $RemediationName

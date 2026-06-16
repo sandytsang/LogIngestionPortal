@@ -11,13 +11,13 @@
       "column": { "name": "DeviceName", "type": "string", "description": "Hostname of the reporting device." }
     },
     {
-      "id": "DeviceId",
-      "label": "Intune/Entra device id",
+      "id": "EnrollmentId",
+      "label": "Intune enrollment id",
       "order": 3,
       "default": true,
       "setups": ["deviceId"],
       "expression": "$deviceId",
-      "column": { "name": "DeviceId", "type": "string", "description": "Intune/Entra device identifier." }
+      "column": { "name": "EnrollmentId", "type": "string", "description": "Intune MDM enrollment id (Enrollments registry key name for the MS DM Server provider)." }
     },
     {
       "id": "UserName",
@@ -33,29 +33,29 @@
       }
     },
     {
-      "id": "ManagedDeviceName",
-      "label": "Intune managed device name",
+      "id": "IntuneDeviceName",
+      "label": "Intune device name",
       "order": 30,
       "default": false,
       "setups": [],
       "collector": "$key = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq 'MS DM Server' } | Select-Object -First 1\nif ($key) { (Get-ItemProperty -LiteralPath \"Registry::$key\" -ErrorAction SilentlyContinue).EntDeviceName }",
       "column": {
-        "name": "ManagedDeviceName",
+        "name": "IntuneDeviceName",
         "type": "string",
-        "description": "Intune managed device name (Enrollments\\MS DM Server\\EntDeviceName)."
+        "description": "Intune-managed device name (Enrollments\\MS DM Server\\EntDeviceName)."
       }
     },
     {
-      "id": "ManagedDeviceId",
-      "label": "Intune managed device id",
+      "id": "IntuneDeviceId",
+      "label": "Intune device id",
       "order": 31,
       "default": false,
       "setups": [],
       "collector": "$key = Get-ChildItem 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -eq 'MS DM Server' } | Select-Object -First 1\nif ($key) { (Get-ItemProperty -LiteralPath \"Registry::$key\" -ErrorAction SilentlyContinue).EntDMID }",
       "column": {
-        "name": "ManagedDeviceId",
+        "name": "IntuneDeviceId",
         "type": "string",
-        "description": "Intune MDM device id (Enrollments\\MS DM Server\\EntDMID)."
+        "description": "Intune device id / managed device GUID shown in the Intune portal (Enrollments\\MS DM Server\\EntDMID)."
       }
     },
     {
