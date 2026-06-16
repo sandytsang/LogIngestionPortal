@@ -47,10 +47,10 @@ const categoryFieldIds = (categories: string[]): string[] =>
     .filter((f) => !f.locked && categories.includes(f.category))
     .map((f) => f.id);
 
-// The portal starts with two tables: the standard device-inventory table (the
-// catalog defaults) and a dedicated WindowsUpdate_CL table preselected with the
-// Identity and Windows Update fields so the WU/telemetry data lands in its own
-// table while still carrying the device-identity columns to correlate on.
+// The portal starts with three tables: the standard device-inventory table (the
+// catalog defaults), plus dedicated WindowsUpdate_CL and SecureBoot_CL tables
+// preselected with their category fields (and Identity) so each topic lands in
+// its own table while still carrying the device-identity columns to correlate on.
 const defaultTables = (): TableConfig[] => [
   {
     id: newTableId(),
@@ -63,6 +63,12 @@ const defaultTables = (): TableConfig[] => [
     name: 'WindowsUpdate_CL',
     description: 'Windows Update, diagnostic data and telemetry upload status, with device identity.',
     fieldIds: categoryFieldIds(['Identity', 'Windows Update']),
+  },
+  {
+    id: newTableId(),
+    name: 'SecureBoot_CL',
+    description: 'Secure Boot 2023 certificate update status, with device identity.',
+    fieldIds: categoryFieldIds(['Identity', 'Secure Boot']),
   },
 ];
 
