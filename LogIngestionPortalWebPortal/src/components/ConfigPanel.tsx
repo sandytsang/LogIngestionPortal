@@ -388,12 +388,12 @@ export function ConfigPanel({
             The Function App region above can differ. Storage, Application Insights and
             the plan are created in the Function App resource group.
           </p>
-          <details className="text-[11px] text-slate-500">
-            <summary className="cursor-pointer select-none">Advanced: separate DCR resource group</summary>
-            <div className="mt-2">
-              {rgField('dcrResourceGroup', <>DCR resource group <span className="text-slate-400">(optional)</span></>, 'dcrResourceGroup', 'defaults to Function App RG', false)}
-            </div>
-          </details>
+          <div>
+            {rgField('dcrResourceGroup', <>DCR resource group <span className="text-slate-400">(optional)</span></>, 'dcrResourceGroup', 'defaults to Function App RG', false)}
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              Leave blank to create the DCR in the Function App resource group.
+            </p>
+          </div>
         </>
       )}
 

@@ -56,37 +56,20 @@ interface Persisted {
 }
 
 function loadPersisted(): Persisted {
+  // Settings are kept in sessionStorage only, so they survive a page reload but
+  // are cleared when the browser/tab is closed. Purge any values left in
+  // localStorage by older builds so stale settings can't reappear.
   try {
-    const v5 = localStorage.getItem(STORAGE_KEY);
-    if (v5) return JSON.parse(v5) as Persisted;
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_KEY);
+  } catch {
+    /* storage unavailable — ignore */
+  }
+  try {
+    const saved = sessionStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved) as Persisted;
   } catch {
     /* storage unavailable — fall through to defaults */
-  }
-  // One-time migration from the single-table layout (v4): wrap the old table and
-  // map every selected field into it.
-  try {
-    const raw = localStorage.getItem(LEGACY_KEY);
-    if (raw) {
-      const old = JSON.parse(raw) as {
-        selected?: string[];
-        config?: Record<string, unknown>;
-        workspaceName?: string;
-      };
-      const oldConfig = old.config ?? {};
-      const tables: TableConfig[] = [
-        {
-          id: newTableId(),
-          name: (oldConfig.tableName as string) || catalog.tableName,
-          description: (oldConfig.tableDescription as string) || catalog.description,
-          fieldIds: old.selected ?? defaultFieldIds(),
-        },
-      ];
-      const { tableName: _n, tableDescription: _d, ...rest } = oldConfig;
-      const config = { ...defaultConfig(), ...rest } as PortalConfig;
-      return { tables, config, workspaceName: old.workspaceName };
-    }
-  } catch {
-    /* ignore malformed legacy data */
   }
   return {};
 }
@@ -108,7 +91,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tables, config, workspaceName }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ tables, config, workspaceName }));
     } catch {
       /* storage unavailable (private mode) — non-fatal */
     }
