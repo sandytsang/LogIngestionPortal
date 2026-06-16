@@ -8,6 +8,7 @@ import { ConfigPanel } from './components/ConfigPanel';
 import { OutputTabs, type OutputTab } from './components/OutputTabs';
 import { ContributeDialog } from './components/ContributeDialog';
 import { SampleColumnsDialog } from './components/SampleColumnsDialog';
+import { DeployHelp } from './components/DeployHelp';
 import {
   columnsToJson,
   generateColumns,
@@ -304,6 +305,9 @@ export default function App() {
           <div className="mt-6 flex h-128 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <OutputTabs tabs={tabs} bundle={bundleFiles} />
           </div>
+
+          {/* How-to-deploy guidance for the downloaded zip */}
+          <DeployHelp />
         </main>
 
         <footer className="mx-auto max-w-7xl px-4 pb-8 text-center text-xs text-slate-400">
