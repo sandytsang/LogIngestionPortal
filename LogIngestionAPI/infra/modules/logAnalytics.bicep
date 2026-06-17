@@ -46,8 +46,9 @@ var lawLocation = manageWorkspace ? location : referencedLaw.location
 #disable-next-line BCP318
 var lawCustomerId = manageWorkspace ? managedLaw.properties.customerId : referencedLaw.properties.customerId
 
-resource customTables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [for t in tables: {
-  name: '${workspaceName}/${t.tableName}'
+resource customTablesManaged 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [for t in tables: if (manageWorkspace) {
+  name: t.tableName
+  parent: managedLaw
   properties: {
     totalRetentionInDays: retentionInDays
     schema: {
@@ -59,9 +60,22 @@ resource customTables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-0
       })
     }
   }
-  dependsOn: [
-    managedLaw
-  ]
+}]
+
+resource customTablesReferenced 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [for t in tables: if (!manageWorkspace) {
+  parent: referencedLaw
+  name: t.tableName
+  properties: {
+    totalRetentionInDays: retentionInDays
+    schema: {
+      name: t.tableName
+      description: t.description
+      columns: map(t.columns, c => {
+        name: c.name
+        type: c.type
+      })
+    }
+  }
 }]
 
 output workspaceId string = lawId

@@ -821,6 +821,44 @@ if (-not $SkipFunctionPublish) {
         }
     }
     Write-Host '    OK - Function code published.' -ForegroundColor Green
+
+    # The function list can lag behind deployment, especially on Flex. Verify
+    # the expected function is registered so operators don't discover an empty
+    # Functions blade later.
+    $expectedFunctionName = 'DCRLogIngestionAPI'
+    Write-Host "==> Verifying function '$expectedFunctionName' is visible in '$functionAppName'" -ForegroundColor Cyan
+    $maxFunctionVisibleAttempts = 20
+    $functionVisible = $false
+    for ($functionAttempt = 1; $functionAttempt -le $maxFunctionVisibleAttempts; $functionAttempt++) {
+        $functionFound = az functionapp function show `
+            --resource-group $functionAppRg `
+            --name $functionAppName `
+            --function-name $expectedFunctionName `
+            --query name `
+            --output tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $functionFound) {
+            $functionVisible = $true
+            Write-Host "    OK - function '$expectedFunctionName' is registered." -ForegroundColor Green
+            break
+        }
+        if ($functionAttempt -lt $maxFunctionVisibleAttempts) {
+            Start-Sleep -Seconds 15
+        }
+    }
+
+    if (-not $functionVisible) {
+        Write-Host ''
+        Write-Warning "Function '$expectedFunctionName' is not visible yet in Function App '$functionAppName'."
+        Write-Host 'This usually means runtime indexing is still in progress or the package did not deploy as expected.' -ForegroundColor Yellow
+        Write-Host 'Try the following checks:' -ForegroundColor Cyan
+        Write-Host "    az functionapp function list -g $functionAppRg -n $functionAppName --query '[].name' -o tsv" -ForegroundColor White
+        Write-Host "    az functionapp config appsettings list -g $functionAppRg -n $functionAppName --query \"[?name=='FUNCTIONS_WORKER_RUNTIME'].value | [0]\" -o tsv" -ForegroundColor White
+        Write-Host "    az functionapp restart -g $functionAppRg -n $functionAppName" -ForegroundColor White
+        if (-not $hasFunc) {
+            Write-Host 'If this is a Flex app and zip deploy was used, publish once with Functions Core Tools (preferred path):' -ForegroundColor Cyan
+            Write-Host "    cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
+        }
+    }
 }
 
 # --- 5. Grant the Function's managed identity Graph Device.Read.All ---------
