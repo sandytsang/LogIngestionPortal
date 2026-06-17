@@ -167,14 +167,14 @@ else {
     $missing += 'Azure CLI (az)   ->  winget install Microsoft.AzureCLI    (or: https://aka.ms/installazurecli)'
 }
 
-# Azure Functions Core Tools (func) — only needed to publish the code (full
-# deploy). Never needed for -SchemaOnly (the Function App is not touched).
+# Azure Functions Core Tools (func) is optional. If it's not available, the
+# script publishes with Azure CLI zip deploy instead.
 if (-not $SkipFunctionPublish -and -not $SchemaOnly) {
     if (Get-Command func -ErrorAction SilentlyContinue) {
-        Write-Host '    OK - Azure Functions Core Tools (func) found.' -ForegroundColor Green
+        Write-Host '    OK - Azure Functions Core Tools (func) found (preferred publish path).' -ForegroundColor Green
     }
     else {
-        $missing += 'Functions Core Tools v4 (func)   ->  winget install Microsoft.Azure.FunctionsCoreTools    (or: npm i -g azure-functions-core-tools@4 --unsafe-perm true)'
+        Write-Host '    INFO - Azure Functions Core Tools (func) not found; publish will use Azure CLI zip deploy.' -ForegroundColor Yellow
     }
 }
 
@@ -633,15 +633,9 @@ if ($SkipDcrRoleAssignment) {
 # --- 4. Publish the Function App code ---------------------------------------
 if (-not $SkipFunctionPublish) {
     Write-Host '==> Publishing Function App code' -ForegroundColor Cyan
-    if (-not (Get-Command func -ErrorAction SilentlyContinue)) {
-        Write-Host ''
-        Write-Host 'Azure Functions Core Tools (the `func` command) is not installed or not on PATH.' -ForegroundColor Yellow
-        Write-Host 'It is required to upload the PowerShell function code to Azure.' -ForegroundColor Yellow
-        Write-Host 'Install it (pick one), then rerun this script:' -ForegroundColor Cyan
-        Write-Host '    winget install Microsoft.Azure.FunctionsCoreTools' -ForegroundColor White
-        Write-Host '    npm  install -g azure-functions-core-tools@4 --unsafe-perm true' -ForegroundColor White
-        Write-Host 'Or rerun with -SkipFunctionPublish and publish the code manually later (see README).' -ForegroundColor Cyan
-        throw 'Azure Functions Core Tools (func) not found.'
+    $hasFunc = [bool](Get-Command func -ErrorAction SilentlyContinue)
+    if (-not $hasFunc) {
+        Write-Host '    Functions Core Tools not found; using Azure CLI zip deploy.' -ForegroundColor Yellow
     }
     # The ARM deployment returns before the Function App is fully propagated to
     # the management plane, so 'func ... publish' can fail with
@@ -679,29 +673,61 @@ if (-not $SkipFunctionPublish) {
         Start-Sleep -Seconds 15
     }
 
-    Push-Location $functionPath
-    try {
-        $maxPublishAttempts = 5
-        for ($publishAttempt = 1; $publishAttempt -le $maxPublishAttempts; $publishAttempt++) {
-            func azure functionapp publish $functionAppName --powershell
-            if ($LASTEXITCODE -eq 0) { break }
-            if ($publishAttempt -eq $maxPublishAttempts) {
-                Write-Host ''
-                Write-Host "Publishing the function code failed after $maxPublishAttempts attempts." -ForegroundColor Yellow
-                Write-Host 'Things to check:' -ForegroundColor Cyan
-                Write-Host '    - You are signed in with `az login` and have Contributor on the Function App.' -ForegroundColor White
-                Write-Host '    - The Function App is running (not stopped) and finished provisioning.' -ForegroundColor White
-                Write-Host '    - Network/proxy is not blocking the SCM (Kudu) publish endpoint.' -ForegroundColor White
-                Write-Host 'Retry the publish manually to see the full error:' -ForegroundColor Cyan
-                Write-Host "    cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
-                throw 'Function publish failed.'
+    $maxPublishAttempts = 5
+    if ($hasFunc) {
+        Push-Location $functionPath
+        try {
+            for ($publishAttempt = 1; $publishAttempt -le $maxPublishAttempts; $publishAttempt++) {
+                func azure functionapp publish $functionAppName --powershell
+                if ($LASTEXITCODE -eq 0) { break }
+                if ($publishAttempt -eq $maxPublishAttempts) {
+                    Write-Host ''
+                    Write-Host "Publishing the function code failed after $maxPublishAttempts attempts." -ForegroundColor Yellow
+                    Write-Host 'Things to check:' -ForegroundColor Cyan
+                    Write-Host '    - You are signed in with `az login` and have Contributor on the Function App.' -ForegroundColor White
+                    Write-Host '    - The Function App is running (not stopped) and finished provisioning.' -ForegroundColor White
+                    Write-Host '    - Network/proxy is not blocking the SCM (Kudu) publish endpoint.' -ForegroundColor White
+                    Write-Host 'Retry the publish manually to see the full error:' -ForegroundColor Cyan
+                    Write-Host "    cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
+                    throw 'Function publish failed.'
+                }
+                Write-Host "    Publish attempt $publishAttempt failed (often propagation lag); retrying in 20s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 20
             }
-            Write-Host "    Publish attempt $publishAttempt failed (often propagation lag); retrying in 20s..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 20
+        }
+        finally {
+            Pop-Location
         }
     }
-    finally {
-        Pop-Location
+    else {
+        $zipPath = Join-Path ([System.IO.Path]::GetTempPath()) ("loging-func-" + [Guid]::NewGuid().ToString('N') + '.zip')
+        try {
+            Compress-Archive -Path (Join-Path $functionPath '*') -DestinationPath $zipPath -Force
+            for ($publishAttempt = 1; $publishAttempt -le $maxPublishAttempts; $publishAttempt++) {
+                az functionapp deployment source config-zip `
+                    --resource-group $functionAppRg `
+                    --name $functionAppName `
+                    --src $zipPath `
+                    --output none
+                if ($LASTEXITCODE -eq 0) { break }
+                if ($publishAttempt -eq $maxPublishAttempts) {
+                    Write-Host ''
+                    Write-Host "Publishing the function code with Azure CLI zip deploy failed after $maxPublishAttempts attempts." -ForegroundColor Yellow
+                    Write-Host 'Things to check:' -ForegroundColor Cyan
+                    Write-Host '    - You are signed in with `az login` and have Contributor on the Function App.' -ForegroundColor White
+                    Write-Host '    - The Function App is running (not stopped) and finished provisioning.' -ForegroundColor White
+                    Write-Host '    - Network/proxy is not blocking the SCM (Kudu) publish endpoint.' -ForegroundColor White
+                    Write-Host 'Retry manually:' -ForegroundColor Cyan
+                    Write-Host "    az functionapp deployment source config-zip -g $functionAppRg -n $functionAppName --src $zipPath" -ForegroundColor White
+                    throw 'Function publish failed (zip deploy).' 
+                }
+                Write-Host "    Zip publish attempt $publishAttempt failed (often propagation lag); retrying in 20s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 20
+            }
+        }
+        finally {
+            Remove-Item -Path $zipPath -ErrorAction SilentlyContinue
+        }
     }
     Write-Host '    OK - Function code published.' -ForegroundColor Green
 }

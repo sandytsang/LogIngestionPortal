@@ -39,20 +39,46 @@ Log Analytics custom table(s)  (*_CL)
 
 ## Prerequisites
 
-Starting from a clean machine you need three things (the deploy script checks for
-them and prints these hints if any are missing):
+Starting from a clean machine you need these tools (the deploy script checks for
+them and prints hints if anything is missing):
 
 - **PowerShell 7+** — `winget install Microsoft.PowerShell`
 - **Azure CLI (`az`)** — `winget install Microsoft.AzureCLI` (or <https://aka.ms/installazurecli>).
   The Bicep CLI is installed automatically by `az` the first time it compiles a template.
-- **Azure Functions Core Tools v4 (`func`)** — `winget install Microsoft.Azure.FunctionsCoreTools`
-  (or `npm i -g azure-functions-core-tools@4 --unsafe-perm true`). Only needed to
-  publish the Function code; skip with `-SkipFunctionPublish`.
+- **Azure Functions Core Tools v4 (`func`)** — optional. If installed, `deploy.ps1`
+  uses it as the preferred publish path. If not installed, `deploy.ps1` falls back to
+  Azure CLI zip deploy automatically.
 
 Then sign in: `az login` (and `az account set --subscription <name-or-id>`). You
 need permission to create resources and role assignments. Granting the device
 check's Graph `Device.Read.All` also needs an admin who can consent to Graph app
 roles (see below).
+
+## No-admin local machine option (Azure Cloud Shell)
+
+If users cannot install tools locally because they do not have local admin rights,
+run the deployment from **Azure Cloud Shell** in a browser. Cloud Shell already has
+Azure CLI + Bicep and does not require local installation.
+
+1. Open Cloud Shell: <https://shell.azure.com>.
+2. Clone this repo and run the same script from Cloud Shell:
+
+```bash
+git clone https://github.com/sandytsang/LogIngestionPortal.git
+cd LogIngestionPortal/LogIngestionAPI/scripts
+pwsh ./deploy.ps1 \
+  -ResourceGroup rg-logging-dev \
+  -Location eastus \
+  -FunctionAppName func-logingestion-dev \
+  -WorkspaceName log-logingestion-dev \
+  -DcrName dcr-logingestion-dev
+```
+
+Notes:
+
+- Cloud Shell solves the **local install/admin** problem only.
+- You still need the correct **Azure RBAC / Entra admin permissions** for resource creation,
+  role assignments, and Graph `Device.Read.All` consent.
 
 ## Deploy
 
