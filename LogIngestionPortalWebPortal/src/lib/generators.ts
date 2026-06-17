@@ -218,6 +218,7 @@ export function generateDeployReadme(
   // --- Update-columns (schema-only) — a single -SchemaOnly command. ---------
   if (config.action === 'updateColumns') {
     const updFlags = [
+      '-Subscription <subscription-name-or-id>',
       '-SchemaOnly',
       `-WorkspaceName ${wsName}`,
       `-WorkspaceResourceGroup ${wsRg || '<workspace-resource-group>'}`,
@@ -270,6 +271,7 @@ export function generateDeployReadme(
 
   // Single deploy command built from the explicit resource names.
   const flags = [
+    '-Subscription <subscription-name-or-id>',
     `-ResourceGroup ${rg}`,
     `-Location ${loc}`,
     `-FunctionAppName ${funcName}`,

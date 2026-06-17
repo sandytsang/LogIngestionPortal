@@ -68,6 +68,7 @@ Azure CLI + Bicep and does not require local installation.
 git clone https://github.com/sandytsang/LogIngestionPortal.git
 cd LogIngestionPortal/LogIngestionAPI/scripts
 pwsh ./deploy.ps1 \
+  -Subscription <subscription-name-or-id> \
   -ResourceGroup rg-logging-dev \
   -Location eastus \
   -FunctionAppName func-logingestion-dev \
@@ -78,6 +79,7 @@ pwsh ./deploy.ps1 \
 
 If you do not pass `-SchemaPath`, the script uses the repo file at
 `LogIngestionAPI/schema/columns.json`.
+Use `-Subscription` so deployment runs in the intended Azure CLI context.
 
 Notes:
 
