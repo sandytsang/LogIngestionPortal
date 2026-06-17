@@ -61,7 +61,8 @@ run the deployment from **Azure Cloud Shell** in a browser. Cloud Shell already 
 Azure CLI + Bicep and does not require local installation.
 
 1. Open Cloud Shell: <https://shell.azure.com>.
-2. Clone this repo and run the same script from Cloud Shell:
+2. Upload your generated `columns.json` to Cloud Shell (Upload/Download in the Cloud Shell toolbar), for example to `~/clouddrive/columns.json`.
+3. Clone this repo and run the script with `-SchemaPath`:
 
 ```bash
 git clone https://github.com/sandytsang/LogIngestionPortal.git
@@ -71,8 +72,12 @@ pwsh ./deploy.ps1 \
   -Location eastus \
   -FunctionAppName func-logingestion-dev \
   -WorkspaceName log-logingestion-dev \
-  -DcrName dcr-logingestion-dev
+  -DcrName dcr-logingestion-dev \
+  -SchemaPath ~/clouddrive/columns.json
 ```
+
+If you do not pass `-SchemaPath`, the script uses the repo file at
+`LogIngestionAPI/schema/columns.json`.
 
 Notes:
 

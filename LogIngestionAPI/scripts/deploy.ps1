@@ -99,6 +99,11 @@
     with guidance if either is missing). Needs -WorkspaceName, -DcrName and the
     matching resource groups; -FunctionAppName and -Location are not used.
 
+.PARAMETER SchemaPath
+    Optional path to a schema JSON file. Defaults to schema/columns.json under
+    this repository. Use this when deploying from Cloud Shell with a generated
+    columns file stored outside the repo clone.
+
 .EXAMPLE
     ./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
         -FunctionAppName func-contoso-logs -WorkspaceName log-contoso -DcrName dcr-contoso
@@ -126,6 +131,7 @@ param(
     [string]$WorkspaceLocation,
     [string]$DcrResourceGroup,
     [string]$DcrName,
+    [string]$SchemaPath,
     [string]$JwtAllowedTenantId,
     [ValidateSet('Consumption', 'Flex')] [string]$FunctionPlanType,
     [switch]$SchemaOnly,
@@ -143,7 +149,21 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$schemaPath = Join-Path $root 'schema\columns.json'
+$defaultSchemaPath = Join-Path $root 'schema\columns.json'
+$schemaPath = if ($SchemaPath) {
+    if ([System.IO.Path]::IsPathRooted($SchemaPath)) {
+        $SchemaPath
+    }
+    else {
+        Join-Path (Get-Location) $SchemaPath
+    }
+}
+else {
+    $defaultSchemaPath
+}
+if (-not (Test-Path -LiteralPath $schemaPath)) {
+    throw "Schema file not found: '$schemaPath'. Pass -SchemaPath with the correct columns.json path."
+}
 $bicepPath = Join-Path $root 'infra\main.bicep'
 $paramPath = Join-Path $root 'infra\main.bicepparam'
 $functionPath = Join-Path $root 'function'
@@ -198,8 +218,8 @@ if (-not $account) {
 Write-Host "    OK - signed in to Azure subscription '$account'." -ForegroundColor Green
 
 # --- 1. Validate the schema -------------------------------------------------
-Write-Host '==> Validating schema/columns.json' -ForegroundColor Cyan
-$schema = Get-Content $schemaPath -Raw | ConvertFrom-Json
+Write-Host "==> Validating schema file '$schemaPath'" -ForegroundColor Cyan
+$schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
 
 # columns.json holds one or more tables ({ tables: [ { tableName, description,
 # columns[] } ] }). A legacy single-table document ({ tableName, columns }) is
