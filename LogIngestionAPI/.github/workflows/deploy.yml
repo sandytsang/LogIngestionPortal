@@ -133,6 +133,10 @@ jobs:
               functionPlanType="${{ inputs.functionPlanType }}"
               jwtRequireEntraDevice=${{ inputs.requireEntraDevice }}
             )
+            tenantId=$(az account show --query tenantId --output tsv)
+            if [ -n "$tenantId" ]; then
+              params+=( jwtAllowedTenantId="$tenantId" )
+            fi
             # Put the workspace in its own resource group when one was provided.
             if [ -n "${{ inputs.workspaceResourceGroup }}" ]; then
               params+=( workspaceResourceGroup="${{ inputs.workspaceResourceGroup }}" )
@@ -208,6 +212,7 @@ jobs:
           echo "- Resource group: ${{ inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Region: ${{ inputs.location }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Plan: ${{ inputs.functionPlanType }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- JWT tenant pin: auto (current Azure tenant)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "If \`requireEntraDevice\` is true, grant the Function's managed identity Graph **Device.Read.All** once (scripts/AssignMSIPermisison.ps1), then copy the function key + URL from the Azure portal into your Intune script." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

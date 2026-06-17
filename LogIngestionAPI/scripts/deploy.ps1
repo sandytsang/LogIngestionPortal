@@ -57,6 +57,11 @@
     -Location. The DCR always follows the workspace region. Ignored when the
     workspace already exists (its region cannot be changed in place).
 
+.PARAMETER JwtAllowedTenantId
+    Optional tenant id pin for device JWT requests. When omitted, the script
+    auto-detects the current Azure tenant via `az account show` and sets
+    JWT_ALLOWED_TENANT_ID to that value by default.
+
 .PARAMETER Force
     Skip the confirmation prompt shown when the chosen -FunctionAppName already
     exists in your subscription (deploying into it hides any other functions in
@@ -121,6 +126,7 @@ param(
     [string]$WorkspaceLocation,
     [string]$DcrResourceGroup,
     [string]$DcrName,
+    [string]$JwtAllowedTenantId,
     [ValidateSet('Consumption', 'Flex')] [string]$FunctionPlanType,
     [switch]$SchemaOnly,
     # Skip the "an app with this name already exists — other functions will be
@@ -452,13 +458,26 @@ else {
 # --- 3. Deploy infrastructure (resource-group scope) ------------------------
 Write-Host '==> Deploying infrastructure (bicep)' -ForegroundColor Cyan
 $deploymentName = "loging-$(Get-Date -Format 'yyyyMMddHHmmss')"
+
+# By default, pin JWT requests to the signed-in Azure tenant. This keeps the
+# deployment safe-by-default while still allowing an explicit override.
+$effectiveJwtTenantId = $JwtAllowedTenantId
+if (-not $effectiveJwtTenantId) {
+    $effectiveJwtTenantId = az account show --query tenantId --output tsv 2>$null
+    if (-not $effectiveJwtTenantId) {
+        throw 'Could not determine tenant id from az account show; pass -JwtAllowedTenantId explicitly.'
+    }
+}
+
 $paramOverrides = @(
     "location=$Location"
     "functionAppName=$FunctionAppName"
     "workspaceName=$WorkspaceName"
     "dcrName=$DcrName"
+    "jwtAllowedTenantId=$effectiveJwtTenantId"
 )
 Write-Host "    Names: function='$FunctionAppName', workspace='$WorkspaceName', dcr='$DcrName'." -ForegroundColor Green
+Write-Host "    JWT tenant pin: $effectiveJwtTenantId" -ForegroundColor Green
 if ($DcrResourceGroup) { $paramOverrides += "dcrResourceGroup=$DcrResourceGroup" }
 if ($WorkspaceResourceGroup) { $paramOverrides += "workspaceResourceGroup=$WorkspaceResourceGroup" }
 if ($wsLocation) { $paramOverrides += "workspaceLocation=$wsLocation" }
@@ -569,7 +588,7 @@ if ($useExistingFunctionApp) {
         "DCR_IMMUTABLE_ID=$dcrImmutableIdOut"
         'JWT_ENFORCE=true'
         "JWT_EXPECTED_AUDIENCE=$expectedAudience"
-        'JWT_ALLOWED_TENANT_ID='
+        "JWT_ALLOWED_TENANT_ID=$effectiveJwtTenantId"
         'JWT_REQUIRE_ENTRA_DEVICE=true'
     )
     az functionapp config appsettings set `
