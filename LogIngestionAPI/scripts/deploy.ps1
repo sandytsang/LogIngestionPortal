@@ -576,9 +576,14 @@ if ($FunctionPlanType) {
     $paramOverrides += "functionPlanType=$FunctionPlanType"
     Write-Host "    Function App hosting plan: $FunctionPlanType." -ForegroundColor Green
 }
+# Always defer DCR role assignment until AFTER app deploy/publish so lack of
+# Microsoft.Authorization/*/write does not block Function deployment itself.
+$paramOverrides += 'assignDcrPublisherRole=false'
 if ($SkipDcrRoleAssignment) {
-    $paramOverrides += 'assignDcrPublisherRole=false'
-    Write-Host '    Skipping the DCR role assignment (Contributor-only deploy); grant it separately afterwards.' -ForegroundColor Yellow
+    Write-Host '    Skipping the DCR role assignment by request; grant it separately afterwards.' -ForegroundColor Yellow
+}
+else {
+    Write-Host '    DCR role assignment will be attempted after Function deployment/publish.' -ForegroundColor Yellow
 }
 if ($useExistingFunctionApp) {
     $paramOverrides += "existingFunctionPrincipalId=$existingPrincipalId"
@@ -587,9 +592,7 @@ if ($useExistingFunctionApp) {
 
 # DCR deployments occasionally fail with a transient 'Data collection rule has
 # been modified before operation completed' conflict. Retry a few times since the
-# deployment is idempotent. Authorization failures (e.g. the operator only has
-# Contributor) are NOT transient, so we detect them and fail fast with a clear,
-# actionable message instead of retrying and printing a generic error.
+# deployment is idempotent.
 $maxDeployAttempts = 3
 $outputJson = $null
 for ($deployAttempt = 1; $deployAttempt -le $maxDeployAttempts; $deployAttempt++) {
@@ -613,36 +616,6 @@ for ($deployAttempt = 1; $deployAttempt -le $maxDeployAttempts; $deployAttempt++
 
     # Surface the raw Azure error so the operator can see exactly what failed.
     if ($deployErr) { Write-Host $deployErr.TrimEnd() -ForegroundColor DarkGray }
-
-    # Detect the non-transient "you don't have rights to create the DCR role
-    # assignment" case. Contributor lacks Microsoft.Authorization/*/write.
-    $isAuthFailure = $deployErr -match 'AuthorizationFailed|RoleAssignmentUpdateNotPermitted|does not have authorization|Microsoft\.Authorization/roleAssignments/write'
-    if ($isAuthFailure) {
-        Write-Host ''
-        Write-Host '------------------------------------------------------------' -ForegroundColor Red
-        Write-Host ' Permission problem: cannot grant the Function access to the DCR' -ForegroundColor Red
-        Write-Host '------------------------------------------------------------' -ForegroundColor Red
-        Write-Host "The deployment tried to give the Function App's managed identity the" -ForegroundColor Yellow
-        Write-Host "'Monitoring Metrics Publisher' role on the Data Collection Rule, but your" -ForegroundColor Yellow
-        Write-Host 'account is not allowed to create role assignments.' -ForegroundColor Yellow
-        Write-Host ''
-        Write-Host 'Why: the Contributor role cannot create role assignments. You need one of:' -ForegroundColor Cyan
-        Write-Host '    - Owner' -ForegroundColor White
-        Write-Host '    - User Access Administrator' -ForegroundColor White
-        Write-Host '    - Role Based Access Control Administrator' -ForegroundColor White
-        Write-Host "on the DCR resource group ('$dcrRg') or the subscription." -ForegroundColor Cyan
-        Write-Host ''
-        Write-Host 'How to fix (pick one):' -ForegroundColor Cyan
-        Write-Host '  1) Ask an admin to elevate your role, then rerun this script, OR' -ForegroundColor White
-        Write-Host '  2) Ask an admin to assign the role manually once the resources exist:' -ForegroundColor White
-        Write-Host "       az role assignment create ``" -ForegroundColor White
-        Write-Host "         --assignee-object-id <FunctionApp-managed-identity-principalId> ``" -ForegroundColor White
-        Write-Host '         --assignee-principal-type ServicePrincipal `' -ForegroundColor White
-        Write-Host "         --role 'Monitoring Metrics Publisher' ``" -ForegroundColor White
-        Write-Host "         --scope <DCR-resource-id>" -ForegroundColor White
-        Write-Host ''
-        throw "Infrastructure deployment failed: insufficient permission to create the DCR role assignment (need Owner / User Access Administrator / RBAC Administrator)."
-    }
 
     if ($deployAttempt -lt $maxDeployAttempts) {
         Write-Host "    Deployment attempt $deployAttempt failed (often a transient DCR conflict); retrying in 15s..." -ForegroundColor Yellow
@@ -694,31 +667,6 @@ if ($useExistingFunctionApp) {
     else {
         Write-Host "    OK - app settings written (JWT audience bound to https://$functionHost)." -ForegroundColor Green
     }
-}
-
-# When the deployment was told NOT to create the DCR role assignment (Contributor-
-# only deploy), the Function cannot push logs until someone with role-assignment
-# rights grants it. Print the exact command so an admin can run it once.
-if ($SkipDcrRoleAssignment) {
-    $subId = az account show --query id -o tsv
-    $dcrRgOut = $outputs.dcrResourceGroup.value
-    $dcrNameOut = $outputs.dcrName.value
-    $miPrincipalId = $outputs.functionPrincipalId.value
-    $dcrScope = "/subscriptions/$subId/resourceGroups/$dcrRgOut/providers/Microsoft.Insights/dataCollectionRules/$dcrNameOut"
-    Write-Host ''
-    Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
-    Write-Host ' Action needed: grant the Function access to the DCR' -ForegroundColor Yellow
-    Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
-    Write-Host 'You deployed with -SkipDcrRoleAssignment, so the role was NOT created.' -ForegroundColor Yellow
-    Write-Host "Until it is, the Function returns errors when pushing logs. Have someone with" -ForegroundColor Yellow
-    Write-Host 'Owner / User Access Administrator / RBAC Administrator run this once:' -ForegroundColor Yellow
-    Write-Host ''
-    Write-Host "  az role assignment create ``" -ForegroundColor White
-    Write-Host "    --assignee-object-id $miPrincipalId ``" -ForegroundColor White
-    Write-Host '    --assignee-principal-type ServicePrincipal `' -ForegroundColor White
-    Write-Host "    --role 'Monitoring Metrics Publisher' ``" -ForegroundColor White
-    Write-Host "    --scope $dcrScope" -ForegroundColor White
-    Write-Host ''
 }
 
 # --- 4. Publish the Function App code ---------------------------------------
@@ -857,6 +805,64 @@ if (-not $SkipFunctionPublish) {
         if (-not $hasFunc) {
             Write-Host 'If this is a Flex app and zip deploy was used, publish once with Functions Core Tools (preferred path):' -ForegroundColor Cyan
             Write-Host "    cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
+        }
+    }
+}
+
+# --- 4b. Grant the Function access to the DCR (post-deploy) -----------------
+if (-not $SchemaOnly) {
+    $subId = az account show --query id -o tsv
+    $dcrRgOut = $outputs.dcrResourceGroup.value
+    $dcrNameOut = $outputs.dcrName.value
+    $miPrincipalId = $outputs.functionPrincipalId.value
+    $roleId = $outputs.monitoringMetricsPublisherRoleId.value
+    $dcrScope = "/subscriptions/$subId/resourceGroups/$dcrRgOut/providers/Microsoft.Insights/dataCollectionRules/$dcrNameOut"
+    $roleDefinitionId = "/subscriptions/$subId/providers/Microsoft.Authorization/roleDefinitions/$roleId"
+
+    if ($SkipDcrRoleAssignment) {
+        Write-Host ''
+        Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
+        Write-Host ' Action needed: grant the Function access to the DCR' -ForegroundColor Yellow
+        Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
+        Write-Host 'You deployed with -SkipDcrRoleAssignment, so the role was NOT created.' -ForegroundColor Yellow
+        Write-Host "Until it is, the Function returns errors when pushing logs. Have someone with" -ForegroundColor Yellow
+        Write-Host 'Owner / User Access Administrator / RBAC Administrator run this once:' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host "  az role assignment create ``" -ForegroundColor White
+        Write-Host "    --assignee-object-id $miPrincipalId ``" -ForegroundColor White
+        Write-Host '    --assignee-principal-type ServicePrincipal `' -ForegroundColor White
+        Write-Host "    --role 'Monitoring Metrics Publisher' ``" -ForegroundColor White
+        Write-Host "    --scope $dcrScope" -ForegroundColor White
+        Write-Host ''
+    }
+    elseif ($miPrincipalId) {
+        Write-Host '==> Granting the Function managed identity access to the DCR (post-deploy)' -ForegroundColor Cyan
+        $existingRoleAssignment = az role assignment list `
+            --assignee-object-id $miPrincipalId `
+            --scope $dcrScope `
+            --query "[?roleDefinitionId=='$roleDefinitionId'] | [0].id" `
+            --output tsv 2>$null
+
+        if ($existingRoleAssignment) {
+            Write-Host '    OK - DCR role assignment already exists.' -ForegroundColor Green
+        }
+        else {
+            az role assignment create `
+                --assignee-object-id $miPrincipalId `
+                --assignee-principal-type ServicePrincipal `
+                --role $roleId `
+                --scope $dcrScope `
+                --output none 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host ''
+                Write-Warning 'Could not create the DCR role assignment automatically.'
+                Write-Host 'The Function app is deployed, but log ingestion needs this role assignment.' -ForegroundColor Yellow
+                Write-Host 'Have someone with Owner / User Access Administrator / RBAC Administrator run:' -ForegroundColor Cyan
+                Write-Host "  az role assignment create --assignee-object-id $miPrincipalId --assignee-principal-type ServicePrincipal --role 'Monitoring Metrics Publisher' --scope $dcrScope" -ForegroundColor White
+            }
+            else {
+                Write-Host '    OK - DCR role assignment created.' -ForegroundColor Green
+            }
         }
     }
 }
