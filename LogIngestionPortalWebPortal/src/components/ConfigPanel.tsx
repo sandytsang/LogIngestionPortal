@@ -111,12 +111,20 @@ export function ConfigPanel({
     labelText: ReactNode,
     value: string,
     setValue: (v: string) => void,
-    opts: { placeholder?: string; required?: boolean; suggested?: string; prefix?: string } = {},
+    opts: {
+      placeholder?: string;
+      required?: boolean;
+      suggested?: string;
+      prefix?: string;
+      suggestWhenEmpty?: boolean;
+    } = {},
   ): ReactNode => {
-    const { placeholder, required = true, suggested, prefix } = opts;
+    const { placeholder, required = true, suggested, prefix, suggestWhenEmpty = true } = opts;
     const empty = isBlank(value);
     const suggestion = empty
-      ? suggested ?? null
+      ? suggestWhenEmpty
+        ? suggested ?? null
+        : null
       : prefix && !value.trim().toLowerCase().startsWith(prefix)
         ? prefix + value.trim()
         : null;
@@ -137,7 +145,7 @@ export function ConfigPanel({
           <button
             type="button"
             onClick={() => setValue(suggestion)}
-            className="mt-1 text-[11px] text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-300"
+            className="mt-1 text-[11px] text-indigo-700 underline hover:text-indigo-600 dark:text-indigo-200"
             title="Suggested name — you can use any name your tenant prefers"
           >
             {empty ? `Use suggested: ${suggestion}` : `Suggested: ${suggestion} — click to use`}
@@ -194,7 +202,7 @@ export function ConfigPanel({
         readOnly
         disabled
       />
-      <p className="mt-1 text-[11px] text-slate-400">{note}</p>
+      <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">{note}</p>
     </div>
   );
 
@@ -281,7 +289,7 @@ export function ConfigPanel({
               { placeholder: 'rg-logingestion', suggested: 'rg-logingestion', prefix: 'rg-' },
             )}
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-300">
             Enter the exact names of the workspace and Data Collection Rule you deployed earlier.
             Only that table and DCR are updated from your selected columns; the region is taken from
             the workspace automatically and the Function App is never changed.
@@ -305,10 +313,10 @@ export function ConfigPanel({
               </div>
               {textField('functionAppName', 'Name', config.functionAppName, set('functionAppName'), {
                 placeholder: 'func-logingestion',
-                suggested: 'func-logingestion',
                 prefix: 'func-',
+                suggestWhenEmpty: false,
               })}
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
                 The name has no random hash and must be globally unique (it becomes{' '}
                 <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">&lt;name&gt;.azurewebsites.net</code>).
                 If an app with this name already exists in your subscription, the deploy updates it
@@ -328,7 +336,7 @@ export function ConfigPanel({
                   <option value="Consumption">Consumption (Windows Y1 · classic serverless)</option>
                   <option value="Flex">Flex Consumption (Linux FC1 · PowerShell 7.4)</option>
                 </select>
-                <p className="mt-1 text-[11px] text-slate-400">
+                <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
                   {config.functionPlanType === 'Flex'
                     ? 'Flex: faster cold starts and VNet support, but not available in every region — verify region support.'
                     : 'Consumption: widely available, pay-per-execution. Pick Flex for VNet or reduced cold starts.'}
@@ -365,7 +373,7 @@ export function ConfigPanel({
                 suggested: 'log-logingestion',
                 prefix: 'log-',
               })}
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
                 Leave the region blank to create the workspace in the Function App region. An
                 existing workspace keeps its current region (it cannot be moved).
               </p>
@@ -400,7 +408,7 @@ export function ConfigPanel({
             </>,
           )}
 
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-300">
             Everything is created if missing or updated in place if it already exists. Storage,
             Application Insights and the App Service plan are created in the Function App resource
             group and named after the Function App.
@@ -425,7 +433,7 @@ export function ConfigPanel({
           </button>
         </summary>
         <div className="border-t border-slate-200 px-3 pb-3 pt-2 dark:border-slate-700">
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-300">
             Each table becomes its own custom Log Analytics table (must end in
             <code className="mx-1 rounded bg-slate-100 px-1 dark:bg-slate-800">_CL</code>) and DCR
             stream. Assign fields to tables in the catalog on the left. TimeGenerated and
@@ -482,7 +490,7 @@ export function ConfigPanel({
                     )}
                   </div>
                 )}
-                <p className="mt-1 text-[11px] text-slate-400">
+                <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
                   {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned (plus
                   TimeGenerated &amp; IntuneScriptVersion).
                 </p>
@@ -505,7 +513,7 @@ export function ConfigPanel({
           onChange={(e) => onChange({ scriptVersion: e.target.value })}
           placeholder="1.0.0"
         />
-        <p className="mt-1 text-[11px] text-slate-400">
+        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
           Required. Stamped into the <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">IntuneScriptVersion</code>{' '}
           column (added to every table automatically) so you can tell whether data came from an older
           script or the current one (e.g.{' '}
