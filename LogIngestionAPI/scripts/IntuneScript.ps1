@@ -222,7 +222,48 @@ function Send-Telemetry {
             return $true
         }
         catch {
-            if ($attempt -eq $maxAttempts) { throw }
+            if ($attempt -eq $maxAttempts) {
+                $statusCode = $null
+                $statusText = $null
+                $responseText = $null
+                try {
+                    if ($_.Exception.Response) {
+                        try { $statusCode = [int]$_.Exception.Response.StatusCode } catch { }
+                        try { $statusText = [string]$_.Exception.Response.StatusCode } catch { }
+                    }
+                }
+                catch { }
+
+                try {
+                    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+                        $responseText = [string]$_.ErrorDetails.Message
+                    }
+                }
+                catch { }
+
+                $serverDetail = $null
+                if ($responseText) {
+                    try {
+                        $parsed = $responseText | ConvertFrom-Json -ErrorAction Stop
+                        $pieces = @()
+                        if ($parsed.error) { $pieces += [string]$parsed.error }
+                        if ($parsed.reason) { $pieces += [string]$parsed.reason }
+                        if ($parsed.message) { $pieces += [string]$parsed.message }
+                        if ($pieces.Count -gt 0) { $serverDetail = ($pieces -join ' | ') }
+                    }
+                    catch {
+                        $serverDetail = ($responseText -replace '[\r\n]+', ' ').Trim()
+                    }
+                }
+
+                $parts = @('Upload rejected')
+                if ($statusCode) {
+                    if ($statusText) { $parts += "(HTTP $statusCode $statusText)" }
+                    else { $parts += "(HTTP $statusCode)" }
+                }
+                if ($serverDetail) { $parts += "Server response: $serverDetail" }
+                throw ($parts -join '. ')
+            }
             Start-Sleep -Seconds ([math]::Pow(2, $attempt))
         }
     }
