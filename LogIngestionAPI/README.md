@@ -95,6 +95,40 @@ Use branch-based OIDC with:
 - AZURE_TENANT_ID
 - AZURE_SUBSCRIPTION_ID
 
+### GitHub OIDC connection architecture
+
+```mermaid
+flowchart LR
+    A[GitHub Repository] --> B[GitHub Actions Workflow]
+    B --> C[OIDC Token from GitHub]
+    C --> D[Microsoft Entra App Registration<br/>Federated Credential]
+    D --> E[Azure Login in Workflow]
+    E --> F[Azure Subscription]
+    F --> G[Resource Group]
+    G --> H[Function App + DCR + Log Analytics]
+```
+
+### Microsoft documentation (setup and reconnect)
+
+- GitHub Actions to Azure with OpenID Connect:
+  https://learn.microsoft.com/azure/developer/github/connect-from-azure-openid-connect
+- Configure federated identity credential on an app registration:
+  https://learn.microsoft.com/entra/workload-id/workload-identity-federation-create-trust?pivots=identity-wif-apps-methods-azp#configure-a-federated-identity-credential-on-an-app
+- Azure Login GitHub Action reference:
+  https://github.com/marketplace/actions/azure-login
+
+### Reconnect checklist
+
+1. Create or reuse an Entra app registration.
+2. Add a federated credential for your repo and branch (for example `main`).
+3. Assign Azure RBAC roles to the app's service principal.
+4. Set repo secrets:
+   - `AZURE_CLIENT_ID`
+   - `AZURE_TENANT_ID`
+   - `AZURE_SUBSCRIPTION_ID`
+5. Ensure workflow permissions include `id-token: write`.
+6. Run the workflow and confirm the Azure login step succeeds.
+
 ## Security model summary
 
 - Device-signed JWT is always required.
