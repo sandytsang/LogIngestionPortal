@@ -41,6 +41,86 @@ function ConvertFrom-Base64Url {
     return [Convert]::FromBase64String($s)
 }
 
+function Get-NormalizedThumbprints {
+    [CmdletBinding()]
+    param([string]$Csv)
+    if (-not $Csv) { return @() }
+    return @(
+        $Csv.Split(',') |
+        ForEach-Object { $_.Trim().Replace(' ', '').Replace('-', '').ToUpperInvariant() } |
+        Where-Object { $_ }
+    )
+}
+
+function Test-CertificateChainTrust {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [string[]]$TrustedRootThumbprints = @(),
+        [string[]]$TrustedIntermediateThumbprints = @(),
+        [switch]$CheckRevocation
+    )
+
+    $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
+    try {
+        $policy = $chain.ChainPolicy
+        $policy.RevocationMode = if ($CheckRevocation) {
+            [System.Security.Cryptography.X509Certificates.X509RevocationMode]::Online
+        }
+        else {
+            [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+        }
+        $policy.RevocationFlag = [System.Security.Cryptography.X509Certificates.X509RevocationFlag]::ExcludeRoot
+        $policy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::NoFlag
+        $policy.VerificationTime = [DateTime]::UtcNow
+        $policy.UrlRetrievalTimeout = [TimeSpan]::FromSeconds(15)
+
+        $ok = $chain.Build($Certificate)
+        if (-not $ok) {
+            $details = @(
+                $chain.ChainStatus |
+                ForEach-Object { $_.StatusInformation.Trim() } |
+                Where-Object { $_ }
+            ) -join '; '
+            if (-not $details) { $details = 'chain build failed' }
+            return [pscustomobject]@{ Valid = $false; Reason = $details }
+        }
+
+        $certs = @($chain.ChainElements | ForEach-Object { $_.Certificate })
+        if ($certs.Count -eq 0) {
+            return [pscustomobject]@{ Valid = $false; Reason = 'empty certificate chain' }
+        }
+
+        $rootThumb = $certs[-1].Thumbprint.ToUpperInvariant()
+        if ($TrustedRootThumbprints.Count -gt 0 -and ($TrustedRootThumbprints -notcontains $rootThumb)) {
+            return [pscustomobject]@{ Valid = $false; Reason = "untrusted root '$rootThumb'" }
+        }
+
+        if ($TrustedIntermediateThumbprints.Count -gt 0) {
+            $intermediateThumbs = @()
+            if ($certs.Count -gt 2) {
+                $intermediateThumbs = @(
+                    $certs[1..($certs.Count - 2)] |
+                    ForEach-Object { $_.Thumbprint.ToUpperInvariant() }
+                )
+            }
+            $hasAllowedIntermediate = @(
+                $intermediateThumbs |
+                Where-Object { $TrustedIntermediateThumbprints -contains $_ }
+            ).Count -gt 0
+            if (-not $hasAllowedIntermediate) {
+                return [pscustomobject]@{ Valid = $false; Reason = 'none of the configured intermediate certificates were present in the chain' }
+            }
+        }
+
+        return [pscustomobject]@{ Valid = $true; Reason = $null }
+    }
+    finally {
+        $chain.Dispose()
+    }
+}
+
 function Get-GraphToken {
     [CmdletBinding()]
     param([string]$Resource = 'https://graph.microsoft.com')
@@ -196,6 +276,11 @@ function Test-DeviceRequestJwt {
     Orchestrates the full device-JWT check, reading configuration from app settings:
       JWT_EXPECTED_AUDIENCE      - optional; aud claim must equal this (e.g. https://<func>.azurewebsites.net)
       JWT_ALLOWED_TENANT_ID      - optional; tid claim must equal this
+    JWT_REQUIRE_CERT_CHAIN     - 'true' (default) enforces certificate chain validation
+                        before Graph/signature checks. Set 'false' only for troubleshooting.
+    JWT_TRUSTED_ROOT_THUMBPRINTS - optional comma-separated allow-list for acceptable root certs.
+    JWT_TRUSTED_INTERMEDIATE_THUMBPRINTS - optional comma-separated allow-list for intermediates.
+    JWT_CHECK_CERT_REVOCATION  - 'false' (default). Set 'true' to perform online CRL/OCSP checks.
       JWT_REQUIRE_ENTRA_DEVICE   - 'true' (default) resolves the device in Entra and validates the
                                    cert against alternativeSecurityIds (needs Graph Device.Read.All).
                                    'false' validates signature + issuer + thumbprint only (no Graph).
@@ -211,6 +296,10 @@ function Test-DeviceRequestJwt {
 
     $expectedAudience = $env:JWT_EXPECTED_AUDIENCE
     $allowedTenantId = $env:JWT_ALLOWED_TENANT_ID
+    $requireCertChain = ($env:JWT_REQUIRE_CERT_CHAIN -ne 'false')
+    $trustedRootThumbprints = Get-NormalizedThumbprints -Csv $env:JWT_TRUSTED_ROOT_THUMBPRINTS
+    $trustedIntermediateThumbprints = Get-NormalizedThumbprints -Csv $env:JWT_TRUSTED_INTERMEDIATE_THUMBPRINTS
+    $checkCertRevocation = ($env:JWT_CHECK_CERT_REVOCATION -eq 'true')
     $requireEntraDevice = ($env:JWT_REQUIRE_ENTRA_DEVICE -ne 'false')   # default true
 
     if (-not $AuthorizationHeader -or $AuthorizationHeader -notmatch '^Bearer\s+(.+)$') {
@@ -255,6 +344,17 @@ function Test-DeviceRequestJwt {
             }
         }
         catch { return (& $result $false 'Invalid x5t' $null $null) }
+    }
+
+    if ($requireCertChain) {
+        $chainCheck = Test-CertificateChainTrust `
+            -Certificate $clientCert `
+            -TrustedRootThumbprints $trustedRootThumbprints `
+            -TrustedIntermediateThumbprints $trustedIntermediateThumbprints `
+            -CheckRevocation:$checkCertRevocation
+        if (-not $chainCheck.Valid) {
+            return (& $result $false ("Certificate chain validation failed: " + $chainCheck.Reason) $null $null)
+        }
     }
 
     # --- Establish the RSA public key used to verify the signature ----------

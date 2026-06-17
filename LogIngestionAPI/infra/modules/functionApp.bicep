@@ -103,6 +103,12 @@ var commonAppSettings = [
     value: jwtAllowedTenantId
   }
   {
+    // Enforce certificate chain validation by default. Graph device lookup is
+    // controlled separately by JWT_REQUIRE_ENTRA_DEVICE.
+    name: 'JWT_REQUIRE_CERT_CHAIN'
+    value: 'true'
+  }
+  {
     name: 'JWT_REQUIRE_ENTRA_DEVICE'
     value: toLower(string(jwtRequireEntraDevice))
   }

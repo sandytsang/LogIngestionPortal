@@ -589,6 +589,7 @@ if ($useExistingFunctionApp) {
         'JWT_ENFORCE=true'
         "JWT_EXPECTED_AUDIENCE=$expectedAudience"
         "JWT_ALLOWED_TENANT_ID=$effectiveJwtTenantId"
+        'JWT_REQUIRE_CERT_CHAIN=true'
         'JWT_REQUIRE_ENTRA_DEVICE=true'
     )
     az functionapp config appsettings set `
