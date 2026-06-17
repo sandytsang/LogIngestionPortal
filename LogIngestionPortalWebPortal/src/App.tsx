@@ -16,7 +16,7 @@ import {
   generateScript,
   generateWorkflowYaml,
 } from './lib/generators';
-import { validateColumns } from './lib/validation';
+import { validateColumns, validatePortalConfig } from './lib/validation';
 
 const STORAGE_KEY = 'logingestion-portal.v7';
 const LEGACY_KEY = 'logingestion-portal.v6';
@@ -154,7 +154,11 @@ export default function App() {
     () => generateColumns(catalog, tables),
     [tables],
   );
-  const errors = useMemo(() => validateColumns(columnsDoc), [columnsDoc]);
+  const errors = useMemo(() => {
+    const schemaErrors = validateColumns(columnsDoc);
+    const configErrors = validatePortalConfig(config);
+    return [...schemaErrors, ...configErrors];
+  }, [columnsDoc, config]);
 
   // Distinct (non-locked) fields assigned to at least one table.
   const selectedCount = useMemo(() => new Set(tables.flatMap((t) => t.fieldIds)).size, [tables]);

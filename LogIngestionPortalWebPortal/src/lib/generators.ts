@@ -286,7 +286,7 @@ export function generateDeployReadme(
     '  ./scripts/deploy.ps1 `',
     ...flags.map((f, i) => `    ${f}${i < flags.length - 1 ? ' `' : ''}`),
   ];
-  const cloudShellFlags = [...flags, '-Subscription <subscription-name-or-id>', '-SchemaPath /home/<your-user>/columns.json'];
+  const cloudShellFlags = [...flags, '-SchemaPath /home/<your-user>/columns.json'];
   const cloudShellCommand = [
     '  pwsh ./scripts/deploy.ps1 `',
     ...cloudShellFlags.map((f, i) => `    ${f}${i < cloudShellFlags.length - 1 ? ' `' : ''}`),

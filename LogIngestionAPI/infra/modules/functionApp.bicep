@@ -43,6 +43,10 @@ var suffix = uniqueString(resourceGroup().id, functionAppName)
 var planName = 'asp-${functionAppName}'
 var aiName = 'appi-${functionAppName}'
 var storageName = toLower(take('st${sanitized}${suffix}', 24))
+// Flex deployment package container must follow blob container naming rules
+// (lowercase only, start/end alnum). Build it from sanitized+hash so it is
+// stable and valid even when Function App name contains uppercase letters.
+var flexPackageContainerName = take('pkg-${sanitized}-${suffix}', 63)
 
 var defaultAudience = 'https://${funcName}.azurewebsites.net'
 var effectiveAudience = empty(jwtExpectedAudience) ? defaultAudience : jwtExpectedAudience
@@ -150,7 +154,7 @@ var flexAppSettings = concat([
 
 // Blob container Flex uses to store the deployed application package.
 resource flexDeploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = if (isFlex) {
-  name: '${storage.name}/default/${funcName}-pkg'
+  name: '${storage.name}/default/${flexPackageContainerName}'
 }
 
 // --- Consumption plan (Windows Y1) ------------------------------------------
@@ -235,7 +239,7 @@ resource functionAppFlex 'Microsoft.Web/sites@2023-12-01' = if (isFlex) {
       deployment: {
         storage: {
           type: 'blobContainer'
-          value: '${storage.properties.primaryEndpoints.blob}${funcName}-pkg'
+          value: '${storage.properties.primaryEndpoints.blob}${flexPackageContainerName}'
           authentication: {
             type: 'StorageAccountConnectionString'
             storageAccountConnectionStringName: 'AzureWebJobsStorage'

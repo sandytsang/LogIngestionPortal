@@ -8,7 +8,7 @@ import {
   generateWorkflowYaml,
   tableFields,
 } from '../src/lib/generators';
-import { validateColumns } from '../src/lib/validation';
+import { validateColumns, validatePortalConfig } from '../src/lib/validation';
 import expectedColumns from './fixtures/columns.json';
 
 const baseConfig: PortalConfig = {
@@ -178,10 +178,10 @@ describe('row-source tables', () => {
 describe('generateDeployReadme', () => {
   const tables = defaultTables();
 
-  it('emits a single deploy command (no A–E options)', () => {
+  it('emits deploy commands without legacy A-E options', () => {
     const readme = generateDeployReadme(baseConfig, tables);
     const occurrences = readme.split('./scripts/deploy.ps1').length - 1;
-    expect(occurrences).toBe(1);
+    expect(occurrences).toBe(2);
     expect(readme).not.toContain('Use an EXISTING Log Analytics workspace');
   });
 
@@ -258,6 +258,18 @@ describe('generateDeployReadme', () => {
     expect(readme).toContain('-DcrResourceGroup rg-dcr');
     expect(readme).not.toContain('-FunctionAppName');
     expect(readme).not.toContain('-Location');
+  });
+});
+
+describe('validatePortalConfig', () => {
+  it('flags an invalid direct DCR name', () => {
+    const errors = validatePortalConfig({ ...baseConfig, dcrName: 'dcr_invalid_' });
+    expect(errors.some((e) => e.includes('DCR name is invalid'))).toBe(true);
+  });
+
+  it('accepts a valid direct DCR name', () => {
+    const errors = validatePortalConfig({ ...baseConfig, dcrName: 'dcr-logingestion-dev' });
+    expect(errors).toEqual([]);
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * Collapsible "How to deploy" panel shown on the page so users see the two ways
+ * Collapsible "How to deploy" panel shown on the page so users see the main ways
  * to deploy the downloaded zip without leaving the portal. The per-selection,
  * copy-pasteable command lives in the generated README.txt tab; this panel is
  * the higher-level "which method and what order" overview.
@@ -16,7 +16,7 @@ export function DeployHelp() {
           Click <span className="font-semibold">Download all (.zip)</span> above. The zip is the
           complete <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">LogIngestionAPI</code>{' '}
           backend with your <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">columns.json</code>{' '}
-          and Intune script already in place. Unzip it and pick one of the two methods below — the
+          and Intune script already in place. Unzip it and pick one of the methods below — the
           exact command for your selection is in the <span className="font-semibold">README.txt</span> tab.
         </p>
 
@@ -51,10 +51,53 @@ export function DeployHelp() {
           </ol>
         </section>
 
-        {/* Method 2 — GitHub Actions */}
+        {/* Method 2 — Azure Cloud Shell */}
         <section className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            Option B — Deploy from your own GitHub (Actions)
+            Option B — Run in Azure Cloud Shell (no local installs)
+          </h3>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">
+            Best when your machine cannot install PowerShell/CLI tools.
+          </p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5">
+            <li>
+              Open{' '}
+              <a
+                href="https://shell.azure.com"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-400"
+              >
+                shell.azure.com
+              </a>
+              {' '}and sign in.
+            </li>
+            <li>
+              Upload your generated{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">columns.json</code>{' '}
+              file (Cloud Shell usually stores uploads under{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">/home/&lt;your-user&gt;/</code>).
+            </li>
+            <li>
+              Clone this repo (or upload/unzip the generated{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">LogIngestionAPI</code>{' '}
+              folder) and run the Cloud Shell command from the{' '}
+              <span className="font-semibold">README.txt</span> tab.
+            </li>
+            <li>
+              Keep{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">-SchemaPath /home/&lt;your-user&gt;/columns.json</code>{' '}
+              and{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">-Subscription &lt;subscription-name-or-id&gt;</code>{' '}
+              as shown in README.txt so deployment uses the right file and subscription.
+            </li>
+          </ol>
+        </section>
+
+        {/* Method 3 — GitHub Actions */}
+        <section className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            Option C — Deploy from your own GitHub (Actions)
           </h3>
           <p className="mt-1 text-slate-500 dark:text-slate-400">
             Best if you want a repeatable, button-click deploy with no local tools.

@@ -2,7 +2,39 @@ import {
   ALLOWED_COLUMN_TYPES,
   type ColumnsDocument,
   type MultiTableColumnsDocument,
+  type PortalConfig,
 } from '../types';
+
+const DIRECT_DCR_NAME_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{1,28}[A-Za-z0-9])?$/;
+
+/**
+ * Matches the Direct DCR naming rule enforced by Azure:
+ * 3-30 chars, letters/numbers/hyphens only, cannot start/end with hyphen.
+ */
+export function isValidDirectDcrName(name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed.length < 3 || trimmed.length > 30) return false;
+  return DIRECT_DCR_NAME_REGEX.test(trimmed);
+}
+
+/**
+ * Portal config validation that mirrors deploy.ps1 checks for early UI feedback.
+ */
+export function validatePortalConfig(config: PortalConfig): string[] {
+  const errors: string[] = [];
+  const dcrName = config.dcrName?.trim() ?? '';
+
+  // Keep "required" and "format" concerns separate: empty is handled by
+  // the required-field warning in the config panel, while this catches invalid
+  // non-empty values before deployment.
+  if (dcrName && !isValidDirectDcrName(dcrName)) {
+    errors.push(
+      "DCR name is invalid for kind 'Direct': use 3-30 characters, letters/numbers/hyphens only, and do not start or end with '-'.",
+    );
+  }
+
+  return errors;
+}
 
 /**
  * Validates a single table the same way LogIngestionAPI/scripts/deploy.ps1 does,

@@ -279,6 +279,31 @@ foreach ($table in $tables) {
 $tableSummary = ($tables | ForEach-Object { $_.tableName }) -join ', '
 Write-Host "    OK - $($tables.Count) table(s) ($tableSummary), $totalColumns columns total." -ForegroundColor Green
 
+# Direct DCR names have stricter constraints than many Azure resources.
+# Validate once here so users get a clear preflight error instead of a late
+# ARM failure from Microsoft.Insights.
+function Test-DirectDcrName {
+    param([string]$Name)
+
+    if (-not $Name) {
+        return $false
+    }
+
+    if ($Name.Length -lt 3 -or $Name.Length -gt 30) {
+        return $false
+    }
+
+    return $Name -match '^[A-Za-z0-9](?:[A-Za-z0-9-]{1,28}[A-Za-z0-9])?$'
+}
+
+function Assert-DirectDcrName {
+    param([string]$Name)
+
+    if (-not (Test-DirectDcrName -Name $Name)) {
+        throw "Invalid -DcrName '$Name'. For kind 'Direct', the DCR name must be 3-30 characters, use only letters/numbers/hyphens, and cannot start or end with '-'. Example: dcr-logingestion-dev"
+    }
+}
+
 # ===========================================================================
 # SCHEMA-ONLY MODE — update the custom table + DCR only, no Function App.
 # ===========================================================================
@@ -290,6 +315,7 @@ if ($SchemaOnly) {
     if (-not $DcrResourceGroup) { throw '-SchemaOnly requires -DcrResourceGroup (the RG where the DCR lives).' }
     if (-not $WorkspaceName) { throw '-SchemaOnly requires -WorkspaceName (the exact workspace name).' }
     if (-not $DcrName) { throw '-SchemaOnly requires -DcrName (the exact Data Collection Rule name).' }
+    Assert-DirectDcrName -Name $DcrName
     if (-not $WorkspaceResourceGroup) {
         $WorkspaceResourceGroup = $DcrResourceGroup
         Write-Host "    No -WorkspaceResourceGroup given; using '$WorkspaceResourceGroup' (same as -DcrResourceGroup)." -ForegroundColor Yellow
@@ -370,6 +396,7 @@ if (-not $Location) { throw 'A full deployment requires -Location.' }
 if (-not $FunctionAppName) { throw 'A full deployment requires -FunctionAppName (the exact Function App name).' }
 if (-not $WorkspaceName) { throw 'A full deployment requires -WorkspaceName (the exact Log Analytics workspace name).' }
 if (-not $DcrName) { throw 'A full deployment requires -DcrName (the exact Data Collection Rule name).' }
+Assert-DirectDcrName -Name $DcrName
 
 # --- 2. Ensure the resource groups exist ------------------------------------
 # The DCR and workspace default to the deployment (Function App) resource group.
