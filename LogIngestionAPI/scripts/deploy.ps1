@@ -852,7 +852,7 @@ if (-not $SkipFunctionPublish) {
         Write-Host 'This usually means runtime indexing is still in progress or the package did not deploy as expected.' -ForegroundColor Yellow
         Write-Host 'Try the following checks:' -ForegroundColor Cyan
         Write-Host "    az functionapp function list -g $functionAppRg -n $functionAppName --query '[].name' -o tsv" -ForegroundColor White
-        Write-Host "    az functionapp config appsettings list -g $functionAppRg -n $functionAppName --query \"[?name=='FUNCTIONS_WORKER_RUNTIME'].value | [0]\" -o tsv" -ForegroundColor White
+        Write-Host ('    az functionapp config appsettings list -g {0} -n {1} --query "[?name==''FUNCTIONS_WORKER_RUNTIME''].value | [0]" -o tsv' -f $functionAppRg, $functionAppName) -ForegroundColor White
         Write-Host "    az functionapp restart -g $functionAppRg -n $functionAppName" -ForegroundColor White
         if (-not $hasFunc) {
             Write-Host 'If this is a Flex app and zip deploy was used, publish once with Functions Core Tools (preferred path):' -ForegroundColor Cyan
