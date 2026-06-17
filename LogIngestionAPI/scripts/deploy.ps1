@@ -359,7 +359,30 @@ $wsRg = if ($WorkspaceResourceGroup) { $WorkspaceResourceGroup } else { $Resourc
 # permissions issue) stop with a clear, copy-pasteable manual instruction.
 function Confirm-ResourceGroup {
     param([string]$Name)
-    $exists = (az group exists --name $Name) -eq 'true'
+    $existsErrFile = New-TemporaryFile
+    try {
+        $existsRaw = az group exists --name $Name --output tsv 2>$existsErrFile
+        $existsExit = $LASTEXITCODE
+        $existsErr = (Get-Content -Path $existsErrFile -Raw -ErrorAction SilentlyContinue)
+    }
+    finally {
+        Remove-Item $existsErrFile -ErrorAction SilentlyContinue
+    }
+
+    if ($existsExit -ne 0) {
+        $subName = az account show --query name --output tsv 2>$null
+        $subId = az account show --query id --output tsv 2>$null
+        Write-Host ''
+        Write-Warning "Could not verify whether resource group '$Name' exists."
+        if ($existsErr) { Write-Host $existsErr.TrimEnd() -ForegroundColor DarkGray }
+        Write-Host "Current Azure subscription context: '$subName' ($subId)" -ForegroundColor Yellow
+        Write-Host 'If the resource group is in a different subscription, switch first:' -ForegroundColor Cyan
+        Write-Host '    az account list --output table' -ForegroundColor White
+        Write-Host '    az account set --subscription <name-or-id>' -ForegroundColor White
+        throw "Failed to check resource group '$Name' due to Azure authorization/context error."
+    }
+
+    $exists = $existsRaw -eq 'true'
     if ($exists) {
         Write-Host "    OK - resource group '$Name' exists." -ForegroundColor Green
         return
