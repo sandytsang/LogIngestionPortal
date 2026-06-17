@@ -33,8 +33,9 @@ in sync and emits ready-to-use files.
 
 1. Open the portal (GitHub Pages) and select the fields you want. The defaults
    reproduce the current `DeviceInventory_CL` schema.
-2. Fill in the **Function URL**, the deployment options (resource group, region,
-   plan), and — if reusing one — an existing workspace name.
+2. Fill in the **Function URL** and explicit deployment names/options for the
+   Function App, Log Analytics workspace, and Data Collection Rule (resource
+   groups, regions, names, plan).
 3. Click **Download all (.zip)** to get the **complete `LogIngestionAPI`
    backend** (function code, Bicep/ARM infra, and scripts) with your generated
    `schema/columns.json` and `scripts/IntuneScript.ps1` already dropped into place,

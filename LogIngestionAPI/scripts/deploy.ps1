@@ -52,6 +52,11 @@
     App and a new workspace. The DCR always follows the workspace's region. When
     the workspace already exists, its existing region is reused automatically.
 
+.PARAMETER WorkspaceLocation
+    Region for the Log Analytics workspace (e.g. westeurope). Defaults to
+    -Location. The DCR always follows the workspace region. Ignored when the
+    workspace already exists (its region cannot be changed in place).
+
 .PARAMETER Force
     Skip the confirmation prompt shown when the chosen -FunctionAppName already
     exists in your subscription (deploying into it hides any other functions in
@@ -113,6 +118,7 @@ param(
     [string]$FunctionAppName,
     [string]$WorkspaceName,
     [string]$WorkspaceResourceGroup,
+    [string]$WorkspaceLocation,
     [string]$DcrResourceGroup,
     [string]$DcrName,
     [ValidateSet('Consumption', 'Flex')] [string]$FunctionPlanType,
@@ -430,10 +436,17 @@ else {
 # never be changed in place, so we must not pass a different one).
 $wsLocation = az resource show --resource-group $wsRg --name $WorkspaceName --resource-type 'Microsoft.OperationalInsights/workspaces' --query location --output tsv 2>$null
 if ($wsLocation) {
-    Write-Host "    Workspace '$WorkspaceName' already exists in '$wsLocation' — it will be updated in place." -ForegroundColor Green
+    Write-Host "    Workspace '$WorkspaceName' already exists in '$wsLocation' — it will be updated in place (its region cannot be changed)." -ForegroundColor Green
+    if ($WorkspaceLocation -and $WorkspaceLocation -ne $wsLocation) {
+        Write-Host "    Ignoring -WorkspaceLocation '$WorkspaceLocation'; the workspace stays in '$wsLocation'." -ForegroundColor Yellow
+    }
+}
+elseif ($WorkspaceLocation) {
+    $wsLocation = $WorkspaceLocation
+    Write-Host "    Workspace '$WorkspaceName' will be created in '$wsLocation'." -ForegroundColor Green
 }
 else {
-    Write-Host "    Workspace '$WorkspaceName' will be created in '$Location'." -ForegroundColor Green
+    Write-Host "    Workspace '$WorkspaceName' will be created in '$Location' (same as the Function App)." -ForegroundColor Green
 }
 
 # --- 3. Deploy infrastructure (resource-group scope) ------------------------

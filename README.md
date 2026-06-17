@@ -37,6 +37,60 @@ flowchart LR
 Every request is authenticated with a **device‑signed JWT** (proof of possession
 of the device's Entra‑join certificate) — this is always required.
 
+## Under the hood — what the portal actually does
+
+The portal is a **static, 100% client‑side app** (TypeScript + React, built with
+Vite, hosted on GitHub Pages). There is **no server, no API, no database, and no
+sign‑in** — every calculation runs in your browser, and the download `.zip` is
+assembled in‑browser too, so nothing you pick ever leaves your machine.
+
+```mermaid
+flowchart TB
+  subgraph Browser["Your browser (the whole portal)"]
+    CAT[Catalog JSON<br/>data points + collectors] --> GEN[Generators]
+    PICK[Your selections<br/>fields, names, regions, plan] --> GEN
+    BUNDLE[LogIngestionAPI backend<br/>baked in at build time] --> ZIP
+    GEN --> ZIP[Download all .zip]
+  end
+  ZIP --> OUT[Ready-to-deploy folder]
+```
+
+**Generated on the fly from your choices** (computed by [`src/lib/generators.ts`](LogIngestionPortalWebPortal/src/lib/generators.ts)):
+
+| Output | Built from |
+| --- | --- |
+| `schema/columns.json` | The catalog + the fields/tables you select. |
+| `scripts/IntuneScript.ps1` | The read‑only PowerShell collector bundled with each selected data point. |
+| `README.txt` | A deploy guide with your exact names, regions, and `deploy.ps1` flags filled in. |
+| The active workflow (`deploy.yml` **or** `update-columns.yml`) | The same file, with its **“Run workflow”** input defaults pre‑filled from your selections. |
+
+**Shipped unchanged (baked into the static bundle at build time)** — the entire
+[`LogIngestionAPI/`](LogIngestionAPI) backend: the **Bicep/ARM templates**,
+`deploy.ps1`, and the PowerShell Function code are globbed into the app as raw
+text and dropped into the zip verbatim.
+
+A few things worth knowing:
+
+- **The portal does *not* generate or rewrite Bicep.** The Bicep is a single,
+  shared, fully‑parameterized template that's identical for everyone. Your names,
+  regions, resource groups and hosting plan are **not** baked into it — they're
+  passed in **at deploy time** as parameters (via the `deploy.ps1` flags in
+  `README.txt`, or the pre‑filled workflow inputs).
+- **The schema is the one thing that changes what the infra creates.**
+  [`main.bicep`](LogIngestionAPI/infra/main.bicep) reads `schema/columns.json` with
+  `loadJsonContent(...)`, so the custom tables and DCR streams differ **because
+  your `columns.json` differs**, not because the template was changed.
+- **The catalog is the source of truth.** Each data point bundles *both* its Log
+  Analytics column definition *and* its PowerShell collector, so adding telemetry
+  is a small JSON edit — no app code. Collectors must be **read‑only**, which is
+  enforced automatically in CI.
+- **Everything authored here is TypeScript** (unit‑tested with Vitest); the only
+  exception is a tiny Node script that validates the catalog against its JSON
+  schema in CI.
+
+In short: the portal produces **data, parameter values, and docs** — the Azure
+template that actually provisions resources is static and parameter‑driven.
+
 ## Quick start
 
 **1. Generate artifacts** — just open the hosted portal in your browser:

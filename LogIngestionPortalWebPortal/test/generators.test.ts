@@ -21,6 +21,7 @@ const baseConfig: PortalConfig = {
   dcrName: '',
   workspaceResourceGroup: '',
   location: '',
+  workspaceLocation: '',
   functionPlanType: 'Consumption',
 };
 
@@ -216,6 +217,16 @@ describe('generateDeployReadme', () => {
     const without = generateDeployReadme(baseConfig, tables, 'my-law');
     expect(without).not.toContain('-WorkspaceResourceGroup');
     expect(without).not.toContain('-DcrResourceGroup');
+  });
+
+  it('adds the -WorkspaceLocation flag only when a workspace region is chosen', () => {
+    const withLoc = generateDeployReadme(
+      { ...baseConfig, workspaceLocation: 'westeurope' },
+      tables,
+      'my-law',
+    );
+    expect(withLoc).toContain('-WorkspaceLocation westeurope');
+    expect(generateDeployReadme(baseConfig, tables, 'my-law')).not.toContain('-WorkspaceLocation');
   });
 
   it('explains where to copy columns.json', () => {

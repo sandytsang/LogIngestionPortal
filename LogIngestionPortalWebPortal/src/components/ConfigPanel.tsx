@@ -147,21 +147,28 @@ export function ConfigPanel({
     );
   };
 
-  const regionSelect = (id: string, labelText: string) => {
-    const empty = isBlank(config.location);
+  const regionSelect = (
+    id: string,
+    labelText: ReactNode,
+    value: string,
+    onPick: (v: string) => void,
+    opts: { required?: boolean; placeholder?: string } = {},
+  ) => {
+    const { required = true, placeholder = 'Select a region…' } = opts;
+    const empty = required && isBlank(value);
     return (
       <div>
         <label className={label} htmlFor={id}>
           {labelText}
-          {reqPill(empty)}
+          {required && reqPill(empty)}
         </label>
         <select
           id={id}
           className={`${field} mt-1 ${empty ? requiredRing : ''}`}
-          value={config.location}
-          onChange={(e) => onChange({ location: e.target.value })}
+          value={value}
+          onChange={(e) => onPick(e.target.value)}
         >
-          <option value="">Select a region…</option>
+          <option value="">{placeholder}</option>
           {azureRegions.map((r) => (
             <option key={r.value} value={r.value}>
               {r.label} ({r.value})
@@ -171,6 +178,33 @@ export function ConfigPanel({
       </div>
     );
   };
+
+  // A read-only region display for resources whose region is dictated by another
+  // resource (the DCR always lives in the workspace's region).
+  const regionReadOnly = (id: string, labelText: ReactNode, value: string, note: string) => (
+    <div>
+      <label className={label} htmlFor={id}>
+        {labelText}
+      </label>
+      <input
+        id={id}
+        className={`${field} mt-1 cursor-not-allowed bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400`}
+        value={value ? azureRegions.find((r) => r.value === value)?.label ?? value : ''}
+        placeholder={note}
+        readOnly
+        disabled
+      />
+      <p className="mt-1 text-[11px] text-slate-400">{note}</p>
+    </div>
+  );
+
+  // A bordered section grouping one resource's region / resource group / name.
+  const section = (title: string, children: ReactNode) => (
+    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+      <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -255,94 +289,123 @@ export function ConfigPanel({
         </>
       ) : (
         <>
-          {/* Deploy: free-form names with one-click suggestions. Everything is
-              upserted (created if missing, updated in place if it exists). */}
-          <div className="grid grid-cols-2 gap-3">
-            {textField('resourceGroup', 'Resource group', config.resourceGroup, set('resourceGroup'), {
-              placeholder: 'rg-logingestion',
-              suggested: 'rg-logingestion',
-              prefix: 'rg-',
-            })}
-            {regionSelect('location', 'Region')}
-          </div>
-          {textField('functionAppName', 'Function App name', config.functionAppName, set('functionAppName'), {
-            placeholder: 'func-logingestion',
-            suggested: 'func-logingestion',
-            prefix: 'func-',
-          })}
-          <p className="text-[11px] text-slate-400">
-            The Function App name has no random hash and must be globally unique (it becomes{' '}
-            <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">&lt;name&gt;.azurewebsites.net</code>).
-            If an app with this name already exists in your subscription, the deploy updates it in
-            place after a warning — a zip deploy replaces all functions in that app. If the name is
-            already taken in another tenant, the deploy stops and asks you to pick a different one.
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {textField('workspaceName', 'Log Analytics workspace', workspaceName, onWorkspaceChange, {
-              placeholder: 'log-logingestion',
-              suggested: 'log-logingestion',
-              prefix: 'log-',
-            })}
-            {textField('dcrName', 'Data Collection Rule', config.dcrName, set('dcrName'), {
-              placeholder: 'dcr-logingestion',
-              suggested: 'dcr-logingestion',
-              prefix: 'dcr-',
-            })}
-          </div>
-          <details className="rounded-lg border border-slate-200 dark:border-slate-700">
-            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-              Advanced: put the workspace / DCR in other resource groups
-            </summary>
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 px-3 py-3 dark:border-slate-700">
-              {textField(
-                'workspaceResourceGroup',
-                <>
-                  Workspace RG <span className="text-slate-400">(optional)</span>
-                </>,
-                config.workspaceResourceGroup,
-                set('workspaceResourceGroup'),
-                { placeholder: 'defaults to resource group', required: false, prefix: 'rg-' },
-              )}
-              {textField(
-                'dcrResourceGroup',
-                <>
-                  DCR RG <span className="text-slate-400">(optional)</span>
-                </>,
-                config.dcrResourceGroup,
-                set('dcrResourceGroup'),
-                { placeholder: 'defaults to resource group', required: false, prefix: 'rg-' },
-              )}
-            </div>
-          </details>
+          {/* Deploy: three resource sections, each with its own region /
+              resource group / name. Everything is upserted (created if missing,
+              updated in place if it exists). */}
+          {section(
+            'Function App',
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {regionSelect('location', 'Region', config.location, (v) => onChange({ location: v }))}
+                {textField('resourceGroup', 'Resource group', config.resourceGroup, set('resourceGroup'), {
+                  placeholder: 'rg-logingestion',
+                  suggested: 'rg-logingestion',
+                  prefix: 'rg-',
+                })}
+              </div>
+              {textField('functionAppName', 'Name', config.functionAppName, set('functionAppName'), {
+                placeholder: 'func-logingestion',
+                suggested: 'func-logingestion',
+                prefix: 'func-',
+              })}
+              <p className="text-[11px] text-slate-400">
+                The name has no random hash and must be globally unique (it becomes{' '}
+                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">&lt;name&gt;.azurewebsites.net</code>).
+                If an app with this name already exists in your subscription, the deploy updates it
+                in place after a warning — a zip deploy replaces all functions in that app. If the
+                name is taken in another tenant, the deploy stops and asks you to pick a different one.
+              </p>
+              <div>
+                <label className={label} htmlFor="functionPlanType">
+                  Hosting plan
+                </label>
+                <select
+                  id="functionPlanType"
+                  className={`${field} mt-1`}
+                  value={config.functionPlanType}
+                  onChange={(e) => onChange({ functionPlanType: e.target.value as 'Consumption' | 'Flex' })}
+                >
+                  <option value="Consumption">Consumption (Windows Y1 · classic serverless)</option>
+                  <option value="Flex">Flex Consumption (Linux FC1 · PowerShell 7.4)</option>
+                </select>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {config.functionPlanType === 'Flex'
+                    ? 'Flex: faster cold starts and VNet support, but not available in every region — verify region support.'
+                    : 'Consumption: widely available, pay-per-execution. Pick Flex for VNet or reduced cold starts.'}
+                </p>
+              </div>
+            </>,
+          )}
+
+          {section(
+            'Log Analytics Workspace',
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {regionSelect(
+                  'workspaceLocation',
+                  <>
+                    Region <span className="text-slate-400">(optional)</span>
+                  </>,
+                  config.workspaceLocation,
+                  (v) => onChange({ workspaceLocation: v }),
+                  { required: false, placeholder: 'Same as Function App region' },
+                )}
+                {textField(
+                  'workspaceResourceGroup',
+                  <>
+                    Resource group <span className="text-slate-400">(optional)</span>
+                  </>,
+                  config.workspaceResourceGroup,
+                  set('workspaceResourceGroup'),
+                  { placeholder: 'defaults to Function App RG', required: false, prefix: 'rg-' },
+                )}
+              </div>
+              {textField('workspaceName', 'Name', workspaceName, onWorkspaceChange, {
+                placeholder: 'log-logingestion',
+                suggested: 'log-logingestion',
+                prefix: 'log-',
+              })}
+              <p className="text-[11px] text-slate-400">
+                Leave the region blank to create the workspace in the Function App region. An
+                existing workspace keeps its current region (it cannot be moved).
+              </p>
+            </>,
+          )}
+
+          {section(
+            'Data Collection Rule',
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {regionReadOnly(
+                  'dcrLocation',
+                  'Region',
+                  config.workspaceLocation || config.location,
+                  'Always matches the Log Analytics workspace region.',
+                )}
+                {textField(
+                  'dcrResourceGroup',
+                  <>
+                    Resource group <span className="text-slate-400">(optional)</span>
+                  </>,
+                  config.dcrResourceGroup,
+                  set('dcrResourceGroup'),
+                  { placeholder: 'defaults to Function App RG', required: false, prefix: 'rg-' },
+                )}
+              </div>
+              {textField('dcrName', 'Name', config.dcrName, set('dcrName'), {
+                placeholder: 'dcr-logingestion',
+                suggested: 'dcr-logingestion',
+                prefix: 'dcr-',
+              })}
+            </>,
+          )}
+
           <p className="text-[11px] text-slate-400">
             Everything is created if missing or updated in place if it already exists. Storage,
-            Application Insights and the App Service plan are created in the resource group above and
-            named after the Function App. Leave the advanced resource groups blank to keep the
-            workspace and DCR in the same resource group.
+            Application Insights and the App Service plan are created in the Function App resource
+            group and named after the Function App.
           </p>
         </>
-      )}
-
-      {!isUpdate && (
-        <div>
-          <label className={label} htmlFor="functionPlanType">
-            Function App hosting plan
-          </label>
-          <select
-            id="functionPlanType"
-            className={`${field} mt-1`}
-            value={config.functionPlanType}
-            onChange={(e) => onChange({ functionPlanType: e.target.value as 'Consumption' | 'Flex' })}
-          >
-            <option value="Consumption">Consumption (Windows Y1 · classic serverless)</option>
-            <option value="Flex">Flex Consumption (Linux FC1 · PowerShell 7.4)</option>
-          </select>
-          <p className="mt-1 text-[11px] text-slate-400">
-            {config.functionPlanType === 'Flex'
-              ? 'Flex: faster cold starts and VNet support, but not available in every region — verify region support.'
-              : 'Consumption: widely available, pay-per-execution. Pick Flex for VNet or reduced cold starts.'}
-          </p>
-        </div>
       )}
 
       <details open className="rounded-lg border border-slate-200 dark:border-slate-700">

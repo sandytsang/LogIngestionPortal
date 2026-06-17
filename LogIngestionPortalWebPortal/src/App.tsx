@@ -18,8 +18,8 @@ import {
 } from './lib/generators';
 import { validateColumns } from './lib/validation';
 
-const STORAGE_KEY = 'logingestion-portal.v6';
-const LEGACY_KEY = 'logingestion-portal.v5';
+const STORAGE_KEY = 'logingestion-portal.v7';
+const LEGACY_KEY = 'logingestion-portal.v6';
 
 const defaultConfig = (): PortalConfig => ({
   functionUrl: 'https://<your-function-app>.azurewebsites.net/api/DCRLogIngestionAPI?code=<your-function-key>',
@@ -31,6 +31,7 @@ const defaultConfig = (): PortalConfig => ({
   dcrName: '',
   workspaceResourceGroup: '',
   location: '',
+  workspaceLocation: '',
   functionPlanType: 'Consumption',
 });
 

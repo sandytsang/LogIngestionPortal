@@ -58,6 +58,10 @@ on:
         description: 'Azure region'
         type: string
         default: eastus
+      workspaceLocation:
+        description: 'Region for the Log Analytics workspace (blank = same as the Function App region)'
+        type: string
+        default: ''
       functionPlanType:
         description: 'Hosting plan'
         type: choice
@@ -133,6 +137,10 @@ jobs:
             if [ -n "${{ inputs.workspaceResourceGroup }}" ]; then
               params+=( workspaceResourceGroup="${{ inputs.workspaceResourceGroup }}" )
             fi
+            # Create the workspace in its own region when one was provided.
+            if [ -n "${{ inputs.workspaceLocation }}" ]; then
+              params+=( workspaceLocation="${{ inputs.workspaceLocation }}" )
+            fi
             # Put the DCR in its own resource group when the portal selected one.
             if [ -n "${{ inputs.dcrResourceGroup }}" ]; then
               params+=( dcrResourceGroup="${{ inputs.dcrResourceGroup }}" )
@@ -178,6 +186,7 @@ jobs:
           $opt = @('-SkipDeviceGraphPermission')
           if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
           if ('${{ inputs.workspaceResourceGroup }}') { $opt += @('-WorkspaceResourceGroup', '${{ inputs.workspaceResourceGroup }}') }
+          if ('${{ inputs.workspaceLocation }}') { $opt += @('-WorkspaceLocation', '${{ inputs.workspaceLocation }}') }
           if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
           # Contributor-only login: don't create the DCR role assignment here.
           if ('${{ inputs.skipRoleAssignment }}' -eq 'true') { $opt += '-SkipDcrRoleAssignment' }

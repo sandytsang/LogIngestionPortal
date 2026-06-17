@@ -212,6 +212,7 @@ export function generateDeployReadme(
   const dcrName = config.dcrName?.trim() || '<dcr-name>';
   const dcrRg = config.dcrResourceGroup?.trim();
   const wsRg = config.workspaceResourceGroup?.trim();
+  const wsLoc = config.workspaceLocation?.trim();
   const isFlex = config.functionPlanType === 'Flex';
 
   // --- Update-columns (schema-only) — a single -SchemaOnly command. ---------
@@ -275,6 +276,7 @@ export function generateDeployReadme(
     `-WorkspaceName ${wsName}`,
     `-DcrName ${dcrName}`,
     ...(wsRg ? [`-WorkspaceResourceGroup ${wsRg}`] : []),
+    ...(wsLoc ? [`-WorkspaceLocation ${wsLoc}`] : []),
     ...(dcrRg ? [`-DcrResourceGroup ${dcrRg}`] : []),
     ...(isFlex ? ['-FunctionPlanType Flex'] : []),
   ];
@@ -398,6 +400,8 @@ export function generateWorkflowYaml(
     workspaceName: ws && yamlStr(ws),
     workspaceResourceGroup:
       trimmed(config.workspaceResourceGroup) && yamlStr(config.workspaceResourceGroup.trim()),
+    workspaceLocation:
+      trimmed(config.workspaceLocation) && yamlStr(config.workspaceLocation.trim()),
     dcrResourceGroup: trimmed(config.dcrResourceGroup) && yamlStr(config.dcrResourceGroup.trim()),
     location: trimmed(config.location) && yamlStr(config.location.trim()),
     dcrName: trimmed(config.dcrName) && yamlStr(config.dcrName.trim()),

@@ -58,7 +58,10 @@ roles (see below).
 
 ```powershell
 cd scripts
-./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
+./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+  -FunctionAppName func-logingestion-dev `
+  -WorkspaceName log-logingestion-dev `
+  -DcrName dcr-logingestion-dev
 ```
 
 The script prints the **Function URL** and **function key**. Paste the full
@@ -71,38 +74,31 @@ reports compliant).
 > create one, the script stops and prints the exact `az group create` command to
 > run (or hand to an admin). Existing resource groups are reused unchanged.
 
-### Put the DCR in a different resource group
+Every resource is **upserted**: created if missing, updated in place if it
+already exists. The Function App name has no random hash. If an app with your
+chosen name already exists in your subscription, `deploy.ps1` shows a warning
+and confirmation prompt before publishing into it (because zip deploy replaces
+all functions in that app). If the name is globally unavailable in another
+tenant, the deployment stops and asks for a different name.
 
-The Function App (with its storage account, Application Insights, App Service
-plan and — for a new deployment — the Log Analytics workspace) is created in the
-`-FunctionResourceGroup`. The Data Collection Rule defaults to that same RG but
-can target another one:
+### Put workspace / DCR in different resource groups (and workspace region)
+
+The Function App (plus storage, Application Insights, and App Service plan) is
+always in `-ResourceGroup`. By default the workspace and DCR are also in that RG,
+but you can place them elsewhere:
 
 ```powershell
-./deploy.ps1 -FunctionResourceGroup rg-fn -Location eastus `
+./deploy.ps1 -ResourceGroup rg-fn -Location eastus `
+  -FunctionAppName func-logingestion-dev `
+  -WorkspaceName log-shared-monitoring `
+  -DcrName dcr-logingestion-dev `
+  -WorkspaceResourceGroup rg-shared-monitoring `
+  -WorkspaceLocation westeurope `
   -DcrResourceGroup rg-dcr
 ```
 
-### Reuse an existing Log Analytics workspace
-
-By default the deployment creates a new workspace. To send data to a workspace
-you already have, pass `-ExistingWorkspaceName`:
-
-```powershell
-# Workspace in the same resource group as the Function App
-./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus -ExistingWorkspaceName my-law
-
-# Workspace in a different resource group
-./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus `
-  -ExistingWorkspaceName my-law `
-  -ExistingWorkspaceResourceGroup rg-shared-monitoring
-```
-
-The custom `*_CL` table is created in the existing workspace (other tables are
-left untouched). You can also set `existingWorkspaceName` /
-`existingWorkspaceResourceGroup` directly in
-[infra/main.bicepparam](infra/main.bicepparam) instead of passing them on the
-command line.
+If the workspace already exists, its current region is reused automatically
+(workspace location cannot be changed in place).
 
 ## Deploy from your own GitHub (Actions)
 
@@ -116,7 +112,7 @@ from the portal's download bundle), GitHub picks them up automatically:
 | --- | --- | --- |
 | [validate.yml](.github/workflows/validate.yml) | PR / push | Compiles the Bicep and sanity-checks `schema/columns.json`. No Azure login needed. |
 | [deploy.yml](.github/workflows/deploy.yml) | Manual (**Run workflow**) | Deploys the full stack (Function App + table + DCR). Pick `method: native` (Bicep + `functions-action`) or `method: script` (runs `scripts/deploy.ps1`). |
-| [update-columns.yml](.github/workflows/update-columns.yml) | Manual (**Run workflow**) | Schema-only update — refreshes just the table + DCR after a `columns.json` change; the Function App is left untouched. Needs an existing workspace. Pick `method: native` or `method: script`. |
+| [update-columns.yml](.github/workflows/update-columns.yml) | Manual (**Run workflow**) | Schema-only update — refreshes just the table + DCR after a `columns.json` change; the Function App is left untouched. Requires the target workspace + DCR names/resource groups. Pick `method: native` or `method: script`. |
 
 You choose how to deploy — the **same `deploy.ps1`** you'd run locally, or a
 fully native pipeline. Both authenticate to Azure with **OIDC (passwordless)**,
@@ -188,7 +184,7 @@ so no secrets/keys are stored.
    Need help? Microsoft's guide:
    [Create GitHub secrets](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect#create-github-secrets).
 4. Run **Actions → Deploy LogIngestionAPI → Run workflow** and fill in the
-   resource group, region, base name, environment and plan.
+  resource group, function app/workspace/DCR names, regions, and plan.
 
 ### After it runs
 
@@ -239,7 +235,10 @@ Set them via Bicep params (`jwtExpectedAudience`,
 1. **Deploy.** The script auto-grants the Graph permission the device check needs
    (see below), so a normal deploy is enough:
    ```powershell
-   ./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
+  ./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+    -FunctionAppName func-logingestion-dev `
+    -WorkspaceName log-logingestion-dev `
+    -DcrName dcr-logingestion-dev
    ```
 2. **Client side** in [scripts/IntuneScript.ps1](scripts/IntuneScript.ps1): keep
    `$UseDeviceJwt = $true` (the default) and package the Proactive Remediation.
@@ -318,10 +317,18 @@ SCM basic auth just for that publish.
    touches just the table + DCR (the Function App is left untouched):
    ```powershell
    # Schema-only update (recommended for column changes)
-   ./deploy.ps1 -SchemaOnly -DcrResourceGroup rg-logging-dev
+   ./deploy.ps1 -SchemaOnly `
+     -WorkspaceName log-logingestion-dev `
+     -WorkspaceResourceGroup rg-logging-dev `
+     -DcrName dcr-logingestion-dev `
+     -DcrResourceGroup rg-logging-dev
 
    # Or a full redeploy without republishing the Function code
-   ./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus -SkipFunctionPublish
+   ./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+     -FunctionAppName func-logingestion-dev `
+     -WorkspaceName log-logingestion-dev `
+     -DcrName dcr-logingestion-dev `
+     -SkipFunctionPublish
    ```
    The table and DCR are regenerated; existing data is preserved and the Function
    code is unchanged.

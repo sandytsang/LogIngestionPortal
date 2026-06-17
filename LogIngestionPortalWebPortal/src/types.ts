@@ -98,7 +98,11 @@ export interface PortalConfig {
   dcrName: string;
   /** Resource group of the Log Analytics workspace. Empty = same as resourceGroup. */
   workspaceResourceGroup: string;
+  /** Region for the Function App (and its storage/App Insights/plan). */
   location: string;
+  /** Region for the Log Analytics workspace. Empty = same as the Function App
+   *  region. The Data Collection Rule always follows the workspace region. */
+  workspaceLocation: string;
   functionPlanType: 'Consumption' | 'Flex';
 }
 

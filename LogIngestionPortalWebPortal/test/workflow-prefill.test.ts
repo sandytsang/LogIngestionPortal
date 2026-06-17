@@ -34,6 +34,7 @@ const updateConfig: PortalConfig = {
   dcrName: 'dcr-logingestion-prod',
   workspaceResourceGroup: 'rg-shared-logs',
   location: '',
+  workspaceLocation: '',
   functionPlanType: 'Consumption',
 };
 
