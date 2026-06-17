@@ -226,7 +226,9 @@ foreach ($group in $groups) {
         # the payload so each call stays under the 1 MB Logs Ingestion limit.
         $body = $batch | ConvertTo-Json -Depth 10 -AsArray -Compress
         try {
-            Invoke-RestMethod -Method Post -Uri $ingestUri -Body $body -Headers $ingestHeaders
+            # Suppress pipeline output so the Functions host doesn't emit empty
+            # "OUTPUT:" log lines for each successful ingestion call.
+            $null = Invoke-RestMethod -Method Post -Uri $ingestUri -Body $body -Headers $ingestHeaders
             $tableIngested += $batch.Count
         }
         catch {
