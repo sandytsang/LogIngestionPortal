@@ -15,13 +15,11 @@ const baseConfig: PortalConfig = {
   functionUrl: 'https://example.azurewebsites.net/api/DCRLogIngestionAPI?code=secret',
   scriptVersion: '1.0.0',
   action: 'deploy',
-  scenario: 'new',
-  baseName: 'logapi',
-  environment: 'dev',
-  functionResourceGroup: '',
+  resourceGroup: '',
+  functionAppName: '',
   dcrResourceGroup: '',
   dcrName: '',
-  existingWorkspaceResourceGroup: '',
+  workspaceResourceGroup: '',
   location: '',
   functionPlanType: 'Consumption',
 };
@@ -186,25 +184,38 @@ describe('generateDeployReadme', () => {
     expect(readme).not.toContain('Use an EXISTING Log Analytics workspace');
   });
 
-  it('start-from-zero command has no workspace flags', () => {
+  it('describes the upsert behaviour and never mentions a random hash', () => {
     const readme = generateDeployReadme(baseConfig, tables);
-    expect(readme).toContain('Scenario: start from zero');
+    expect(readme).toContain('created if it is missing');
+    expect(readme).toContain('no random hash');
     expect(readme).not.toContain('-ExistingWorkspaceName');
   });
 
-  it('existing-workspace scenario includes the workspace flag', () => {
+  it('always includes the explicit workspace + DCR names in the deploy command', () => {
     const cfg = {
       ...baseConfig,
-      scenario: 'existing' as const,
-      existingWorkspaceResourceGroup: 'rg-mon',
+      resourceGroup: 'rg-logging',
+      functionAppName: 'func-logging',
+      dcrName: 'dcr-logging',
     };
-    const readme = generateDeployReadme(cfg, tables, 'my-law');
-    expect(readme).toContain('-ExistingWorkspaceName my-law');
-    expect(readme).toContain('-ExistingWorkspaceResourceGroup rg-mon');
+    const readme = generateDeployReadme(cfg, tables, 'log-logging');
+    expect(readme).toContain('-ResourceGroup rg-logging');
+    expect(readme).toContain('-FunctionAppName func-logging');
+    expect(readme).toContain('-WorkspaceName log-logging');
+    expect(readme).toContain('-DcrName dcr-logging');
   });
 
-  it('does not add the workspace flag for the new scenario even if a name is passed', () => {
-    expect(generateDeployReadme(baseConfig, tables, 'my-law')).not.toContain('-ExistingWorkspaceName');
+  it('adds the optional workspace/DCR resource-group flags only when provided', () => {
+    const withRgs = generateDeployReadme(
+      { ...baseConfig, workspaceResourceGroup: 'rg-ws', dcrResourceGroup: 'rg-dcr' },
+      tables,
+      'my-law',
+    );
+    expect(withRgs).toContain('-WorkspaceResourceGroup rg-ws');
+    expect(withRgs).toContain('-DcrResourceGroup rg-dcr');
+    const without = generateDeployReadme(baseConfig, tables, 'my-law');
+    expect(without).not.toContain('-WorkspaceResourceGroup');
+    expect(without).not.toContain('-DcrResourceGroup');
   });
 
   it('explains where to copy columns.json', () => {
@@ -224,15 +235,17 @@ describe('generateDeployReadme', () => {
     const cfg = {
       ...baseConfig,
       action: 'updateColumns' as const,
-      existingWorkspaceResourceGroup: 'rg-logs',
+      workspaceResourceGroup: 'rg-logs',
+      dcrName: 'dcr-shared',
       dcrResourceGroup: 'rg-dcr',
     };
     const readme = generateDeployReadme(cfg, tables, 'log-shared');
     expect(readme).toContain('-SchemaOnly');
-    expect(readme).toContain('-ExistingWorkspaceName log-shared');
-    expect(readme).toContain('-ExistingWorkspaceResourceGroup rg-logs');
+    expect(readme).toContain('-WorkspaceName log-shared');
+    expect(readme).toContain('-WorkspaceResourceGroup rg-logs');
+    expect(readme).toContain('-DcrName dcr-shared');
     expect(readme).toContain('-DcrResourceGroup rg-dcr');
-    expect(readme).not.toContain('-FunctionResourceGroup');
+    expect(readme).not.toContain('-FunctionAppName');
     expect(readme).not.toContain('-Location');
   });
 });
@@ -249,32 +262,28 @@ describe('generateWorkflowYaml', () => {
     '      resourceGroup:',
     '        type: string',
     '        default: rg-logingestion',
-    '      dcrResourceGroup:',
-    '        type: string',
-    "        default: ''",
     '      location:',
     '        type: string',
     '        default: eastus',
-    '      baseName:',
+    '      functionAppName:',
     '        type: string',
-    '        default: logapi',
-    '      environment:',
-    '        type: choice',
-    '        options: [dev, test, prod]',
-    '        default: dev',
-    '      functionPlanType:',
-    '        type: choice',
-    '        options: [Consumption, Flex]',
-    '        default: Consumption',
-    '      existingWorkspaceName:',
+    '        default: func-logingestion',
+    '      workspaceName:',
     '        type: string',
-    "        default: ''",
-    '      existingWorkspaceResourceGroup:',
+    '        default: log-logingestion',
+    '      workspaceResourceGroup:',
     '        type: string',
     "        default: ''",
     '      dcrName:',
     '        type: string',
     "        default: ''",
+    '      dcrResourceGroup:',
+    '        type: string',
+    "        default: ''",
+    '      functionPlanType:',
+    '        type: choice',
+    '        options: [Consumption, Flex]',
+    '        default: Consumption',
     '      requireEntraDevice:',
     '        type: boolean',
     '        default: true',
@@ -285,20 +294,17 @@ describe('generateWorkflowYaml', () => {
     const cfg: PortalConfig = {
       ...baseConfig,
       action: 'deploy',
-      scenario: 'new',
-      baseName: 'logingestion',
-      environment: 'prod',
-      functionResourceGroup: 'rg-logingestion-prod',
+      resourceGroup: 'rg-logingestion-prod',
+      functionAppName: 'func-logingestion-prod',
       dcrResourceGroup: 'rg-log-demo',
       location: 'northeurope',
       functionPlanType: 'Flex',
     };
     const out = generateWorkflowYaml(sampleYaml, cfg);
     expect(out).toContain("        default: 'rg-logingestion-prod'");
+    expect(out).toContain("        default: 'func-logingestion-prod'");
     expect(out).toContain("        default: 'rg-log-demo'");
     expect(out).toContain("        default: 'northeurope'");
-    expect(out).toContain("        default: 'logingestion'");
-    expect(out).toContain('        default: prod');
     expect(out).toContain('        default: Flex');
     // method is not portal-controlled, so it keeps its file default.
     expect(out).toContain('        default: native');
@@ -310,8 +316,7 @@ describe('generateWorkflowYaml', () => {
     const cfg: PortalConfig = {
       ...baseConfig,
       action: 'updateColumns',
-      scenario: 'existing',
-      existingWorkspaceResourceGroup: 'rg-shared-logs',
+      workspaceResourceGroup: 'rg-shared-logs',
       dcrName: 'dcr-logingestion-prod',
     };
     const out = generateWorkflowYaml(sampleYaml, cfg, 'log-shared-central');
@@ -322,8 +327,8 @@ describe('generateWorkflowYaml', () => {
 
   it('leaves blank optional inputs untouched when not provided', () => {
     const out = generateWorkflowYaml(sampleYaml, baseConfig);
-    // existingWorkspaceName stays empty for a new-from-zero deploy.
-    expect(out).toContain("      existingWorkspaceName:\n        type: string\n        default: ''");
+    // dcrName stays empty for a blank config.
+    expect(out).toContain("      dcrName:\n        type: string\n        default: ''");
     // resourceGroup keeps its file default because the portal field is blank.
     expect(out).toContain('        default: rg-logingestion');
   });

@@ -205,30 +205,23 @@ export function generateDeployReadme(
       ? '<table>'
       : tables.map((t) => `"${t.name}"`).join(', ');
   const tableWord = tables.length > 1 ? 'tables' : 'table';
-  const fnRg = config.functionResourceGroup?.trim() || 'rg-logging-prod';
+  const rg = config.resourceGroup?.trim() || 'rg-logingestion';
   const loc = config.location?.trim() || 'eastus';
+  const funcName = config.functionAppName?.trim() || '<function-app-name>';
+  const wsName = workspaceName?.trim() || '<workspace-name>';
+  const dcrName = config.dcrName?.trim() || '<dcr-name>';
   const dcrRg = config.dcrResourceGroup?.trim();
-  const wsRg = config.existingWorkspaceResourceGroup?.trim();
+  const wsRg = config.workspaceResourceGroup?.trim();
   const isFlex = config.functionPlanType === 'Flex';
-  const useExisting = config.scenario === 'existing' && !!workspaceName;
-  const baseName = config.baseName?.trim() || 'logapi';
-  const env = config.environment || 'dev';
-  // Only emit naming flags when they differ from the script defaults.
-  const namingFlags = [
-    ...(baseName !== 'logapi' ? [`-BaseName ${baseName}`] : []),
-    ...(env !== 'dev' ? [`-Environment ${env}`] : []),
-  ];
 
   // --- Update-columns (schema-only) — a single -SchemaOnly command. ---------
   if (config.action === 'updateColumns') {
-    const ws = workspaceName?.trim() || '<workspace-name>';
-    const dcrName = config.dcrName?.trim() || '<dcr-name>';
     const updFlags = [
       '-SchemaOnly',
+      `-WorkspaceName ${wsName}`,
+      `-WorkspaceResourceGroup ${wsRg || '<workspace-resource-group>'}`,
       `-DcrName ${dcrName}`,
       `-DcrResourceGroup ${dcrRg || '<dcr-resource-group>'}`,
-      `-ExistingWorkspaceName ${ws}`,
-      `-ExistingWorkspaceResourceGroup ${wsRg || '<workspace-resource-group>'}`,
     ];
     const updCommand = [
       '  ./scripts/deploy.ps1 `',
@@ -274,34 +267,30 @@ export function generateDeployReadme(
     ].join('\n');
   }
 
-  // Single deploy command built from the chosen scenario's flags.
+  // Single deploy command built from the explicit resource names.
   const flags = [
-    `-FunctionResourceGroup ${fnRg}`,
+    `-ResourceGroup ${rg}`,
     `-Location ${loc}`,
+    `-FunctionAppName ${funcName}`,
+    `-WorkspaceName ${wsName}`,
+    `-DcrName ${dcrName}`,
+    ...(wsRg ? [`-WorkspaceResourceGroup ${wsRg}`] : []),
     ...(dcrRg ? [`-DcrResourceGroup ${dcrRg}`] : []),
-    ...(useExisting ? [`-ExistingWorkspaceName ${workspaceName}`] : []),
-    ...(useExisting && wsRg ? [`-ExistingWorkspaceResourceGroup ${wsRg}`] : []),
     ...(isFlex ? ['-FunctionPlanType Flex'] : []),
-    ...namingFlags,
   ];
   const command = [
     '  ./scripts/deploy.ps1 `',
     ...flags.map((f, i) => `    ${f}${i < flags.length - 1 ? ' `' : ''}`),
   ];
 
-  const scenarioSummary = useExisting
-    ? [
-        `Scenario: send data to your existing workspace "${workspaceName}".`,
-        '  A new Function App (+ storage, App Insights, plan) is created in the',
-        '  Function App resource group. The Data Collection Rule is created in your',
-        "  workspace's region automatically.",
-      ]
-    : [
-        'Scenario: start from zero — create everything new.',
-        '  The Function App (+ storage, App Insights, plan), a new Log Analytics',
-        '  workspace, and the Data Collection Rule are all created together in the',
-        '  resource group and region below.',
-      ];
+  const scenarioSummary = [
+    'Every resource is created if it is missing, or updated in place if it',
+    'already exists — pick whatever names match your tenant\'s standard. The',
+    'Function App is named exactly as you chose (no random hash). If an app with',
+    'that name already exists in your subscription the script warns you before',
+    'deploying into it (a zip deploy hides any other functions in that app); if',
+    'the name is taken in another tenant it tells you to pick a different one.',
+  ];
 
   return [
     'Log Ingestion Portal — deployment instructions',
@@ -394,26 +383,23 @@ export function generateWorkflowYaml(
   config: PortalConfig,
   workspaceName?: string,
 ): string {
-  const isUpdate = config.action === 'updateColumns';
-  const useExisting = isUpdate || config.scenario === 'existing';
   const trimmed = (v?: string) => (v && v.trim() ? v.trim() : undefined);
   // Single-quoted YAML scalar (a literal single quote is doubled).
   const yamlStr = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
-  const ws = useExisting ? trimmed(workspaceName) : undefined;
+  const ws = trimmed(workspaceName);
   // Map each workflow input name to its new default. `undefined` = leave as-is.
-  // Keys that don't exist in the given file (e.g. functionPlanType in the
-  // schema-only workflow) are ignored.
+  // Keys that don't exist in the given file are ignored, so the same overrides
+  // work for both the deploy and the schema-only workflow.
   const overrides: Record<string, string | undefined> = {
-    environment: config.environment,
     functionPlanType: config.functionPlanType,
-    resourceGroup: trimmed(config.functionResourceGroup) && yamlStr(config.functionResourceGroup.trim()),
+    resourceGroup: trimmed(config.resourceGroup) && yamlStr(config.resourceGroup.trim()),
+    functionAppName: trimmed(config.functionAppName) && yamlStr(config.functionAppName.trim()),
+    workspaceName: ws && yamlStr(ws),
+    workspaceResourceGroup:
+      trimmed(config.workspaceResourceGroup) && yamlStr(config.workspaceResourceGroup.trim()),
     dcrResourceGroup: trimmed(config.dcrResourceGroup) && yamlStr(config.dcrResourceGroup.trim()),
     location: trimmed(config.location) && yamlStr(config.location.trim()),
-    baseName: trimmed(config.baseName) && yamlStr(config.baseName.trim()),
-    existingWorkspaceName: ws && yamlStr(ws),
-    existingWorkspaceResourceGroup:
-      trimmed(config.existingWorkspaceResourceGroup) && yamlStr(config.existingWorkspaceResourceGroup.trim()),
     dcrName: trimmed(config.dcrName) && yamlStr(config.dcrName.trim()),
   };
 

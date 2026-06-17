@@ -1,7 +1,12 @@
 using './main.bicep'
 
-param baseName = 'logapi'
-param environment = 'dev'
+// Exact resource names. Pick whatever fits your tenant's naming standard; the
+// portal/deploy script suggest defaults but you can use anything valid. The
+// Function App name has NO hash and must be globally unique (it becomes
+// <name>.azurewebsites.net).
+param functionAppName = 'func-logapi-dev'
+param workspaceName = 'log-logapi-dev'
+param dcrName = 'dcr-logapi-dev'
 param location = 'eastus'
 param retentionInDays = 90
 
@@ -15,16 +20,11 @@ param functionPlanType = 'Consumption'
 // --- Resource groups --------------------------------------------------------
 // This template is resource-group scoped: it deploys into the RG passed to
 // `az deployment group create --resource-group <rg>` (the Function App RG, which
-// also holds storage, App Insights, the plan and a new workspace). The DCR can
-// optionally target a different RG; leave empty to co-locate with the Function
-// App RG. deploy.ps1 sets this from -DcrResourceGroup.
+// also holds storage, App Insights and the plan). The DCR and the workspace can
+// optionally live in different RGs; leave empty to co-locate with the deployment
+// RG. deploy.ps1 sets these from -DcrResourceGroup / -WorkspaceResourceGroup.
 param dcrResourceGroup = ''
-
-// To reuse an existing Log Analytics workspace, set its name here. Leave empty
-// to create a new workspace. If the workspace lives in a different resource
-// group, also set existingWorkspaceResourceGroup.
-param existingWorkspaceName = ''
-param existingWorkspaceResourceGroup = ''
+param workspaceResourceGroup = ''
 
 // --- Device authentication (JWT) --------------------------------------------
 // Device-signed JWT authentication is always required; there is no toggle.

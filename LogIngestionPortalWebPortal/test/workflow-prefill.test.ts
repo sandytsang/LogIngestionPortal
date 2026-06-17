@@ -9,14 +9,10 @@ const crlfYaml = [
   'on:',
   '  workflow_dispatch:',
   '    inputs:',
-  '      environment:',
-  '        type: choice',
-  '        options: [dev, test, prod]',
-  '        default: dev',
-  '      existingWorkspaceName:',
+  '      workspaceName:',
   '        type: string',
   "        default: ''",
-  '      existingWorkspaceResourceGroup:',
+  '      workspaceResourceGroup:',
   '        type: string',
   "        default: ''",
   '      dcrName:',
@@ -32,13 +28,11 @@ const updateConfig: PortalConfig = {
   functionUrl: '',
   scriptVersion: '1.0.0',
   action: 'updateColumns',
-  scenario: 'existing',
-  baseName: '',
-  environment: 'prod',
-  functionResourceGroup: '',
+  resourceGroup: '',
+  functionAppName: '',
   dcrResourceGroup: 'rg-logingestion-prod',
   dcrName: 'dcr-logingestion-prod',
-  existingWorkspaceResourceGroup: 'rg-shared-logs',
+  workspaceResourceGroup: 'rg-shared-logs',
   location: '',
   functionPlanType: 'Consumption',
 };
@@ -50,7 +44,6 @@ describe('update-columns workflow pre-fill (CRLF-tolerant)', () => {
     expect(out).toContain("        default: 'rg-shared-logs'");
     expect(out).toContain("        default: 'dcr-logingestion-prod'");
     expect(out).toContain("        default: 'rg-logingestion-prod'");
-    expect(out).toContain('        default: prod');
   });
 });
 
@@ -65,42 +58,33 @@ const deployCrlfYaml = [
   '      location:',
   '        type: string',
   '        default: eastus',
-  '      baseName:',
+  '      functionAppName:',
   '        type: string',
-  '        default: logapi',
-  '      environment:',
-  '        type: choice',
-  '        options: [dev, test, prod]',
-  '        default: dev',
+  '        default: func-logingestion',
+  '      workspaceName:',
+  '        type: string',
+  '        default: log-logingestion',
   '      functionPlanType:',
   '        type: choice',
   '        options: [Consumption, Flex]',
   '        default: Consumption',
-  '      existingWorkspaceName:',
-  '        type: string',
-  "        default: ''",
   '',
 ].join('\r\n');
 
 describe('deploy workflow pre-fill (brand-new deploy)', () => {
-  it('keeps the web UI values: resource group, region, workload name, environment, plan', () => {
+  it('keeps the web UI values: resource group, region, function app name, plan', () => {
     const cfg: PortalConfig = {
       ...updateConfig,
       action: 'deploy',
-      scenario: 'new',
-      baseName: 'logingestion',
-      environment: 'prod',
-      functionResourceGroup: 'rg-logingestion-prod',
+      resourceGroup: 'rg-logingestion-prod',
+      functionAppName: 'func-logingestion-prod',
       location: 'northeurope',
       functionPlanType: 'Flex',
     };
     const out = generateWorkflowYaml(deployCrlfYaml, cfg);
     expect(out).toContain("        default: 'rg-logingestion-prod'");
+    expect(out).toContain("        default: 'func-logingestion-prod'");
     expect(out).toContain("        default: 'northeurope'");
-    expect(out).toContain("        default: 'logingestion'");
-    expect(out).toContain('        default: prod');
     expect(out).toContain('        default: Flex');
-    // A new deploy creates a new workspace, so this stays blank.
-    expect(out).toContain("      existingWorkspaceName:\n        type: string\n        default: ''");
   });
 });

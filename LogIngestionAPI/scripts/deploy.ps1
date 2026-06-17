@@ -7,26 +7,55 @@
     infra/main.bicep, publishes the Function App code, and prints a ready-to-run
     test command plus the values needed by the device remediation script.
 
-    Run this same script whenever you add or remove a column in
-    schema/columns.json - the table and DCR are regenerated from that file, so a
-    single redeploy keeps everything in sync. The Function code never changes.
+    You choose the exact name for every resource (Function App, Log Analytics
+    workspace, Data Collection Rule and the resource group) — nothing is derived
+    from a workload/environment convention and no random hash is appended to the
+    Function App. Every resource is upserted: if it already exists it is updated
+    in place, otherwise it is created. Run this same script whenever you add or
+    remove a column in schema/columns.json to keep the table and DCR in sync.
 
-.PARAMETER FunctionResourceGroup
+.PARAMETER ResourceGroup
     Resource group for the Function App, its storage account, Application
-    Insights, the App Service plan and (for a new deployment) the Log Analytics
-    workspace. This is the deployment's resource group. If it does not exist the
+    Insights, the App Service plan and (by default) the Log Analytics workspace
+    and DCR. This is the deployment's resource group. If it does not exist the
     script tries to create it, and if that fails (no permission) it prints the
-    command for you or your admin to run.
+    command for you or your admin to run. Aliased as -FunctionResourceGroup.
+
+.PARAMETER FunctionAppName
+    Exact Function App name (no hash appended). It must be globally unique
+    because it becomes <name>.azurewebsites.net. The script checks the name:
+      - If an app with this name already exists in YOUR subscription, the script
+        deploys this solution's code INTO it (after a confirmation, because zip
+        deploy hides any other functions already in that app — see -Force).
+      - If the name is taken in ANOTHER tenant, the script stops and tells you
+        the name is not available so you can choose a different one.
+      - Otherwise a new Function App is created with exactly this name.
+
+.PARAMETER WorkspaceName
+    Exact Log Analytics workspace name. Created if it does not exist, updated in
+    place if it does. Lives in -WorkspaceResourceGroup (defaults to -ResourceGroup).
+
+.PARAMETER WorkspaceResourceGroup
+    Resource group of the Log Analytics workspace. Defaults to -ResourceGroup.
+
+.PARAMETER DcrName
+    Exact name of the Data Collection Rule to create/update. Lives in
+    -DcrResourceGroup (defaults to -ResourceGroup).
 
 .PARAMETER DcrResourceGroup
-    Resource group for the Data Collection Rule. Defaults to the Function App
-    RG. Created automatically if missing (falls back to a manual instruction
-    when you lack permission).
+    Resource group for the Data Collection Rule. Defaults to -ResourceGroup.
+    Created automatically if missing (falls back to a manual instruction when
+    you lack permission).
 
 .PARAMETER Location
-    Azure region (e.g. eastus). Used when creating resource groups and the
-    Function App resources. A new workspace also uses this region; the DCR always
-    follows the workspace's region automatically.
+    Azure region (e.g. eastus). Used when creating resource groups, the Function
+    App and a new workspace. The DCR always follows the workspace's region. When
+    the workspace already exists, its existing region is reused automatically.
+
+.PARAMETER Force
+    Skip the confirmation prompt shown when the chosen -FunctionAppName already
+    exists in your subscription (deploying into it hides any other functions in
+    that app). Use for unattended/automated runs.
 
 .PARAMETER SkipFunctionPublish
     Only deploy infrastructure; skip publishing the Function App code.
@@ -53,58 +82,44 @@
     only has Contributor (which cannot create role assignments). The script then
     prints the exact 'az role assignment create' command to grant it separately.
 
-.PARAMETER ExistingWorkspaceName
-    Name of an existing Log Analytics workspace to reuse instead of creating a
-    new one. If the workspace is in a different resource group, also pass
-    -ExistingWorkspaceResourceGroup.
-
-.PARAMETER ExistingWorkspaceResourceGroup
-    Resource group of the existing Log Analytics workspace (defaults to the
-    Function App resource group).
-
 .PARAMETER SchemaOnly
     Update ONLY the Log Analytics custom table + DCR from schema/columns.json.
-    The Function App and its dependencies are left untouched. Requires an
-    existing workspace and DCR (errors with guidance if either is missing).
-    Needs -ExistingWorkspaceName, -ExistingWorkspaceResourceGroup and
-    -DcrResourceGroup; -FunctionResourceGroup and -Location are not used.
-
-.PARAMETER BaseName
-    Base name used to derive resource names (e.g. func-<baseName>-<environment>).
-    Defaults to 'logapi'. Use the SAME value for later updates so names match.
-
-.PARAMETER Environment
-    Environment short name: dev (default), test or prod. Appended to every
-    resource name (e.g. dcr-logapi-prod). Use the SAME value for later updates.
-
-.PARAMETER DcrName
-    Exact name of the Data Collection Rule to create/update. Overrides the
-    derived dcr-<baseName>-<environment>. For a schema-only update, set this to
-    the existing DCR's name instead of passing -BaseName/-Environment.
+    The Function App and its dependencies are left untouched, and the workspace
+    is referenced (not modified). Requires an existing workspace and DCR (errors
+    with guidance if either is missing). Needs -WorkspaceName, -DcrName and the
+    matching resource groups; -FunctionAppName and -Location are not used.
 
 .EXAMPLE
-    ./deploy.ps1 -FunctionResourceGroup rg-logging-dev -Location eastus
+    ./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+        -FunctionAppName func-contoso-logs -WorkspaceName log-contoso -DcrName dcr-contoso
 
 .EXAMPLE
-    ./deploy.ps1 -FunctionResourceGroup rg-fn -DcrResourceGroup rg-dcr -Location eastus
+    # Workspace and DCR in a shared RG, Function App in another
+    ./deploy.ps1 -ResourceGroup rg-fn -Location eastus `
+        -FunctionAppName func-contoso-logs `
+        -WorkspaceName log-shared -WorkspaceResourceGroup rg-logs `
+        -DcrName dcr-contoso -DcrResourceGroup rg-logs
 
 .EXAMPLE
     # Update data columns only (no Function App changes)
-    ./deploy.ps1 -SchemaOnly -ExistingWorkspaceName log-shared -ExistingWorkspaceResourceGroup rg-logs -DcrResourceGroup rg-dcr -DcrName dcr-logingestion-prod
+    ./deploy.ps1 -SchemaOnly -WorkspaceName log-shared -WorkspaceResourceGroup rg-logs `
+        -DcrResourceGroup rg-dcr -DcrName dcr-contoso
 #>
 
 [CmdletBinding()]
 param(
-    [Alias('ResourceGroup')] [string]$FunctionResourceGroup,
+    [Alias('FunctionResourceGroup')] [string]$ResourceGroup,
     [string]$Location,
+    [string]$FunctionAppName,
+    [string]$WorkspaceName,
+    [string]$WorkspaceResourceGroup,
     [string]$DcrResourceGroup,
-    [string]$ExistingWorkspaceName,
-    [string]$ExistingWorkspaceResourceGroup,
+    [string]$DcrName,
     [ValidateSet('Consumption', 'Flex')] [string]$FunctionPlanType,
     [switch]$SchemaOnly,
-    [string]$BaseName = 'logapi',
-    [ValidateSet('dev', 'test', 'prod')] [string]$Environment = 'dev',
-    [string]$DcrName,
+    # Skip the "an app with this name already exists — other functions will be
+    # hidden" confirmation prompt (for unattended/automated runs).
+    [switch]$Force,
     # Accepted for backward compatibility. The Graph Device.Read.All grant now
     # runs by default (device-JWT enforcement + Entra device check are on by
     # default); use -SkipDeviceGraphPermission to opt out.
@@ -217,40 +232,38 @@ Write-Host "    OK - $($tables.Count) table(s) ($tableSummary), $totalColumns co
 if ($SchemaOnly) {
     Write-Host '==> Schema-only update (table + DCR; Function App untouched)' -ForegroundColor Cyan
 
-    # Required input. The workspace name/RG can be derived for a "start from
-    # zero" deployment (workspace = log-<baseName>-<environment> in the same RG).
+    # Required input. The DCR's RG defaults the workspace RG; the workspace and
+    # DCR names must be given explicitly (no naming convention is assumed).
     if (-not $DcrResourceGroup) { throw '-SchemaOnly requires -DcrResourceGroup (the RG where the DCR lives).' }
-    if (-not $ExistingWorkspaceName) {
-        $ExistingWorkspaceName = "log-$BaseName-$Environment"
-        Write-Host "    No -ExistingWorkspaceName given; using derived name '$ExistingWorkspaceName' (from -BaseName/-Environment)." -ForegroundColor Yellow
-    }
-    if (-not $ExistingWorkspaceResourceGroup) {
-        $ExistingWorkspaceResourceGroup = $DcrResourceGroup
-        Write-Host "    No -ExistingWorkspaceResourceGroup given; using '$ExistingWorkspaceResourceGroup' (same as -DcrResourceGroup)." -ForegroundColor Yellow
+    if (-not $WorkspaceName) { throw '-SchemaOnly requires -WorkspaceName (the exact workspace name).' }
+    if (-not $DcrName) { throw '-SchemaOnly requires -DcrName (the exact Data Collection Rule name).' }
+    if (-not $WorkspaceResourceGroup) {
+        $WorkspaceResourceGroup = $DcrResourceGroup
+        Write-Host "    No -WorkspaceResourceGroup given; using '$WorkspaceResourceGroup' (same as -DcrResourceGroup)." -ForegroundColor Yellow
     }
 
     # The workspace and DCR must already exist — schema-only never creates them.
     # Use `az resource show` (core, no extension needed) so the checks are robust.
-    Write-Host "    Checking for workspace '$ExistingWorkspaceName' in '$ExistingWorkspaceResourceGroup'..." -ForegroundColor Gray
+    Write-Host "    Checking for workspace '$WorkspaceName' in '$WorkspaceResourceGroup'..." -ForegroundColor Gray
     $ws = az resource show `
-        --resource-group $ExistingWorkspaceResourceGroup `
-        --name $ExistingWorkspaceName `
+        --resource-group $WorkspaceResourceGroup `
+        --name $WorkspaceName `
         --resource-type 'Microsoft.OperationalInsights/workspaces' `
         --query name --output tsv 2>$null
     if (-not $ws) {
-        Write-Warning "Log Analytics workspace '$ExistingWorkspaceName' not found in resource group '$ExistingWorkspaceResourceGroup'."
-        $found = az resource list --resource-group $ExistingWorkspaceResourceGroup --resource-type 'Microsoft.OperationalInsights/workspaces' --query "[].name" --output tsv 2>$null
+        Write-Warning "Log Analytics workspace '$WorkspaceName' not found in resource group '$WorkspaceResourceGroup'."
+        $found = az resource list --resource-group $WorkspaceResourceGroup --resource-type 'Microsoft.OperationalInsights/workspaces' --query "[].name" --output tsv 2>$null
         if ($found) {
-            Write-Host "    Workspaces in '$ExistingWorkspaceResourceGroup': $($found -join ', ')" -ForegroundColor Cyan
-            Write-Host '    Pass the correct one with -ExistingWorkspaceName.' -ForegroundColor Cyan
+            Write-Host "    Workspaces in '$WorkspaceResourceGroup': $($found -join ', ')" -ForegroundColor Cyan
+            Write-Host '    Pass the correct one with -WorkspaceName.' -ForegroundColor Cyan
         }
         else {
-            Write-Host "    No Log Analytics workspaces found in '$ExistingWorkspaceResourceGroup'. Check the resource group, or run a FULL deployment first." -ForegroundColor Cyan
+            Write-Host "    No Log Analytics workspaces found in '$WorkspaceResourceGroup'. Check the resource group, or run a FULL deployment first." -ForegroundColor Cyan
         }
         throw 'Workspace not found for schema-only update.'
     }
 
-    $dcrName = if ($DcrName) { $DcrName } else { "dcr-$BaseName-$Environment" }
+    $dcrName = $DcrName
     Write-Host "    Checking for DCR '$dcrName' in '$DcrResourceGroup'..." -ForegroundColor Gray
     $dcrFound = az resource show `
         --resource-group $DcrResourceGroup `
@@ -259,21 +272,19 @@ if ($SchemaOnly) {
         --query name --output tsv 2>$null
     if (-not $dcrFound) {
         Write-Warning "Data Collection Rule '$dcrName' not found in resource group '$DcrResourceGroup'."
-        Write-Host "If your DCR uses a different name, pass -DcrName to match it exactly (or -BaseName/-Environment to derive dcr-<baseName>-<environment>)." -ForegroundColor Cyan
+        Write-Host 'If your DCR uses a different name, pass -DcrName to match it exactly.' -ForegroundColor Cyan
         Write-Host 'Or run a FULL deployment first, then use -SchemaOnly for later column updates.' -ForegroundColor Cyan
         throw 'DCR not found for schema-only update.'
     }
-    Write-Host "    OK - found workspace '$ExistingWorkspaceName' and DCR '$dcrName'." -ForegroundColor Green
+    Write-Host "    OK - found workspace '$WorkspaceName' and DCR '$dcrName'." -ForegroundColor Green
 
     # Deploy into the DCR's RG; the bicep skips the Function App when schemaOnly=true.
     $deploymentName = "loging-schema-$(Get-Date -Format 'yyyyMMddHHmmss')"
     $schemaOverrides = @(
         'schemaOnly=true'
-        "existingWorkspaceName=$ExistingWorkspaceName"
-        "existingWorkspaceResourceGroup=$ExistingWorkspaceResourceGroup"
+        "workspaceName=$WorkspaceName"
+        "workspaceResourceGroup=$WorkspaceResourceGroup"
         "dcrResourceGroup=$DcrResourceGroup"
-        "baseName=$BaseName"
-        "environment=$Environment"
         "dcrName=$dcrName"
     )
     Write-Host "==> Deploying schema (table + DCR) to resource group '$DcrResourceGroup'" -ForegroundColor Cyan
@@ -297,14 +308,20 @@ if ($SchemaOnly) {
     return
 }
 
-# Non-schema-only (full deploy) requires the Function App RG + region.
-if (-not $FunctionResourceGroup) { throw 'A full deployment requires -FunctionResourceGroup.' }
+# ===========================================================================
+# Full deploy: validate the required explicit names + region. Nothing is derived
+# from a workload/environment convention — you name every resource yourself.
+# ===========================================================================
+if (-not $ResourceGroup) { throw 'A full deployment requires -ResourceGroup.' }
 if (-not $Location) { throw 'A full deployment requires -Location.' }
+if (-not $FunctionAppName) { throw 'A full deployment requires -FunctionAppName (the exact Function App name).' }
+if (-not $WorkspaceName) { throw 'A full deployment requires -WorkspaceName (the exact Log Analytics workspace name).' }
+if (-not $DcrName) { throw 'A full deployment requires -DcrName (the exact Data Collection Rule name).' }
 
 # --- 2. Ensure the resource groups exist ------------------------------------
-# The DCR defaults to the Function App RG. When reusing an existing workspace we
-# never create its RG (it already holds the workspace).
-$dcrRg = if ($DcrResourceGroup) { $DcrResourceGroup } else { $FunctionResourceGroup }
+# The DCR and workspace default to the deployment (Function App) resource group.
+$dcrRg = if ($DcrResourceGroup) { $DcrResourceGroup } else { $ResourceGroup }
+$wsRg = if ($WorkspaceResourceGroup) { $WorkspaceResourceGroup } else { $ResourceGroup }
 
 # Ensures one RG exists: if missing, try to create it; if that fails (usually a
 # permissions issue) stop with a clear, copy-pasteable manual instruction.
@@ -329,20 +346,109 @@ function Confirm-ResourceGroup {
 }
 
 Write-Host '==> Ensuring resource groups exist' -ForegroundColor Cyan
-$rgsToEnsure = @($FunctionResourceGroup, $dcrRg)
+$rgsToEnsure = @($ResourceGroup, $dcrRg, $wsRg)
 foreach ($rg in ($rgsToEnsure | Select-Object -Unique)) {
     Confirm-ResourceGroup -Name $rg
+}
+
+# --- 2b. Resolve how to handle the Function App name ------------------------
+# The Function App is named exactly as requested (no hash). Three outcomes:
+#   1. An app with this name already exists in YOUR subscription -> deploy this
+#      solution's code INTO it (warn first: zip deploy hides other functions).
+#   2. The name is taken in ANOTHER tenant (global DNS) -> stop; not available.
+#   3. The name is free -> create a brand-new Function App with this name.
+$useExistingFunctionApp = $false
+$existingPrincipalId = $null
+$existingFunctionHost = $null
+
+Write-Host "==> Checking Function App name '$FunctionAppName'" -ForegroundColor Cyan
+# The app could live in any RG, so search the whole subscription by name.
+$ownAppRg = az functionapp list --query "[?name=='$FunctionAppName'].resourceGroup | [0]" --output tsv 2>$null
+if ($ownAppRg) {
+    # Case 1 — it's already in this subscription. Big warning + confirm.
+    $useExistingFunctionApp = $true
+    Write-Host ''
+    Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
+    Write-Host " A Function App named '$FunctionAppName' already exists" -ForegroundColor Yellow
+    Write-Host "  in your subscription (resource group '$ownAppRg')." -ForegroundColor Yellow
+    Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
+    Write-Host 'Deploying this solution publishes its code with a zip/package deploy,' -ForegroundColor Yellow
+    Write-Host 'which REPLACES the app contents — any OTHER functions currently in this' -ForegroundColor Yellow
+    Write-Host 'app will stop being served. Its storage, plan and other apps are untouched.' -ForegroundColor Yellow
+    Write-Host ''
+    if (-not $Force) {
+        $answer = Read-Host "Type 'yes' to deploy into '$FunctionAppName' (anything else cancels)"
+        if ($answer -ne 'yes') { throw 'Cancelled by user (existing Function App not modified).' }
+    }
+    else {
+        Write-Host '    -Force set; proceeding without prompting.' -ForegroundColor Yellow
+    }
+
+    $existingAppJson = az functionapp show --name $FunctionAppName --resource-group $ownAppRg --output json 2>$null
+    if (-not $existingAppJson) { throw "Could not read the existing Function App '$FunctionAppName' in '$ownAppRg'." }
+    $existingApp = $existingAppJson | ConvertFrom-Json
+    $existingFunctionHost = $existingApp.defaultHostName
+
+    # The function code is PowerShell; warn (don't block) if the runtime differs.
+    $existingRuntime = az functionapp config appsettings list --name $FunctionAppName --resource-group $ownAppRg --query "[?name=='FUNCTIONS_WORKER_RUNTIME'].value | [0]" --output tsv 2>$null
+    if ($existingRuntime -and $existingRuntime -ne 'powershell') {
+        Write-Warning "    The app's FUNCTIONS_WORKER_RUNTIME is '$existingRuntime', not 'powershell'. This code is PowerShell and may not run correctly."
+    }
+
+    # Ensure a system-assigned managed identity exists (idempotent) and read it.
+    $existingPrincipalId = $existingApp.identity.principalId
+    if (-not $existingPrincipalId) {
+        Write-Host '    Enabling system-assigned managed identity on the app...' -ForegroundColor Yellow
+        $existingPrincipalId = az functionapp identity assign --name $FunctionAppName --resource-group $ownAppRg --query principalId --output tsv 2>$null
+    }
+    if (-not $existingPrincipalId) { throw "Could not enable/read the managed identity on '$FunctionAppName'." }
+    Write-Host "    OK - will deploy into the existing app (identity '$existingPrincipalId')." -ForegroundColor Green
+}
+else {
+    # Cases 2 & 3 — not in this subscription. Check global name availability.
+    $subId = az account show --query id -o tsv
+    $availJson = az rest --method POST `
+        --url "https://management.azure.com/subscriptions/$subId/providers/Microsoft.Web/checkNameAvailability?api-version=2023-12-01" `
+        --headers 'Content-Type=application/json' `
+        --body "{\""name\"":\""$FunctionAppName\"",\""type\"":\""Microsoft.Web/sites\""}" --output json 2>$null
+    $avail = if ($availJson) { $availJson | ConvertFrom-Json } else { $null }
+    if ($avail -and -not $avail.nameAvailable) {
+        Write-Host ''
+        Write-Host '------------------------------------------------------------' -ForegroundColor Red
+        Write-Host " Function App name '$FunctionAppName' is not available" -ForegroundColor Red
+        Write-Host '------------------------------------------------------------' -ForegroundColor Red
+        if ($avail.message) { Write-Host "Reason: $($avail.message)" -ForegroundColor Yellow }
+        Write-Host 'Function App names are globally unique across all Azure tenants (the app is' -ForegroundColor Yellow
+        Write-Host 'served at <name>.azurewebsites.net), and this one is already taken by someone' -ForegroundColor Yellow
+        Write-Host 'else. Choose a different -FunctionAppName and run again.' -ForegroundColor Cyan
+        throw "Function App name '$FunctionAppName' is not available."
+    }
+    Write-Host "    OK - '$FunctionAppName' is available; a new Function App will be created." -ForegroundColor Green
+}
+
+# If the workspace already exists, reuse its region (a workspace's location can
+# never be changed in place, so we must not pass a different one).
+$wsLocation = az resource show --resource-group $wsRg --name $WorkspaceName --resource-type 'Microsoft.OperationalInsights/workspaces' --query location --output tsv 2>$null
+if ($wsLocation) {
+    Write-Host "    Workspace '$WorkspaceName' already exists in '$wsLocation' — it will be updated in place." -ForegroundColor Green
+}
+else {
+    Write-Host "    Workspace '$WorkspaceName' will be created in '$Location'." -ForegroundColor Green
 }
 
 # --- 3. Deploy infrastructure (resource-group scope) ------------------------
 Write-Host '==> Deploying infrastructure (bicep)' -ForegroundColor Cyan
 $deploymentName = "loging-$(Get-Date -Format 'yyyyMMddHHmmss')"
-$paramOverrides = @("location=$Location", "baseName=$BaseName", "environment=$Environment")
-Write-Host "    Naming: baseName='$BaseName', environment='$Environment' (e.g. func-$BaseName-$Environment, dcr-$BaseName-$Environment)." -ForegroundColor Green
+$paramOverrides = @(
+    "location=$Location"
+    "functionAppName=$FunctionAppName"
+    "workspaceName=$WorkspaceName"
+    "dcrName=$DcrName"
+)
+Write-Host "    Names: function='$FunctionAppName', workspace='$WorkspaceName', dcr='$DcrName'." -ForegroundColor Green
 if ($DcrResourceGroup) { $paramOverrides += "dcrResourceGroup=$DcrResourceGroup" }
-if ($DcrName) { $paramOverrides += "dcrName=$DcrName" }
-if ($ExistingWorkspaceName) { $paramOverrides += "existingWorkspaceName=$ExistingWorkspaceName" }
-if ($ExistingWorkspaceResourceGroup) { $paramOverrides += "existingWorkspaceResourceGroup=$ExistingWorkspaceResourceGroup" }
+if ($WorkspaceResourceGroup) { $paramOverrides += "workspaceResourceGroup=$WorkspaceResourceGroup" }
+if ($wsLocation) { $paramOverrides += "workspaceLocation=$wsLocation" }
 if ($FunctionPlanType) {
     $paramOverrides += "functionPlanType=$FunctionPlanType"
     Write-Host "    Function App hosting plan: $FunctionPlanType." -ForegroundColor Green
@@ -351,8 +457,9 @@ if ($SkipDcrRoleAssignment) {
     $paramOverrides += 'assignDcrPublisherRole=false'
     Write-Host '    Skipping the DCR role assignment (Contributor-only deploy); grant it separately afterwards.' -ForegroundColor Yellow
 }
-if ($ExistingWorkspaceName) {
-    Write-Host "    Reusing existing Log Analytics workspace '$ExistingWorkspaceName'." -ForegroundColor Green
+if ($useExistingFunctionApp) {
+    $paramOverrides += "existingFunctionPrincipalId=$existingPrincipalId"
+    Write-Host "    Deploying into existing Function App '$FunctionAppName' (no new app created)." -ForegroundColor Green
 }
 
 # DCR deployments occasionally fail with a transient 'Data collection rule has
@@ -367,7 +474,7 @@ for ($deployAttempt = 1; $deployAttempt -le $maxDeployAttempts; $deployAttempt++
     $deployErrFile = New-TemporaryFile
     try {
         $outputJson = az deployment group create `
-            --resource-group $FunctionResourceGroup `
+            --resource-group $ResourceGroup `
             --name $deployName `
             --template-file $bicepPath `
             --parameters $paramPath $paramOverrides `
@@ -419,14 +526,51 @@ for ($deployAttempt = 1; $deployAttempt -le $maxDeployAttempts; $deployAttempt++
         Start-Sleep -Seconds 15
     }
     else {
-        throw "Infrastructure deployment failed after $maxDeployAttempts attempts. Review the Azure error above, or inspect the deployment in the portal (Resource group '$FunctionResourceGroup' > Deployments > '$deployName')."
+        throw "Infrastructure deployment failed after $maxDeployAttempts attempts. Review the Azure error above, or inspect the deployment in the portal (Resource group '$ResourceGroup' > Deployments > '$deployName')."
     }
 }
 
 $outputs = $outputJson | ConvertFrom-Json
-$functionAppName = $outputs.functionAppName.value
-$functionHost = $outputs.functionAppHostName.value
+if ($useExistingFunctionApp) {
+    $functionAppName = $FunctionAppName
+    $functionAppRg = $ownAppRg
+    $functionHost = $existingFunctionHost
+}
+else {
+    $functionAppName = $outputs.functionAppName.value
+    $functionAppRg = $ResourceGroup
+    $functionHost = $outputs.functionAppHostName.value
+}
 Write-Host "    OK - Function App '$functionAppName'." -ForegroundColor Green
+
+# In existing-app mode, write the app settings the function code needs (additive;
+# other settings on the app are preserved). A new app already has these baked in
+# by the bicep, so this only runs for an existing app.
+if ($useExistingFunctionApp) {
+    Write-Host '==> Configuring app settings on the existing Function App' -ForegroundColor Cyan
+    $dcrEndpointOut = $outputs.dcrIngestionEndpoint.value
+    $dcrImmutableIdOut = $outputs.dcrImmutableId.value
+    $expectedAudience = "https://$functionHost"
+    $appSettings = @(
+        "DCR_ENDPOINT=$dcrEndpointOut"
+        "DCR_IMMUTABLE_ID=$dcrImmutableIdOut"
+        'JWT_ENFORCE=true'
+        "JWT_EXPECTED_AUDIENCE=$expectedAudience"
+        'JWT_ALLOWED_TENANT_ID='
+        'JWT_REQUIRE_ENTRA_DEVICE=true'
+    )
+    az functionapp config appsettings set `
+        --name $functionAppName `
+        --resource-group $functionAppRg `
+        --settings $appSettings `
+        --output none 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "    Could not set app settings on '$functionAppName'. Set DCR_ENDPOINT/DCR_IMMUTABLE_ID and the JWT_* values manually (see README)."
+    }
+    else {
+        Write-Host "    OK - app settings written (JWT audience bound to https://$functionHost)." -ForegroundColor Green
+    }
+}
 
 # When the deployment was told NOT to create the DCR role assignment (Contributor-
 # only deploy), the Function cannot push logs until someone with role-assignment
@@ -475,7 +619,7 @@ if (-not $SkipFunctionPublish) {
     for ($readyAttempt = 1; $readyAttempt -le $maxReadyAttempts; $readyAttempt++) {
         $appState = az functionapp show `
             --name $functionAppName `
-            --resource-group $FunctionResourceGroup `
+            --resource-group $functionAppRg `
             --query state `
             --output tsv 2>$null
         # A zero exit code means the app is queryable (discoverable) on the
@@ -495,7 +639,7 @@ if (-not $SkipFunctionPublish) {
             Write-Host 'What to do:' -ForegroundColor Cyan
             Write-Host '    - Wait a couple of minutes and rerun this script (it is idempotent), OR' -ForegroundColor White
             Write-Host '    - Confirm it exists, then publish manually:' -ForegroundColor White
-            Write-Host "        az functionapp show -g $FunctionResourceGroup -n $functionAppName --query state -o tsv" -ForegroundColor White
+            Write-Host "        az functionapp show -g $functionAppRg -n $functionAppName --query state -o tsv" -ForegroundColor White
             Write-Host "        cd '$functionPath'; func azure functionapp publish $functionAppName --powershell" -ForegroundColor White
             throw "Function App '$functionAppName' did not become discoverable in time."
         }
@@ -537,14 +681,14 @@ if (-not $SkipFunctionPublish) {
 # jwtRequireEntraDevice=false or will grant it another way.
 if (-not $SkipDeviceGraphPermission) {
     Write-Host '==> Granting Graph Device.Read.All to the Function managed identity' -ForegroundColor Cyan
-    $miPrincipalId = az functionapp identity show --resource-group $FunctionResourceGroup --name $functionAppName --query principalId --output tsv 2>$null
+    $miPrincipalId = az functionapp identity show --resource-group $functionAppRg --name $functionAppName --query principalId --output tsv 2>$null
     if (-not $miPrincipalId) {
         Write-Host ''
         Write-Warning "Could not read the Function App's managed identity (principalId)."
         Write-Host '    The system-assigned managed identity may not be enabled yet, or you may' -ForegroundColor Yellow
         Write-Host '    lack rights to read it. Without Device.Read.All every request returns 401.' -ForegroundColor Yellow
         Write-Host '    Fix it manually once the identity exists:' -ForegroundColor Cyan
-        Write-Host "      az functionapp identity show -g $FunctionResourceGroup -n $functionAppName --query principalId -o tsv" -ForegroundColor White
+        Write-Host "      az functionapp identity show -g $functionAppRg -n $functionAppName --query principalId -o tsv" -ForegroundColor White
         Write-Host '    Then grant Graph Device.Read.All to that principalId (see README), or rerun' -ForegroundColor Cyan
         Write-Host '    with -jwtRequireEntraDevice false if you do not need Entra device validation.' -ForegroundColor Cyan
     }

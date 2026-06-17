@@ -34,40 +34,35 @@ on:
         description: 'Target resource group (created if missing)'
         type: string
         default: rg-logingestion
+      functionAppName:
+        description: 'Exact Function App name (no hash; globally unique). Updated in place if it already exists.'
+        type: string
+        default: func-logingestion
+      workspaceName:
+        description: 'Exact Log Analytics workspace name (created if missing, updated in place if it exists).'
+        type: string
+        default: log-logingestion
+      dcrName:
+        description: 'Exact Data Collection Rule name (created if missing, updated in place if it exists).'
+        type: string
+        default: dcr-logingestion
       dcrResourceGroup:
         description: 'Resource group for the Data Collection Rule (blank = same as target resource group)'
+        type: string
+        default: ''
+      workspaceResourceGroup:
+        description: 'Resource group of the Log Analytics workspace (blank = same as target resource group)'
         type: string
         default: ''
       location:
         description: 'Azure region'
         type: string
         default: eastus
-      baseName:
-        description: 'Base name for resources (3-17 lowercase chars)'
-        type: string
-        default: logapi
-      environment:
-        description: 'Environment'
-        type: choice
-        options: [dev, test, prod]
-        default: dev
       functionPlanType:
         description: 'Hosting plan'
         type: choice
         options: [Consumption, Flex]
         default: Consumption
-      existingWorkspaceName:
-        description: 'Existing Log Analytics workspace name (leave blank to create a new one).'
-        type: string
-        default: ''
-      existingWorkspaceResourceGroup:
-        description: 'Resource group of the existing workspace (blank = same as target resource group)'
-        type: string
-        default: ''
-      dcrName:
-        description: 'Exact DCR name to use (blank = dcr-<baseName>-<environment>). Set this to target an existing DCR by name.'
-        type: string
-        default: ''
       requireEntraDevice:
         description: 'Validate device against its Entra record (needs Graph Device.Read.All granted separately)'
         type: boolean
@@ -128,16 +123,15 @@ jobs:
           inlineScript: |
             params=(
               location="${{ inputs.location }}"
-              baseName="${{ inputs.baseName }}"
-              environment="${{ inputs.environment }}"
+              functionAppName="${{ inputs.functionAppName }}"
+              workspaceName="${{ inputs.workspaceName }}"
+              dcrName="${{ inputs.dcrName }}"
               functionPlanType="${{ inputs.functionPlanType }}"
-              existingWorkspaceName="${{ inputs.existingWorkspaceName }}"
-              existingWorkspaceResourceGroup="${{ inputs.existingWorkspaceResourceGroup }}"
               jwtRequireEntraDevice=${{ inputs.requireEntraDevice }}
             )
-            # Use a specific DCR name when one was provided.
-            if [ -n "${{ inputs.dcrName }}" ]; then
-              params+=( dcrName="${{ inputs.dcrName }}" )
+            # Put the workspace in its own resource group when one was provided.
+            if [ -n "${{ inputs.workspaceResourceGroup }}" ]; then
+              params+=( workspaceResourceGroup="${{ inputs.workspaceResourceGroup }}" )
             fi
             # Put the DCR in its own resource group when the portal selected one.
             if [ -n "${{ inputs.dcrResourceGroup }}" ]; then
@@ -183,17 +177,18 @@ jobs:
           # runs exactly like a local deploy.
           $opt = @('-SkipDeviceGraphPermission')
           if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
-          if ('${{ inputs.existingWorkspaceName }}') { $opt += @('-ExistingWorkspaceName', '${{ inputs.existingWorkspaceName }}') }
-          if ('${{ inputs.existingWorkspaceResourceGroup }}') { $opt += @('-ExistingWorkspaceResourceGroup', '${{ inputs.existingWorkspaceResourceGroup }}') }
+          if ('${{ inputs.workspaceResourceGroup }}') { $opt += @('-WorkspaceResourceGroup', '${{ inputs.workspaceResourceGroup }}') }
           if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
           # Contributor-only login: don't create the DCR role assignment here.
           if ('${{ inputs.skipRoleAssignment }}' -eq 'true') { $opt += '-SkipDcrRoleAssignment' }
           ./deploy.ps1 `
-            -FunctionResourceGroup '${{ inputs.resourceGroup }}' `
+            -ResourceGroup '${{ inputs.resourceGroup }}' `
             -Location '${{ inputs.location }}' `
-            -BaseName '${{ inputs.baseName }}' `
-            -Environment '${{ inputs.environment }}' `
+            -FunctionAppName '${{ inputs.functionAppName }}' `
+            -WorkspaceName '${{ inputs.workspaceName }}' `
+            -DcrName '${{ inputs.dcrName }}' `
             -FunctionPlanType '${{ inputs.functionPlanType }}' `
+            -Force `
             @opt
 
       - name: Summary

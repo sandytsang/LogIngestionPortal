@@ -4,11 +4,8 @@
 // Service plan always live with the Function App. Supports Consumption (Windows
 // Y1) or Flex Consumption (Linux FC1); both run PowerShell 7.4.
 // ---------------------------------------------------------------------------
-@description('Base name used to derive resource names.')
-param baseName string
-
-@description('Environment short name.')
-param environment string
+@description('Exact Function App name (no hash appended). Must be globally unique across Azure because it becomes <name>.azurewebsites.net.')
+param functionAppName string
 
 @description('Region for the Function App and its dependencies.')
 param location string
@@ -35,14 +32,17 @@ param jwtAllowedTenantId string = ''
 @description('Validate the device against its Entra record (needs Graph Device.Read.All).')
 param jwtRequireEntraDevice bool = true
 
-// Names follow the Cloud Adoption Framework resource abbreviations
-// (https://aka.ms/CAF/abbreviations): func- (Function App), asp- (App Service
-// plan), appi- (Application Insights), st (storage account, no hyphens).
-var suffix = uniqueString(resourceGroup().id, baseName, environment)
-var funcName = 'func-${baseName}-${environment}-${substring(suffix, 0, 5)}'
-var planName = 'asp-${baseName}-${environment}'
-var aiName = 'appi-${baseName}-${environment}'
-var storageName = toLower(take('st${baseName}${suffix}', 24))
+// The Function App name is supplied verbatim (no hash). Its co-located
+// dependencies derive their names from it: asp- (plan), appi- (App Insights)
+// and a storage account (st<sanitized><hash>, since storage names must be
+// 3-24 lowercase alphanumerics and globally unique). Only the Function App
+// itself is hash-free; the storage hash is an internal, non-user-facing detail.
+var funcName = functionAppName
+var sanitized = toLower(replace(replace(functionAppName, '-', ''), '_', ''))
+var suffix = uniqueString(resourceGroup().id, functionAppName)
+var planName = 'asp-${functionAppName}'
+var aiName = 'appi-${functionAppName}'
+var storageName = toLower(take('st${sanitized}${suffix}', 24))
 
 var defaultAudience = 'https://${funcName}.azurewebsites.net'
 var effectiveAudience = empty(jwtExpectedAudience) ? defaultAudience : jwtExpectedAudience

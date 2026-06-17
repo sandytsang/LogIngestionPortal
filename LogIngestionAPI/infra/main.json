@@ -5,36 +5,22 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "5282306944137139567"
+      "templateHash": "17489788753071176214"
     }
   },
   "parameters": {
-    "baseName": {
-      "type": "string",
-      "defaultValue": "loging",
-      "minLength": 3,
-      "maxLength": 17,
-      "metadata": {
-        "description": "Base name used to derive all resource names. 3-17 lowercase chars."
-      }
-    },
     "location": {
       "type": "string",
       "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Azure region for resources created in this RG (Function App + a new workspace). The DCR follows the workspace region automatically."
+        "description": "Azure region for resources created/updated in this RG (Function App + workspace when it is created here). The DCR follows the workspace region automatically."
       }
     },
-    "environment": {
+    "functionAppName": {
       "type": "string",
-      "defaultValue": "dev",
-      "allowedValues": [
-        "dev",
-        "test",
-        "prod"
-      ],
+      "defaultValue": "",
       "metadata": {
-        "description": "Environment short name, appended to resource names."
+        "description": "Exact Function App name (no hash appended). Globally unique across Azure. Required for a full deploy; ignored for a schema-only update or when deploying into an existing app by principal id."
       }
     },
     "functionPlanType": {
@@ -52,7 +38,7 @@
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "When true, deploy ONLY the Log Analytics custom table + DCR (schema update). The Function App and its dependencies are not deployed. Requires an existing workspace."
+        "description": "When true, deploy ONLY the Log Analytics custom table + DCR (schema update). The Function App and its dependencies are not deployed, and the workspace is referenced (not managed). Requires an existing workspace."
       }
     },
     "dcrResourceGroup": {
@@ -66,7 +52,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Exact name of the Data Collection Rule to create/update. Leave empty to derive dcr-<baseName>-<environment>. Set this for a schema-only update that targets an existing DCR by name."
+        "description": "Exact name of the Data Collection Rule to create/update."
       }
     },
     "retentionInDays": {
@@ -78,18 +64,25 @@
         "description": "Log Analytics data retention in days."
       }
     },
-    "existingWorkspaceName": {
+    "workspaceName": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Name of an existing Log Analytics workspace to reuse. Leave empty to create a new one in this RG."
+        "description": "Exact Log Analytics workspace name. Created if it does not exist, updated in place if it does."
       }
     },
-    "existingWorkspaceResourceGroup": {
+    "workspaceLocation": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Resource group of the existing Log Analytics workspace. Defaults to this deployment's RG when empty."
+        "description": "Region for the workspace. Defaults to location. Pass the workspace's existing region when it already exists (a workspace location cannot be changed in place)."
+      }
+    },
+    "workspaceResourceGroup": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource group of the Log Analytics workspace. Defaults to this deployment's RG when empty."
       }
     },
     "jwtExpectedAudience": {
@@ -119,6 +112,13 @@
       "metadata": {
         "description": "When true, the deployment grants the Function App's managed identity Monitoring Metrics Publisher on the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately."
       }
+    },
+    "existingFunctionPrincipalId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Principal id of an existing Function App's managed identity to deploy against instead of creating a new Function App. When set, the Function App and its storage/plan/App Insights are NOT created; only the table, DCR and the DCR role assignment (for this principal) are deployed. deploy.ps1 sets this from -ExistingFunctionAppName and configures the existing app's settings + code separately."
+      }
     }
   },
   "variables": {
@@ -134,44 +134,14 @@
               "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
             },
             {
-              "name": "DeviceName",
+              "name": "AutopilotHardwareHash",
               "type": "string",
-              "description": "Hostname of the reporting device."
+              "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
             },
             {
-              "name": "UserName",
+              "name": "BiosVersion",
               "type": "string",
-              "description": "Currently logged-on user (UPN or sAMAccountName)."
-            },
-            {
-              "name": "OSVersion",
-              "type": "string",
-              "description": "Operating system build/version string."
-            },
-            {
-              "name": "IntuneScriptVersion",
-              "type": "string",
-              "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
-            },
-            {
-              "name": "Manufacturer",
-              "type": "string",
-              "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
-            },
-            {
-              "name": "Model",
-              "type": "string",
-              "description": "System model (Win32_ComputerSystem.Model)."
-            },
-            {
-              "name": "SerialNumber",
-              "type": "string",
-              "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
-            },
-            {
-              "name": "TotalMemoryGB",
-              "type": "real",
-              "description": "Installed physical memory in GB."
+              "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
             },
             {
               "name": "BitLockerStatus",
@@ -189,14 +159,34 @@
               "description": "Microsoft Defender antivirus signature version (Get-MpComputerStatus.AntivirusSignatureVersion)."
             },
             {
-              "name": "BiosVersion",
+              "name": "DeviceName",
               "type": "string",
-              "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
+              "description": "Hostname of the reporting device."
             },
             {
-              "name": "AutopilotHardwareHash",
+              "name": "IntuneScriptVersion",
               "type": "string",
-              "description": "Base64-encoded Windows Autopilot device hardware hash (MDM_DevDetail_Ext01.DeviceHardwareData)."
+              "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
+            },
+            {
+              "name": "Manufacturer",
+              "type": "string",
+              "description": "System manufacturer (Win32_ComputerSystem.Manufacturer)."
+            },
+            {
+              "name": "Model",
+              "type": "string",
+              "description": "System model (Win32_ComputerSystem.Model)."
+            },
+            {
+              "name": "OSVersion",
+              "type": "string",
+              "description": "Operating system build/version string."
+            },
+            {
+              "name": "SerialNumber",
+              "type": "string",
+              "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
             },
             {
               "name": "SystemDriveFreeGB",
@@ -207,6 +197,16 @@
               "name": "SystemDriveSizeGB",
               "type": "real",
               "description": "Total size of the system drive in GB."
+            },
+            {
+              "name": "TotalMemoryGB",
+              "type": "real",
+              "description": "Installed physical memory in GB."
+            },
+            {
+              "name": "UserName",
+              "type": "string",
+              "description": "Currently logged-on user (UPN or sAMAccountName)."
             }
           ]
         },
@@ -220,14 +220,19 @@
               "description": "Event timestamp (UTC). REQUIRED by Log Analytics. Set by the device script."
             },
             {
+              "name": "BitLockerStatus",
+              "type": "dynamic",
+              "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+            },
+            {
               "name": "IntuneScriptVersion",
               "type": "string",
               "description": "Version of the Intune script that produced this record, so you can tell old data from the current script."
             },
             {
-              "name": "BitLockerStatus",
-              "type": "dynamic",
-              "description": "Per-volume BitLocker protection/encryption status (array of objects from Get-BitLockerVolume)."
+              "name": "SecureBootEnabled",
+              "type": "boolean",
+              "description": "Whether UEFI Secure Boot is enabled."
             },
             {
               "name": "TpmPresent",
@@ -238,11 +243,6 @@
               "name": "TpmReady",
               "type": "boolean",
               "description": "Whether the TPM is ready for use."
-            },
-            {
-              "name": "SecureBootEnabled",
-              "type": "boolean",
-              "description": "Whether UEFI Secure Boot is enabled."
             }
           ]
         }
@@ -250,12 +250,11 @@
     },
     "schema": "[variables('$fxv#0')]",
     "tables": "[variables('schema').tables]",
-    "createWorkspace": "[empty(parameters('existingWorkspaceName'))]",
+    "manageWorkspace": "[not(parameters('schemaOnly'))]",
+    "createFunctionApp": "[and(not(parameters('schemaOnly')), empty(parameters('existingFunctionPrincipalId')))]",
     "primaryRg": "[resourceGroup().name]",
     "dcrRg": "[if(empty(parameters('dcrResourceGroup')), variables('primaryRg'), parameters('dcrResourceGroup'))]",
-    "laRg": "[if(variables('createWorkspace'), variables('primaryRg'), if(empty(parameters('existingWorkspaceResourceGroup')), variables('primaryRg'), parameters('existingWorkspaceResourceGroup')))]",
-    "lawName": "[format('log-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-    "effectiveDcrName": "[if(empty(parameters('dcrName')), format('dcr-{0}-{1}', parameters('baseName'), parameters('environment')), parameters('dcrName'))]",
+    "laRg": "[if(empty(parameters('workspaceResourceGroup')), variables('primaryRg'), parameters('workspaceResourceGroup'))]",
     "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
   },
   "resources": [
@@ -270,18 +269,13 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "createWorkspace": {
-            "value": "[variables('createWorkspace')]"
+          "manageWorkspace": {
+            "value": "[variables('manageWorkspace')]"
           },
-          "lawName": {
-            "value": "[variables('lawName')]"
+          "workspaceName": {
+            "value": "[parameters('workspaceName')]"
           },
-          "existingWorkspaceName": {
-            "value": "[parameters('existingWorkspaceName')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
+          "location": "[if(empty(parameters('workspaceLocation')), createObject('value', parameters('location')), createObject('value', parameters('workspaceLocation')))]",
           "retentionInDays": {
             "value": "[parameters('retentionInDays')]"
           },
@@ -296,33 +290,26 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14803902146725045504"
+              "templateHash": "15418694896676101113"
             }
           },
           "parameters": {
-            "createWorkspace": {
+            "manageWorkspace": {
               "type": "bool",
               "metadata": {
-                "description": "Create a new workspace (true) or reference an existing one (false)."
+                "description": "When true, declare/upsert the workspace (create it or update it in place). When false, reference the existing workspace without managing its top-level properties (schema-only updates)."
               }
             },
-            "lawName": {
+            "workspaceName": {
               "type": "string",
               "metadata": {
-                "description": "Name for a new workspace."
-              }
-            },
-            "existingWorkspaceName": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Name of the existing workspace to reference when createWorkspace is false."
+                "description": "Exact Log Analytics workspace name."
               }
             },
             "location": {
               "type": "string",
               "metadata": {
-                "description": "Region for a new workspace."
+                "description": "Region for the workspace when it is being created/updated."
               }
             },
             "retentionInDays": {
@@ -339,15 +326,14 @@
             }
           },
           "variables": {
-            "effectiveLawName": "[if(parameters('createWorkspace'), parameters('lawName'), parameters('existingWorkspaceName'))]",
-            "lawId": "[if(parameters('createWorkspace'), resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName')), resourceId('Microsoft.OperationalInsights/workspaces', parameters('existingWorkspaceName')))]"
+            "lawId": "[if(parameters('manageWorkspace'), resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')))]"
           },
           "resources": [
             {
-              "condition": "[parameters('createWorkspace')]",
+              "condition": "[parameters('manageWorkspace')]",
               "type": "Microsoft.OperationalInsights/workspaces",
               "apiVersion": "2023-09-01",
-              "name": "[parameters('lawName')]",
+              "name": "[parameters('workspaceName')]",
               "location": "[parameters('location')]",
               "properties": {
                 "sku": {
@@ -366,7 +352,7 @@
               },
               "type": "Microsoft.OperationalInsights/workspaces/tables",
               "apiVersion": "2023-09-01",
-              "name": "[format('{0}/{1}', variables('effectiveLawName'), parameters('tables')[copyIndex()].tableName)]",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('tables')[copyIndex()].tableName)]",
               "properties": {
                 "totalRetentionInDays": "[parameters('retentionInDays')]",
                 "schema": {
@@ -376,7 +362,7 @@
                 }
               },
               "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName'))]"
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
               ]
             }
           ],
@@ -387,11 +373,11 @@
             },
             "workspaceLocation": {
               "type": "string",
-              "value": "[if(parameters('createWorkspace'), parameters('location'), reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('existingWorkspaceName')), '2023-09-01', 'full').location)]"
+              "value": "[if(parameters('manageWorkspace'), parameters('location'), reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2023-09-01', 'full').location)]"
             },
             "workspaceCustomerId": {
               "type": "string",
-              "value": "[if(parameters('createWorkspace'), reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('lawName')), '2023-09-01').customerId, reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('existingWorkspaceName')), '2023-09-01').customerId)]"
+              "value": "[if(parameters('manageWorkspace'), reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2023-09-01').customerId, reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2023-09-01').customerId)]"
             }
           }
         }
@@ -409,7 +395,7 @@
         "mode": "Incremental",
         "parameters": {
           "dcrName": {
-            "value": "[variables('effectiveDcrName')]"
+            "value": "[parameters('dcrName')]"
           },
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('laRg')), 'Microsoft.Resources/deployments', 'logAnalytics'), '2025-04-01').outputs.workspaceLocation.value]"
@@ -518,7 +504,7 @@
       ]
     },
     {
-      "condition": "[not(parameters('schemaOnly'))]",
+      "condition": "[variables('createFunctionApp')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "functionApp",
@@ -528,11 +514,8 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "baseName": {
-            "value": "[parameters('baseName')]"
-          },
-          "environment": {
-            "value": "[parameters('environment')]"
+          "functionAppName": {
+            "value": "[parameters('functionAppName')]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -566,20 +549,14 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14783422181334847512"
+              "templateHash": "11540310060626425234"
             }
           },
           "parameters": {
-            "baseName": {
+            "functionAppName": {
               "type": "string",
               "metadata": {
-                "description": "Base name used to derive resource names."
-              }
-            },
-            "environment": {
-              "type": "string",
-              "metadata": {
-                "description": "Environment short name."
+                "description": "Exact Function App name (no hash appended). Must be globally unique across Azure because it becomes <name>.azurewebsites.net."
               }
             },
             "location": {
@@ -639,11 +616,12 @@
             }
           },
           "variables": {
-            "suffix": "[uniqueString(resourceGroup().id, parameters('baseName'), parameters('environment'))]",
-            "funcName": "[format('func-{0}-{1}-{2}', parameters('baseName'), parameters('environment'), substring(variables('suffix'), 0, 5))]",
-            "planName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "aiName": "[format('appi-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "storageName": "[toLower(take(format('st{0}{1}', parameters('baseName'), variables('suffix')), 24))]",
+            "funcName": "[parameters('functionAppName')]",
+            "sanitized": "[toLower(replace(replace(parameters('functionAppName'), '-', ''), '_', ''))]",
+            "suffix": "[uniqueString(resourceGroup().id, parameters('functionAppName'))]",
+            "planName": "[format('asp-{0}', parameters('functionAppName'))]",
+            "aiName": "[format('appi-{0}', parameters('functionAppName'))]",
+            "storageName": "[toLower(take(format('st{0}{1}', variables('sanitized'), variables('suffix')), 24))]",
             "defaultAudience": "[format('https://{0}.azurewebsites.net', variables('funcName'))]",
             "effectiveAudience": "[if(empty(parameters('jwtExpectedAudience')), variables('defaultAudience'), parameters('jwtExpectedAudience'))]",
             "isFlex": "[equals(parameters('functionPlanType'), 'Flex')]"
@@ -874,9 +852,7 @@
           "dcrName": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.dcrName.value]"
           },
-          "principalId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value]"
-          },
+          "principalId": "[if(variables('createFunctionApp'), createObject('value', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value), createObject('value', parameters('existingFunctionPrincipalId')))]",
           "roleDefinitionId": {
             "value": "[variables('monitoringMetricsPublisherRoleId')]"
           }
@@ -935,15 +911,15 @@
   "outputs": {
     "functionAppName": {
       "type": "string",
-      "value": "[if(parameters('schemaOnly'), '', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppName.value)]"
+      "value": "[if(variables('createFunctionApp'), reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppName.value, '')]"
     },
     "functionAppHostName": {
       "type": "string",
-      "value": "[if(parameters('schemaOnly'), '', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppHostName.value)]"
+      "value": "[if(variables('createFunctionApp'), reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.functionAppHostName.value, '')]"
     },
     "functionPrincipalId": {
       "type": "string",
-      "value": "[if(parameters('schemaOnly'), '', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value)]"
+      "value": "[if(variables('createFunctionApp'), reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value, parameters('existingFunctionPrincipalId'))]"
     },
     "functionResourceGroup": {
       "type": "string",

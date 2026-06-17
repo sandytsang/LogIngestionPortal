@@ -18,20 +18,18 @@ import {
 } from './lib/generators';
 import { validateColumns } from './lib/validation';
 
-const STORAGE_KEY = 'logingestion-portal.v5';
-const LEGACY_KEY = 'logingestion-portal.v4';
+const STORAGE_KEY = 'logingestion-portal.v6';
+const LEGACY_KEY = 'logingestion-portal.v5';
 
 const defaultConfig = (): PortalConfig => ({
   functionUrl: 'https://<your-function-app>.azurewebsites.net/api/DCRLogIngestionAPI?code=<your-function-key>',
   scriptVersion: '1.0.0',
   action: 'deploy',
-  scenario: 'new',
-  baseName: '',
-  environment: 'dev',
-  functionResourceGroup: '',
+  resourceGroup: '',
+  functionAppName: '',
   dcrResourceGroup: '',
   dcrName: '',
-  existingWorkspaceResourceGroup: '',
+  workspaceResourceGroup: '',
   location: '',
   functionPlanType: 'Consumption',
 });
@@ -184,9 +182,7 @@ export default function App() {
         content: generateDeployReadme(
           config,
           tables,
-          config.action === 'updateColumns' || config.scenario === 'existing'
-            ? workspaceName.trim() || undefined
-            : undefined,
+          workspaceName.trim() || undefined,
         ),
       },
     ],

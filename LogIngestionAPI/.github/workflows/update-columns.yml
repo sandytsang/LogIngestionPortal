@@ -26,12 +26,12 @@ on:
         type: choice
         options: [native, script]
         default: native
-      existingWorkspaceName:
-        description: 'Existing Log Analytics workspace name (the workspace that holds the table to update).'
+      workspaceName:
+        description: 'Log Analytics workspace name (the workspace that holds the table to update).'
         type: string
         default: ''
-      existingWorkspaceResourceGroup:
-        description: 'Resource group of the existing workspace.'
+      workspaceResourceGroup:
+        description: 'Resource group of the workspace.'
         type: string
         default: ''
       dcrName:
@@ -67,8 +67,8 @@ jobs:
       - name: Validate inputs
         run: |
           missing=""
-          [ -z "${{ inputs.existingWorkspaceName }}" ] && missing="$missing existingWorkspaceName"
-          [ -z "${{ inputs.existingWorkspaceResourceGroup }}" ] && missing="$missing existingWorkspaceResourceGroup"
+          [ -z "${{ inputs.workspaceName }}" ] && missing="$missing workspaceName"
+          [ -z "${{ inputs.workspaceResourceGroup }}" ] && missing="$missing workspaceResourceGroup"
           [ -z "${{ inputs.dcrName }}" ] && missing="$missing dcrName"
           if [ -n "$missing" ]; then
             echo "::error::Missing required input(s):$missing" >&2
@@ -92,8 +92,8 @@ jobs:
           azcliversion: latest
           inlineScript: |
             params=(
-              existingWorkspaceName="${{ inputs.existingWorkspaceName }}"
-              existingWorkspaceResourceGroup="${{ inputs.existingWorkspaceResourceGroup }}"
+              workspaceName="${{ inputs.workspaceName }}"
+              workspaceResourceGroup="${{ inputs.workspaceResourceGroup }}"
               schemaOnly=true
               dcrName="${{ inputs.dcrName }}"
             )
@@ -105,7 +105,7 @@ jobs:
             # exists and holds the custom table); the table + DCR are written into
             # the workspace/DCR resource groups via the template's module scopes.
             az deployment group create \
-              --resource-group "${{ inputs.existingWorkspaceResourceGroup }}" \
+              --resource-group "${{ inputs.workspaceResourceGroup }}" \
               --name "logapi-schema-$(date +%Y%m%d%H%M%S)" \
               --template-file infra/main.bicep \
               --parameters infra/main.bicepparam \
@@ -125,12 +125,12 @@ jobs:
           # app isn't touched here anyway, so skip that step. For a schema-only
           # update deploy.ps1 needs the workspace + DCR only.
           $dcrRg = '${{ inputs.dcrResourceGroup }}'
-          if (-not $dcrRg) { $dcrRg = '${{ inputs.existingWorkspaceResourceGroup }}' }
+          if (-not $dcrRg) { $dcrRg = '${{ inputs.workspaceResourceGroup }}' }
           ./deploy.ps1 `
             -SchemaOnly `
             -SkipDeviceGraphPermission `
-            -ExistingWorkspaceName '${{ inputs.existingWorkspaceName }}' `
-            -ExistingWorkspaceResourceGroup '${{ inputs.existingWorkspaceResourceGroup }}' `
+            -WorkspaceName '${{ inputs.workspaceName }}' `
+            -WorkspaceResourceGroup '${{ inputs.workspaceResourceGroup }}' `
             -DcrName '${{ inputs.dcrName }}' `
             -DcrResourceGroup $dcrRg
 
@@ -139,7 +139,7 @@ jobs:
         run: |
           echo "### LogIngestionAPI schema-only update (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Workspace: ${{ inputs.existingWorkspaceName }} (RG ${{ inputs.existingWorkspaceResourceGroup }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workspace: ${{ inputs.workspaceName }} (RG ${{ inputs.workspaceResourceGroup }})" >> "$GITHUB_STEP_SUMMARY"
           echo "- DCR: ${{ inputs.dcrName }}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Only the Log Analytics custom table and Data Collection Rule were updated. The Function App was left unchanged." >> "$GITHUB_STEP_SUMMARY"

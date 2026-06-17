@@ -18,29 +18,23 @@
 // ---------------------------------------------------------------------------
 targetScope = 'resourceGroup'
 
-@description('Base name used to derive all resource names. 3-17 lowercase chars.')
-@minLength(3)
-@maxLength(17)
-param baseName string = 'loging'
-
-@description('Azure region for resources created in this RG (Function App + a new workspace). The DCR follows the workspace region automatically.')
+@description('Azure region for resources created/updated in this RG (Function App + workspace when it is created here). The DCR follows the workspace region automatically.')
 param location string = resourceGroup().location
 
-@description('Environment short name, appended to resource names.')
-@allowed([ 'dev', 'test', 'prod' ])
-param environment string = 'dev'
+@description('Exact Function App name (no hash appended). Globally unique across Azure. Required for a full deploy; ignored for a schema-only update or when deploying into an existing app by principal id.')
+param functionAppName string = ''
 
 @description('Function App hosting plan. Consumption = Windows Y1. Flex = Linux Flex Consumption (FC1) with PowerShell 7.4.')
 @allowed([ 'Consumption', 'Flex' ])
 param functionPlanType string = 'Consumption'
 
-@description('When true, deploy ONLY the Log Analytics custom table + DCR (schema update). The Function App and its dependencies are not deployed. Requires an existing workspace.')
+@description('When true, deploy ONLY the Log Analytics custom table + DCR (schema update). The Function App and its dependencies are not deployed, and the workspace is referenced (not managed). Requires an existing workspace.')
 param schemaOnly bool = false
 
 @description('Resource group for the Data Collection Rule. Defaults to this deployment\'s RG when empty.')
 param dcrResourceGroup string = ''
 
-@description('Exact name of the Data Collection Rule to create/update. Leave empty to derive dcr-<baseName>-<environment>. Set this for a schema-only update that targets an existing DCR by name.')
+@description('Exact name of the Data Collection Rule to create/update.')
 param dcrName string = ''
 
 @description('Log Analytics data retention in days.')
@@ -48,11 +42,14 @@ param dcrName string = ''
 @maxValue(730)
 param retentionInDays int = 90
 
-@description('Name of an existing Log Analytics workspace to reuse. Leave empty to create a new one in this RG.')
-param existingWorkspaceName string = ''
+@description('Exact Log Analytics workspace name. Created if it does not exist, updated in place if it does.')
+param workspaceName string = ''
 
-@description('Resource group of the existing Log Analytics workspace. Defaults to this deployment\'s RG when empty.')
-param existingWorkspaceResourceGroup string = ''
+@description('Region for the workspace. Defaults to location. Pass the workspace\'s existing region when it already exists (a workspace location cannot be changed in place).')
+param workspaceLocation string = ''
+
+@description('Resource group of the Log Analytics workspace. Defaults to this deployment\'s RG when empty.')
+param workspaceResourceGroup string = ''
 
 // ---------------------------------------------------------------------------
 // Device authentication (JWT) - all values become Function app settings.
@@ -69,6 +66,9 @@ param jwtRequireEntraDevice bool = true
 @description('When true, the deployment grants the Function App\'s managed identity Monitoring Metrics Publisher on the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately.')
 param assignDcrPublisherRole bool = true
 
+@description('Principal id of an existing Function App\'s managed identity to deploy against instead of creating a new Function App. When set, the Function App and its storage/plan/App Insights are NOT created; only the table, DCR and the DCR role assignment (for this principal) are deployed. deploy.ps1 sets this from -ExistingFunctionAppName and configures the existing app\'s settings + code separately.')
+param existingFunctionPrincipalId string = ''
+
 // ---------------------------------------------------------------------------
 // Schema - single source of truth
 //
@@ -84,21 +84,15 @@ var tables = schema.tables
 // ---------------------------------------------------------------------------
 // Resource group resolution
 // ---------------------------------------------------------------------------
-var createWorkspace = empty(existingWorkspaceName)
+// The workspace is managed (created or updated in place) on a full deploy, and
+// only referenced (not managed) during a schema-only update.
+var manageWorkspace = !schemaOnly
+// Skip creating the Function App (and its storage/plan/App Insights) when an
+// existing app's managed-identity principal id was supplied.
+var createFunctionApp = !schemaOnly && empty(existingFunctionPrincipalId)
 var primaryRg = resourceGroup().name
 var dcrRg = empty(dcrResourceGroup) ? primaryRg : dcrResourceGroup
-var laRg = createWorkspace
-  ? primaryRg
-  : (empty(existingWorkspaceResourceGroup) ? primaryRg : existingWorkspaceResourceGroup)
-
-// ---------------------------------------------------------------------------
-// Naming (RG-unique names; the Function App computes its own globally-unique
-// names inside its module where resourceGroup() is in scope).
-// Names follow the Cloud Adoption Framework resource abbreviations
-// (https://aka.ms/CAF/abbreviations): log- (workspace), dcr- (data collection rule).
-// ---------------------------------------------------------------------------
-var lawName = 'log-${baseName}-${environment}'
-var effectiveDcrName = empty(dcrName) ? 'dcr-${baseName}-${environment}' : dcrName
+var laRg = empty(workspaceResourceGroup) ? primaryRg : workspaceResourceGroup
 
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
 
@@ -109,10 +103,9 @@ module logAnalytics 'modules/logAnalytics.bicep' = {
   name: 'logAnalytics'
   scope: resourceGroup(laRg)
   params: {
-    createWorkspace: createWorkspace
-    lawName: lawName
-    existingWorkspaceName: existingWorkspaceName
-    location: location
+    manageWorkspace: manageWorkspace
+    workspaceName: workspaceName
+    location: empty(workspaceLocation) ? location : workspaceLocation
     retentionInDays: retentionInDays
     tables: tables
   }
@@ -122,18 +115,17 @@ module dcr 'modules/dcr.bicep' = {
   name: 'dcr'
   scope: resourceGroup(dcrRg)
   params: {
-    dcrName: effectiveDcrName
+    dcrName: dcrName
     location: logAnalytics.outputs.workspaceLocation
     workspaceResourceId: logAnalytics.outputs.workspaceId
     tables: tables
   }
 }
 
-module functionApp 'modules/functionApp.bicep' = if (!schemaOnly) {
+module functionApp 'modules/functionApp.bicep' = if (createFunctionApp) {
   name: 'functionApp'
   params: {
-    baseName: baseName
-    environment: environment
+    functionAppName: functionAppName
     location: location
     functionPlanType: functionPlanType
     workspaceResourceId: logAnalytics.outputs.workspaceId
@@ -151,7 +143,7 @@ module dcrRoleAssignment 'modules/dcrRoleAssignment.bicep' = if (!schemaOnly && 
   params: {
     dcrName: dcr.outputs.dcrName
     #disable-next-line BCP318
-    principalId: functionApp.outputs.principalId
+    principalId: createFunctionApp ? functionApp.outputs.principalId : existingFunctionPrincipalId
     roleDefinitionId: monitoringMetricsPublisherRoleId
   }
 }
@@ -160,11 +152,11 @@ module dcrRoleAssignment 'modules/dcrRoleAssignment.bicep' = if (!schemaOnly && 
 // Outputs
 // ---------------------------------------------------------------------------
 #disable-next-line BCP318
-output functionAppName string = schemaOnly ? '' : functionApp.outputs.functionAppName
+output functionAppName string = createFunctionApp ? functionApp.outputs.functionAppName : ''
 #disable-next-line BCP318
-output functionAppHostName string = schemaOnly ? '' : functionApp.outputs.functionAppHostName
+output functionAppHostName string = createFunctionApp ? functionApp.outputs.functionAppHostName : ''
 #disable-next-line BCP318
-output functionPrincipalId string = schemaOnly ? '' : functionApp.outputs.principalId
+output functionPrincipalId string = createFunctionApp ? functionApp.outputs.principalId : existingFunctionPrincipalId
 output functionResourceGroup string = primaryRg
 output dcrResourceGroup string = dcrRg
 output dcrName string = dcr.outputs.dcrName

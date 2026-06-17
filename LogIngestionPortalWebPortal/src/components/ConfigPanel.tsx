@@ -77,11 +77,10 @@ export function ConfigPanel({
   errors,
 }: Props) {
   const isUpdate = config.action === 'updateColumns';
-  const isNew = config.scenario === 'new';
 
   // Required-field check for the whole panel. Lists the mandatory inputs that
-  // are still empty for the chosen action/scenario so the user gets one clear
-  // warning of everything missing before they download the artifacts.
+  // are still empty for the chosen action so the user gets one clear warning of
+  // everything missing before they download the artifacts.
   const isBlank = (value?: string): boolean => (value ?? '').trim() === '';
   const requiredWarnings: string[] = [];
   if (isBlank(config.scriptVersion)) requiredWarnings.push('Intune script version');
@@ -89,54 +88,59 @@ export function ConfigPanel({
     if (isBlank(t.name)) requiredWarnings.push(`Table ${i + 1} name`);
   });
   if (isUpdate) {
+    if (isBlank(workspaceName)) requiredWarnings.push('Workspace name');
+    if (isBlank(config.workspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
     if (isBlank(config.dcrName)) requiredWarnings.push('DCR name');
     if (isBlank(config.dcrResourceGroup)) requiredWarnings.push('DCR resource group');
-    if (isBlank(workspaceName)) requiredWarnings.push('Existing workspace name');
-    if (isBlank(config.existingWorkspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
   } else {
-    if (isBlank(config.baseName)) requiredWarnings.push('Workload name');
-    if (isBlank(config.functionResourceGroup)) {
-      requiredWarnings.push(isNew ? 'Resource group' : 'Function App resource group');
-    }
-    if (isBlank(config.location)) requiredWarnings.push(isNew ? 'Region' : 'Function App region');
-    if (!isNew) {
-      if (isBlank(workspaceName)) requiredWarnings.push('Existing workspace name');
-      if (isBlank(config.existingWorkspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
-    }
+    if (isBlank(config.resourceGroup)) requiredWarnings.push('Resource group');
+    if (isBlank(config.functionAppName)) requiredWarnings.push('Function App name');
+    if (isBlank(config.location)) requiredWarnings.push('Region');
+    if (isBlank(workspaceName)) requiredWarnings.push('Workspace name');
+    if (isBlank(config.dcrName)) requiredWarnings.push('DCR name');
   }
 
-  // Cloud Adoption Framework abbreviation suggestion: if a name doesn't start
-  // with the recommended prefix, offer a one-click corrected value.
-  const cafSuggest = (value: string, prefix: string): string | null => {
-    const v = value.trim();
-    return v && !v.toLowerCase().startsWith(prefix) ? prefix + v : null;
-  };
+  // A free-form text field with a one-click "suggested name". Names are NOT
+  // forced into any convention: the suggestion is only a recommendation (the
+  // Cloud Adoption Framework abbreviation) you can accept or ignore.
+  const set = (key: keyof PortalConfig) => (v: string) =>
+    onChange({ [key]: v } as Partial<PortalConfig>);
 
-  type RgKey = 'functionResourceGroup' | 'dcrResourceGroup' | 'existingWorkspaceResourceGroup';
-  const rgField = (id: string, labelText: ReactNode, key: RgKey, placeholder: string, required = true) => {
-    const suggestion = cafSuggest(config[key], 'rg-');
-    const empty = required && isBlank(config[key]);
+  const textField = (
+    id: string,
+    labelText: ReactNode,
+    value: string,
+    setValue: (v: string) => void,
+    opts: { placeholder?: string; required?: boolean; suggested?: string; prefix?: string } = {},
+  ): ReactNode => {
+    const { placeholder, required = true, suggested, prefix } = opts;
+    const empty = isBlank(value);
+    const suggestion = empty
+      ? suggested ?? null
+      : prefix && !value.trim().toLowerCase().startsWith(prefix)
+        ? prefix + value.trim()
+        : null;
     return (
       <div>
         <label className={label} htmlFor={id}>
           {labelText}
-          {reqPill(empty)}
+          {required && reqPill(empty)}
         </label>
         <input
           id={id}
-          className={`${field} mt-1 ${empty ? requiredRing : ''}`}
-          value={config[key]}
-          onChange={(e) => onChange({ [key]: e.target.value } as Partial<PortalConfig>)}
+          className={`${field} mt-1 ${required && empty ? requiredRing : ''}`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
         />
         {suggestion && (
           <button
             type="button"
-            onClick={() => onChange({ [key]: suggestion } as Partial<PortalConfig>)}
+            onClick={() => setValue(suggestion)}
             className="mt-1 text-[11px] text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-300"
-            title="Azure naming best practice (Cloud Adoption Framework)"
+            title="Suggested name — you can use any name your tenant prefers"
           >
-            Suggested name: {suggestion} — click to use
+            {empty ? `Use suggested: ${suggestion}` : `Suggested: ${suggestion} — click to use`}
           </button>
         )}
       </div>
@@ -212,190 +216,110 @@ export function ConfigPanel({
         </div>
       </div>
 
-      {/* Naming: workload name + environment drive all resource names (deploy only). */}
-      {!isUpdate && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label} htmlFor="baseName">
-                Workload name
-                {reqPill(isBlank(config.baseName))}
-              </label>
-              <input
-                id="baseName"
-                className={`${field} mt-1 ${isBlank(config.baseName) ? requiredRing : ''}`}
-                value={config.baseName}
-                onChange={(e) => onChange({ baseName: e.target.value })}
-                placeholder="logapi"
-              />
-            </div>
-            <div>
-              <label className={label} htmlFor="environment">
-                Environment
-              </label>
-              <select
-                id="environment"
-                className={`${field} mt-1`}
-                value={config.environment}
-                onChange={(e) => onChange({ environment: e.target.value as 'dev' | 'test' | 'prod' })}
-              >
-                <option value="dev">dev</option>
-                <option value="test">test</option>
-                <option value="prod">prod</option>
-              </select>
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Used for resource names, e.g. dcr-{config.baseName || 'logapi'}-{config.environment} and
-            log-{config.baseName || 'logapi'}-{config.environment}. The Function App also gets a short
-            unique hash, e.g. func-{config.baseName || 'logapi'}-{config.environment}-x1y2z (required
-            because its name must be globally unique). Use the same workload + environment when you
-            update later.
-          </p>
-        </>
-      )}
-
       {isUpdate ? (
         <>
-          {/* Schema-only: identify the exact DCR + its workspace to update. */}
+          {/* Schema-only: identify the exact workspace + DCR to update. */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label} htmlFor="dcrName">
-                DCR name
-                {reqPill(isBlank(config.dcrName))}
-              </label>
-              <input
-                id="dcrName"
-                className={`${field} mt-1 ${isBlank(config.dcrName) ? requiredRing : ''}`}
-                value={config.dcrName}
-                onChange={(e) => onChange({ dcrName: e.target.value })}
-                placeholder="dcr-logingestion-prod"
-              />
-              {cafSuggest(config.dcrName, 'dcr-') && (
-                <button
-                  type="button"
-                  onClick={() => onChange({ dcrName: cafSuggest(config.dcrName, 'dcr-') as string })}
-                  className="mt-1 text-[11px] text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-300"
-                  title="Azure naming best practice (Cloud Adoption Framework)"
-                >
-                  Suggested name: {cafSuggest(config.dcrName, 'dcr-')} — click to use
-                </button>
-              )}
-            </div>
-            {rgField('dcrResourceGroup', 'DCR resource group', 'dcrResourceGroup', 'rg-logging-prod')}
+            {textField('workspaceName', 'Workspace name', workspaceName, onWorkspaceChange, {
+              placeholder: 'log-logingestion',
+              suggested: 'log-logingestion',
+              prefix: 'log-',
+            })}
+            {textField(
+              'workspaceResourceGroup',
+              'Workspace resource group',
+              config.workspaceResourceGroup,
+              set('workspaceResourceGroup'),
+              { placeholder: 'rg-logingestion', suggested: 'rg-logingestion', prefix: 'rg-' },
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label} htmlFor="workspaceName">
-                Existing workspace name
-                {reqPill(isBlank(workspaceName))}
-              </label>
-              <input
-                id="workspaceName"
-                className={`${field} mt-1 ${isBlank(workspaceName) ? requiredRing : ''}`}
-                value={workspaceName}
-                onChange={(e) => onWorkspaceChange(e.target.value)}
-                placeholder="log-shared-central"
-              />
-            </div>
-            {rgField('existingWorkspaceResourceGroup', 'Workspace resource group', 'existingWorkspaceResourceGroup', 'rg-shared-logs')}
+            {textField('dcrName', 'DCR name', config.dcrName, set('dcrName'), {
+              placeholder: 'dcr-logingestion',
+              suggested: 'dcr-logingestion',
+              prefix: 'dcr-',
+            })}
+            {textField(
+              'dcrResourceGroup',
+              'DCR resource group',
+              config.dcrResourceGroup,
+              set('dcrResourceGroup'),
+              { placeholder: 'rg-logingestion', suggested: 'rg-logingestion', prefix: 'rg-' },
+            )}
           </div>
           <p className="text-[11px] text-slate-400">
-            Enter the exact name of the Data Collection Rule you deployed earlier (it
-            is not derived from the workload name). Updates only that table and DCR
-            from your selected columns. The region is taken from the workspace
-            automatically, and the Function App is never changed.
-          </p>
-        </>
-      ) : isNew ? (
-        <>
-          {/* Scenario selector (deploy only). */}
-          <div>
-            <span className={label}>What are you setting up?</span>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onChange({ scenario: 'new' })}
-                className="rounded-lg border border-indigo-500 bg-indigo-50 px-3 py-2 text-left text-xs text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200"
-              >
-                <span className="block font-semibold">Start from zero</span>
-                <span className="block text-[11px] opacity-80">Create everything new in one resource group &amp; region.</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onChange({ scenario: 'existing' })}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-              >
-                <span className="block font-semibold">Use existing Log Analytics</span>
-                <span className="block text-[11px] opacity-80">Send data to a workspace you already have.</span>
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {rgField('functionResourceGroup', 'Resource group', 'functionResourceGroup', 'rg-logging-prod')}
-            {regionSelect('location', 'Region')}
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Everything — Function App, storage, Application Insights, the App Service
-            plan, a new Log Analytics workspace and the DCR — is created together in
-            this resource group and region.
+            Enter the exact names of the workspace and Data Collection Rule you deployed earlier.
+            Only that table and DCR are updated from your selected columns; the region is taken from
+            the workspace automatically and the Function App is never changed.
           </p>
         </>
       ) : (
         <>
-          {/* Scenario selector (deploy only). */}
-          <div>
-            <span className={label}>What are you setting up?</span>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onChange({ scenario: 'new' })}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-              >
-                <span className="block font-semibold">Start from zero</span>
-                <span className="block text-[11px] opacity-80">Create everything new in one resource group &amp; region.</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onChange({ scenario: 'existing' })}
-                className="rounded-lg border border-indigo-500 bg-indigo-50 px-3 py-2 text-left text-xs text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200"
-              >
-                <span className="block font-semibold">Use existing Log Analytics</span>
-                <span className="block text-[11px] opacity-80">Send data to a workspace you already have.</span>
-              </button>
-            </div>
-          </div>
+          {/* Deploy: free-form names with one-click suggestions. Everything is
+              upserted (created if missing, updated in place if it exists). */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label} htmlFor="workspaceName">
-                Existing workspace name
-                {reqPill(isBlank(workspaceName))}
-              </label>
-              <input
-                id="workspaceName"
-                className={`${field} mt-1 ${isBlank(workspaceName) ? requiredRing : ''}`}
-                value={workspaceName}
-                onChange={(e) => onWorkspaceChange(e.target.value)}
-                placeholder="log-shared-central"
-              />
-            </div>
-            {rgField('existingWorkspaceResourceGroup', 'Workspace resource group', 'existingWorkspaceResourceGroup', 'rg-shared-logs')}
+            {textField('resourceGroup', 'Resource group', config.resourceGroup, set('resourceGroup'), {
+              placeholder: 'rg-logingestion',
+              suggested: 'rg-logingestion',
+              prefix: 'rg-',
+            })}
+            {regionSelect('location', 'Region')}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {rgField('functionResourceGroup', 'Function App resource group', 'functionResourceGroup', 'rg-logging-prod')}
-            {regionSelect('location', 'Function App region')}
-          </div>
-          <p className="text-[11px] text-amber-600 dark:text-amber-400">
-            The DCR is created automatically in your workspace's region (it must match).
-            The Function App region above can differ. Storage, Application Insights and
-            the plan are created in the Function App resource group.
+          {textField('functionAppName', 'Function App name', config.functionAppName, set('functionAppName'), {
+            placeholder: 'func-logingestion',
+            suggested: 'func-logingestion',
+            prefix: 'func-',
+          })}
+          <p className="text-[11px] text-slate-400">
+            The Function App name has no random hash and must be globally unique (it becomes{' '}
+            <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">&lt;name&gt;.azurewebsites.net</code>).
+            If an app with this name already exists in your subscription, the deploy updates it in
+            place after a warning — a zip deploy replaces all functions in that app. If the name is
+            already taken in another tenant, the deploy stops and asks you to pick a different one.
           </p>
-          <div>
-            {rgField('dcrResourceGroup', <>DCR resource group <span className="text-slate-400">(optional)</span></>, 'dcrResourceGroup', 'defaults to Function App RG', false)}
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              Leave blank to create the DCR in the Function App resource group.
-            </p>
+          <div className="grid grid-cols-2 gap-3">
+            {textField('workspaceName', 'Log Analytics workspace', workspaceName, onWorkspaceChange, {
+              placeholder: 'log-logingestion',
+              suggested: 'log-logingestion',
+              prefix: 'log-',
+            })}
+            {textField('dcrName', 'Data Collection Rule', config.dcrName, set('dcrName'), {
+              placeholder: 'dcr-logingestion',
+              suggested: 'dcr-logingestion',
+              prefix: 'dcr-',
+            })}
           </div>
+          <details className="rounded-lg border border-slate-200 dark:border-slate-700">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+              Advanced: put the workspace / DCR in other resource groups
+            </summary>
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 px-3 py-3 dark:border-slate-700">
+              {textField(
+                'workspaceResourceGroup',
+                <>
+                  Workspace RG <span className="text-slate-400">(optional)</span>
+                </>,
+                config.workspaceResourceGroup,
+                set('workspaceResourceGroup'),
+                { placeholder: 'defaults to resource group', required: false, prefix: 'rg-' },
+              )}
+              {textField(
+                'dcrResourceGroup',
+                <>
+                  DCR RG <span className="text-slate-400">(optional)</span>
+                </>,
+                config.dcrResourceGroup,
+                set('dcrResourceGroup'),
+                { placeholder: 'defaults to resource group', required: false, prefix: 'rg-' },
+              )}
+            </div>
+          </details>
+          <p className="text-[11px] text-slate-400">
+            Everything is created if missing or updated in place if it already exists. Storage,
+            Application Insights and the App Service plan are created in the resource group above and
+            named after the Function App. Leave the advanced resource groups blank to keep the
+            workspace and DCR in the same resource group.
+          </p>
         </>
       )}
 

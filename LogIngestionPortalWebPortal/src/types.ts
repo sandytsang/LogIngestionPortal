@@ -88,14 +88,16 @@ export interface PortalConfig {
   functionUrl: string;
   scriptVersion: string;
   action: 'deploy' | 'updateColumns';
-  scenario: 'new' | 'existing';
-  baseName: string;
-  environment: 'dev' | 'test' | 'prod';
-  functionResourceGroup: string;
+  /** Resource group for the Function App and (by default) the workspace + DCR. */
+  resourceGroup: string;
+  /** Exact Function App name (no hash). Globally unique; upserted if it exists. */
+  functionAppName: string;
+  /** Resource group of the Data Collection Rule. Empty = same as resourceGroup. */
   dcrResourceGroup: string;
-  /** Exact DCR name to target in a schema-only update. Empty = derive dcr-<baseName>-<environment>. */
+  /** Exact DCR name to create/update. */
   dcrName: string;
-  existingWorkspaceResourceGroup: string;
+  /** Resource group of the Log Analytics workspace. Empty = same as resourceGroup. */
+  workspaceResourceGroup: string;
   location: string;
   functionPlanType: 'Consumption' | 'Flex';
 }

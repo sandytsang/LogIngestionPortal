@@ -1,18 +1,16 @@
 // ---------------------------------------------------------------------------
 // Log Analytics workspace + custom table (deployed into the workspace's RG).
-// Creates a new workspace, or references an existing one, and (re)creates the
-// custom table so the schema stays in sync with schema/columns.json.
+// Declares (creates or updates) the workspace by name, or references it without
+// managing it during a schema-only update, then (re)creates the custom tables so
+// the schema stays in sync with schema/columns.json.
 // ---------------------------------------------------------------------------
-@description('Create a new workspace (true) or reference an existing one (false).')
-param createWorkspace bool
+@description('When true, declare/upsert the workspace (create it or update it in place). When false, reference the existing workspace without managing its top-level properties (schema-only updates).')
+param manageWorkspace bool
 
-@description('Name for a new workspace.')
-param lawName string
+@description('Exact Log Analytics workspace name.')
+param workspaceName string
 
-@description('Name of the existing workspace to reference when createWorkspace is false.')
-param existingWorkspaceName string = ''
-
-@description('Region for a new workspace.')
+@description('Region for the workspace when it is being created/updated.')
 param location string
 
 @description('Data retention in days.')
@@ -21,8 +19,8 @@ param retentionInDays int
 @description('Custom tables ({ tableName, description, columns[] }). Each (re)created so the schema stays in sync with schema/columns.json.')
 param tables array
 
-resource newLaw 'Microsoft.OperationalInsights/workspaces@2023-09-01' = if (createWorkspace) {
-  name: lawName
+resource managedLaw 'Microsoft.OperationalInsights/workspaces@2023-09-01' = if (manageWorkspace) {
+  name: workspaceName
   location: location
   properties: {
     sku: {
@@ -35,22 +33,21 @@ resource newLaw 'Microsoft.OperationalInsights/workspaces@2023-09-01' = if (crea
   }
 }
 
-resource existingLaw 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = if (!createWorkspace) {
-  name: existingWorkspaceName
+resource referencedLaw 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = if (!manageWorkspace) {
+  name: workspaceName
 }
 
-var effectiveLawName = createWorkspace ? lawName : existingWorkspaceName
 // The ternary guarantees only the resource that exists is read; the BCP318
 // null-possibility warnings are therefore false positives here.
 #disable-next-line BCP318
-var lawId = createWorkspace ? newLaw.id : existingLaw.id
+var lawId = manageWorkspace ? managedLaw.id : referencedLaw.id
 #disable-next-line BCP318
-var lawLocation = createWorkspace ? location : existingLaw.location
+var lawLocation = manageWorkspace ? location : referencedLaw.location
 #disable-next-line BCP318
-var lawCustomerId = createWorkspace ? newLaw.properties.customerId : existingLaw.properties.customerId
+var lawCustomerId = manageWorkspace ? managedLaw.properties.customerId : referencedLaw.properties.customerId
 
 resource customTables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [for t in tables: {
-  name: '${effectiveLawName}/${t.tableName}'
+  name: '${workspaceName}/${t.tableName}'
   properties: {
     totalRetentionInDays: retentionInDays
     schema: {
@@ -63,7 +60,7 @@ resource customTables 'Microsoft.OperationalInsights/workspaces/tables@2023-09-0
     }
   }
   dependsOn: [
-    newLaw
+    managedLaw
   ]
 }]
 
