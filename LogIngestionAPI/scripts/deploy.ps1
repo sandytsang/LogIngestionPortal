@@ -62,6 +62,11 @@
     auto-detects the current Azure tenant via `az account show` and sets
     JWT_ALLOWED_TENANT_ID to that value by default.
 
+.PARAMETER Subscription
+    Optional Azure subscription name or id to force for Azure CLI (`az`) commands.
+    Use this when your Az PowerShell context differs from the Azure CLI context
+    (Set-AzContext does not change `az` account selection).
+
 .PARAMETER Force
     Skip the confirmation prompt shown when the chosen -FunctionAppName already
     exists in your subscription (deploying into it hides any other functions in
@@ -132,6 +137,7 @@ param(
     [string]$DcrResourceGroup,
     [string]$DcrName,
     [string]$SchemaPath,
+    [Alias('SubscriptionId')][string]$Subscription,
     [string]$JwtAllowedTenantId,
     [ValidateSet('Consumption', 'Flex')] [string]$FunctionPlanType,
     [switch]$SchemaOnly,
@@ -163,6 +169,12 @@ else {
 }
 if (-not (Test-Path -LiteralPath $schemaPath)) {
     throw "Schema file not found: '$schemaPath'. Pass -SchemaPath with the correct columns.json path."
+}
+# main.bicep uses loadJsonContent('../schema/columns.json'), so ensure that file
+# matches the selected -SchemaPath before any deployment call.
+if ($schemaPath -ne $defaultSchemaPath) {
+    Copy-Item -LiteralPath $schemaPath -Destination $defaultSchemaPath -Force
+    Write-Host "    OK - schema source synced to '$defaultSchemaPath' from '$schemaPath'." -ForegroundColor Green
 }
 $bicepPath = Join-Path $root 'infra\main.bicep'
 $paramPath = Join-Path $root 'infra\main.bicepparam'
@@ -205,6 +217,15 @@ if ($missing.Count -gt 0) {
     Write-Host ''
     Write-Host 'Install the above (open a new terminal afterwards so PATH refreshes), then re-run this script.' -ForegroundColor Cyan
     throw 'Prerequisites are missing.'
+}
+
+# Optional: force the Azure CLI subscription context used by all `az` commands.
+if ($Subscription) {
+    az account set --subscription $Subscription 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to set Azure CLI subscription to '$Subscription'. Check the value with: az account list --output table"
+    }
+    Write-Host "    OK - Azure CLI subscription set to '$Subscription'." -ForegroundColor Green
 }
 
 # Must be signed in to Azure. (az auto-installs the Bicep CLI on first compile.)

@@ -284,6 +284,11 @@ export function generateDeployReadme(
     '  ./scripts/deploy.ps1 `',
     ...flags.map((f, i) => `    ${f}${i < flags.length - 1 ? ' `' : ''}`),
   ];
+  const cloudShellFlags = [...flags, '-Subscription <subscription-name-or-id>', '-SchemaPath /home/<your-user>/columns.json'];
+  const cloudShellCommand = [
+    '  pwsh ./scripts/deploy.ps1 `',
+    ...cloudShellFlags.map((f, i) => `    ${f}${i < cloudShellFlags.length - 1 ? ' `' : ''}`),
+  ];
 
   const scenarioSummary = [
     'Every resource is created if it is missing, or updated in place if it',
@@ -334,6 +339,17 @@ export function generateDeployReadme(
     'It is idempotent — safe to re-run to redeploy the full solution. Missing',
     'resource groups are created for you; if you lack permission the script prints',
     'the exact "az group create" command to run or hand to an admin.',
+    '',
+    '## No-admin local machine option (Azure Cloud Shell)',
+    '',
+    'If you cannot install tools locally, run the same deployment in Azure Cloud',
+    'Shell. Use the uploaded file path shown by Cloud Shell for -SchemaPath',
+    '(commonly /home/<your-user>/columns.json).',
+    '',
+    '  1) Open https://shell.azure.com',
+    '  2) Upload your generated columns.json file',
+    '  3) Run:',
+    ...cloudShellCommand,
     '',
     'Later, to change ONLY the data columns (no Function App changes), use the',
     "portal's \"Update data columns only\" action — it generates a lighter",

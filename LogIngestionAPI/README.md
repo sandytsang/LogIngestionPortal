@@ -61,7 +61,7 @@ run the deployment from **Azure Cloud Shell** in a browser. Cloud Shell already 
 Azure CLI + Bicep and does not require local installation.
 
 1. Open Cloud Shell: <https://shell.azure.com>.
-2. Upload your generated `columns.json` to Cloud Shell (Upload/Download in the Cloud Shell toolbar), for example to `~/clouddrive/columns.json`.
+2. Upload your generated `columns.json` to Cloud Shell (Upload/Download in the Cloud Shell toolbar), then use the exact uploaded path shown in your shell. Most commonly this is `/home/<your-user>/columns.json` (and in some setups it may be under `/home/<your-user>/clouddrive/`).
 3. Clone this repo and run the script with `-SchemaPath`:
 
 ```bash
@@ -73,7 +73,7 @@ pwsh ./deploy.ps1 \
   -FunctionAppName func-logingestion-dev \
   -WorkspaceName log-logingestion-dev \
   -DcrName dcr-logingestion-dev \
-  -SchemaPath ~/clouddrive/columns.json
+  -SchemaPath /home/<your-user>/columns.json
 ```
 
 If you do not pass `-SchemaPath`, the script uses the repo file at
