@@ -134,7 +134,7 @@ flowchart LR
 - Device-signed JWT is always required.
 - Function managed identity needs Graph Device.Read.All when Entra device check
   is enabled.
-- DCR ingestion needs Monitoring Metrics Publisher role on the DCR.
+- DCR ingestion needs Monitoring Metrics Publisher role on the resource group that holds the DCR.
 
 ## Project layout
 

@@ -72,7 +72,7 @@ on:
         type: boolean
         default: true
       skipRoleAssignment:
-        description: 'Do not create the DCR role assignment (use when the login identity only has Contributor; grant Monitoring Metrics Publisher separately)'
+        description: 'Do not create the resource group role assignment (use when the login identity only has Contributor; grant Monitoring Metrics Publisher separately)'
         type: boolean
         default: true
 
@@ -149,8 +149,8 @@ jobs:
             if [ -n "${{ inputs.dcrResourceGroup }}" ]; then
               params+=( dcrResourceGroup="${{ inputs.dcrResourceGroup }}" )
             fi
-            # Contributor-only login: skip the DCR role assignment (grant it
-            # separately). Contributor cannot create role assignments.
+            # Contributor-only login: skip the resource group role assignment
+            # (grant it separately). Contributor cannot create role assignments.
             if [ "${{ inputs.skipRoleAssignment }}" = "true" ]; then
               params+=( assignDcrPublisherRole=false )
             fi
@@ -192,7 +192,7 @@ jobs:
           if ('${{ inputs.workspaceResourceGroup }}') { $opt += @('-WorkspaceResourceGroup', '${{ inputs.workspaceResourceGroup }}') }
           if ('${{ inputs.workspaceLocation }}') { $opt += @('-WorkspaceLocation', '${{ inputs.workspaceLocation }}') }
           if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
-          # Contributor-only login: don't create the DCR role assignment here.
+          # Contributor-only login: don't create the resource group role assignment here.
           if ('${{ inputs.skipRoleAssignment }}' -eq 'true') { $opt += '-SkipDcrRoleAssignment' }
           ./deploy.ps1 `
             -ResourceGroup '${{ inputs.resourceGroup }}' `
@@ -216,4 +216,4 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "If \`requireEntraDevice\` is true, grant the Function's managed identity Graph **Device.Read.All** once (scripts/AssignMSIPermisison.ps1), then copy the function key + URL from the Azure portal into your Intune script." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "If \`skipRoleAssignment\` was true, also grant the Function's managed identity **Monitoring Metrics Publisher** on the DCR (the deploy.ps1 log prints the exact \`az role assignment create\` command)." >> "$GITHUB_STEP_SUMMARY"
+          echo "If \`skipRoleAssignment\` was true, also grant the Function's managed identity **Monitoring Metrics Publisher** on the DCR's resource group (the deploy.ps1 log prints the exact \`az role assignment create\` command)." >> "$GITHUB_STEP_SUMMARY"

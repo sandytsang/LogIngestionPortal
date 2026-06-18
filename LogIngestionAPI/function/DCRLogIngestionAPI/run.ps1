@@ -25,6 +25,29 @@ function Write-HttpResponse {
     })
 }
 
+function Write-BadRequestResponse {
+    param(
+        [Parameter(Mandatory)][string]$Code,
+        [Parameter(Mandatory)][string]$Error,
+        [hashtable]$Context = @{}
+    )
+
+    $parts = @("Bad request [$Code]", $Error)
+    foreach ($key in $Context.Keys) {
+        $value = $Context[$key]
+        if ($null -eq $value -or $value -eq '') { continue }
+        $parts += ('{0}={1}' -f $key, $value)
+    }
+    Write-Warning ($parts -join ' ')
+
+    $body = [ordered]@{ code = $Code; error = $Error }
+    foreach ($key in $Context.Keys) {
+        $body[$key] = $Context[$key]
+    }
+
+    Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body $body
+}
+
 # Returns the member name/value pairs of an object, transparently handling both
 # PSCustomObject (the usual JSON deserialization) and Hashtable/dictionary.
 function Get-Members {
@@ -129,7 +152,7 @@ Write-Information "Device authenticated (did=$($auth.Claims.did) tid=$($auth.Cla
 # --- Validate payload -------------------------------------------------------
 $payload = $Request.Body
 if (-not $payload) {
-    Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{ error = 'Request body is empty.' }
+    Write-BadRequestResponse -Code 'EmptyBody' -Error 'Request body is empty.'
     return
 }
 
@@ -153,8 +176,9 @@ if (Test-TableKeyed $payload) {
 }
 else {
     if (-not $defaultTable) {
-        Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{
-            error = "Send a table-keyed body, e.g. { 'MyTable_CL': [ { ... } ] }. No DCR_STREAMS default table is configured for a bare array."
+        Write-BadRequestResponse -Code 'MissingDefaultStream' -Error "Send a table-keyed body, e.g. { 'MyTable_CL': [ { ... } ] }. No DCR_STREAMS default table is configured for a bare array." -Context @{
+            payloadType = $payload.GetType().FullName
+            configuredTables = ($streamByTable.Keys -join ',')
         }
         return
     }
@@ -165,7 +189,10 @@ else {
 $totalRecords = 0
 foreach ($g in $groups) { $totalRecords += $g.Records.Count }
 if ($groups.Count -eq 0 -or $totalRecords -eq 0) {
-    Write-HttpResponse -StatusCode ([HttpStatusCode]::BadRequest) -Body @{ error = 'No records to ingest.' }
+    Write-BadRequestResponse -Code 'NoRecords' -Error 'No records to ingest.' -Context @{
+        groupCount = $groups.Count
+        totalRecords = $totalRecords
+    }
     return
 }
 

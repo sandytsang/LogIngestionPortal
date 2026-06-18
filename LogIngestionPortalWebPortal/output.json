@@ -434,16 +434,13 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
-      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), variables('resolvedFunctionAppResourceId'), variables('monitoringMetricsPublisherRoleId'))]",
+      "name": "[guid(resourceGroup().id, variables('resolvedFunctionAppResourceId'), variables('monitoringMetricsPublisherRoleId'))]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
         "principalId": "[if(variables('isFlex'), reference(resourceId('Microsoft.Web/sites', variables('funcName')), '2023-12-01', 'full').identity.principalId, reference(resourceId('Microsoft.Web/sites', variables('funcName')), '2023-12-01', 'full').identity.principalId)]",
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
-        "[resourceId('Microsoft.Web/sites', variables('funcName'))]",
         "[resourceId('Microsoft.Web/sites', variables('funcName'))]"
       ]
     }

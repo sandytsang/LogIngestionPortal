@@ -345,7 +345,7 @@ export function generateDeployReadme(
     'If your account cannot create role assignments (Contributor-only), append',
     '-SkipDcrRoleAssignment to the deploy command. The Function still deploys,',
     'and the script prints a one-line "az role assignment create" command for an',
-    'admin to grant Monitoring Metrics Publisher on the DCR afterwards.',
+    'admin to grant Monitoring Metrics Publisher on the DCR resource group afterwards.',
     '',
     '## No-admin local machine option (Azure Cloud Shell)',
     '',

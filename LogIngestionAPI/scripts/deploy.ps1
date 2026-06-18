@@ -92,10 +92,11 @@
     jwtRequireEntraDevice=true, skipping this makes every request return 401.
 
 .PARAMETER SkipDcrRoleAssignment
-    Do not let the deployment create the DCR role assignment (Monitoring Metrics
-    Publisher for the Function's managed identity). Use this when the deployer
-    only has Contributor (which cannot create role assignments). The script then
-    prints the exact 'az role assignment create' command to grant it separately.
+    Do not let the deployment create the role assignment (Monitoring Metrics
+    Publisher for the Function's managed identity) on the DCR's resource group.
+    Use this when the deployer only has Contributor (which cannot create role
+    assignments). The script then prints the exact 'az role assignment create'
+    command to grant it separately.
 
 .PARAMETER SchemaOnly
     Update ONLY the Log Analytics custom table + DCR from schema/columns.json.
@@ -576,14 +577,14 @@ if ($FunctionPlanType) {
     $paramOverrides += "functionPlanType=$FunctionPlanType"
     Write-Host "    Function App hosting plan: $FunctionPlanType." -ForegroundColor Green
 }
-# Always defer DCR role assignment until AFTER app deploy/publish so lack of
+# Always defer the role assignment until AFTER app deploy/publish so lack of
 # Microsoft.Authorization/*/write does not block Function deployment itself.
 $paramOverrides += 'assignDcrPublisherRole=false'
 if ($SkipDcrRoleAssignment) {
-    Write-Host '    Skipping the DCR role assignment by request; grant it separately afterwards.' -ForegroundColor Yellow
+    Write-Host '    Skipping the resource group role assignment by request; grant it separately afterwards.' -ForegroundColor Yellow
 }
 else {
-    Write-Host '    DCR role assignment will be attempted after Function deployment/publish.' -ForegroundColor Yellow
+    Write-Host '    Resource group role assignment will be attempted after Function deployment/publish.' -ForegroundColor Yellow
 }
 if ($useExistingFunctionApp) {
     $paramOverrides += "existingFunctionPrincipalId=$existingPrincipalId"
@@ -809,20 +810,19 @@ if (-not $SkipFunctionPublish) {
     }
 }
 
-# --- 4b. Grant the Function access to the DCR (post-deploy) -----------------
+# --- 4b. Grant the Function access to the DCR's resource group (post-deploy) -
 if (-not $SchemaOnly) {
     $subId = az account show --query id -o tsv
     $dcrRgOut = $outputs.dcrResourceGroup.value
-    $dcrNameOut = $outputs.dcrName.value
     $miPrincipalId = $outputs.functionPrincipalId.value
     $roleId = $outputs.monitoringMetricsPublisherRoleId.value
-    $dcrScope = "/subscriptions/$subId/resourceGroups/$dcrRgOut/providers/Microsoft.Insights/dataCollectionRules/$dcrNameOut"
+    $rgScope = "/subscriptions/$subId/resourceGroups/$dcrRgOut"
     $roleDefinitionId = "/subscriptions/$subId/providers/Microsoft.Authorization/roleDefinitions/$roleId"
 
     if ($SkipDcrRoleAssignment) {
         Write-Host ''
         Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
-        Write-Host ' Action needed: grant the Function access to the DCR' -ForegroundColor Yellow
+        Write-Host ' Action needed: grant the Function access to the DCR resource group' -ForegroundColor Yellow
         Write-Host '------------------------------------------------------------' -ForegroundColor Yellow
         Write-Host 'You deployed with -SkipDcrRoleAssignment, so the role was NOT created.' -ForegroundColor Yellow
         Write-Host "Until it is, the Function returns errors when pushing logs. Have someone with" -ForegroundColor Yellow
@@ -832,36 +832,36 @@ if (-not $SchemaOnly) {
         Write-Host "    --assignee-object-id $miPrincipalId ``" -ForegroundColor White
         Write-Host '    --assignee-principal-type ServicePrincipal `' -ForegroundColor White
         Write-Host "    --role 'Monitoring Metrics Publisher' ``" -ForegroundColor White
-        Write-Host "    --scope $dcrScope" -ForegroundColor White
+        Write-Host "    --scope $rgScope" -ForegroundColor White
         Write-Host ''
     }
     elseif ($miPrincipalId) {
-        Write-Host '==> Granting the Function managed identity access to the DCR (post-deploy)' -ForegroundColor Cyan
+        Write-Host '==> Granting the Function managed identity access to the DCR resource group (post-deploy)' -ForegroundColor Cyan
         $existingRoleAssignment = az role assignment list `
             --assignee-object-id $miPrincipalId `
-            --scope $dcrScope `
+            --scope $rgScope `
             --query "[?roleDefinitionId=='$roleDefinitionId'] | [0].id" `
             --output tsv 2>$null
 
         if ($existingRoleAssignment) {
-            Write-Host '    OK - DCR role assignment already exists.' -ForegroundColor Green
+            Write-Host '    OK - resource group role assignment already exists.' -ForegroundColor Green
         }
         else {
             az role assignment create `
                 --assignee-object-id $miPrincipalId `
                 --assignee-principal-type ServicePrincipal `
                 --role $roleId `
-                --scope $dcrScope `
+                --scope $rgScope `
                 --output none 2>$null
             if ($LASTEXITCODE -ne 0) {
                 Write-Host ''
-                Write-Warning 'Could not create the DCR role assignment automatically.'
+                Write-Warning 'Could not create the resource group role assignment automatically.'
                 Write-Host 'The Function app is deployed, but log ingestion needs this role assignment.' -ForegroundColor Yellow
                 Write-Host 'Have someone with Owner / User Access Administrator / RBAC Administrator run:' -ForegroundColor Cyan
-                Write-Host "  az role assignment create --assignee-object-id $miPrincipalId --assignee-principal-type ServicePrincipal --role 'Monitoring Metrics Publisher' --scope $dcrScope" -ForegroundColor White
+                Write-Host "  az role assignment create --assignee-object-id $miPrincipalId --assignee-principal-type ServicePrincipal --role 'Monitoring Metrics Publisher' --scope $rgScope" -ForegroundColor White
             }
             else {
-                Write-Host '    OK - DCR role assignment created.' -ForegroundColor Green
+                Write-Host '    OK - resource group role assignment created.' -ForegroundColor Green
             }
         }
     }

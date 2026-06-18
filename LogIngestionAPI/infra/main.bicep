@@ -63,10 +63,10 @@ param jwtAllowedTenantId string = ''
 @description('When true, resolve the device in Entra and validate its certificate against the device record (needs Graph Device.Read.All). When false, validate signature + MS-Organization-Access issuer only.')
 param jwtRequireEntraDevice bool = true
 
-@description('When true, the deployment grants the Function App\'s managed identity Monitoring Metrics Publisher on the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately.')
+@description('When true, the deployment grants the Function App\'s managed identity Monitoring Metrics Publisher on the resource group that holds the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately.')
 param assignDcrPublisherRole bool = true
 
-@description('Principal id of an existing Function App\'s managed identity to deploy against instead of creating a new Function App. When set, the Function App and its storage/plan/App Insights are NOT created; only the table, DCR and the DCR role assignment (for this principal) are deployed. deploy.ps1 sets this from -ExistingFunctionAppName and configures the existing app\'s settings + code separately.')
+@description('Principal id of an existing Function App\'s managed identity to deploy against instead of creating a new Function App. When set, the Function App and its storage/plan/App Insights are NOT created; only the table, DCR and the resource-group role assignment (for this principal) are deployed. deploy.ps1 sets this from -ExistingFunctionAppName and configures the existing app\'s settings + code separately.')
 param existingFunctionPrincipalId string = ''
 
 // ---------------------------------------------------------------------------
@@ -141,7 +141,6 @@ module dcrRoleAssignment 'modules/dcrRoleAssignment.bicep' = if (!schemaOnly && 
   name: 'dcrRoleAssignment'
   scope: resourceGroup(dcrRg)
   params: {
-    dcrName: dcr.outputs.dcrName
     #disable-next-line BCP318
     principalId: createFunctionApp ? functionApp.outputs.principalId : existingFunctionPrincipalId
     roleDefinitionId: monitoringMetricsPublisherRoleId
@@ -168,7 +167,8 @@ output logAnalyticsWorkspaceId string = logAnalytics.outputs.workspaceCustomerId
 output customTableNames array = map(tables, t => t.tableName)
 output functionPlanType string = functionPlanType
 output schemaOnly bool = schemaOnly
-// True when the deployment created the DCR role assignment itself. When false
-// (Contributor-only deploy), grant Monitoring Metrics Publisher separately.
+// True when the deployment created the resource-group role assignment itself.
+// When false (Contributor-only deploy), grant Monitoring Metrics Publisher
+// separately.
 output dcrRoleAssigned bool = !schemaOnly && assignDcrPublisherRole
 output monitoringMetricsPublisherRoleId string = monitoringMetricsPublisherRoleId

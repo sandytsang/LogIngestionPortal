@@ -43,6 +43,11 @@ $UseDeviceJwt = $true
 
 # Name recorded in the RemediationName column.
 $RemediationName = 'DeviceInventory'
+
+# Destination custom table. The body is sent table-keyed ({ "<table>": [ ... ] })
+# so the Function routes it to the Custom-<table> DCR stream directly. This works
+# whether or not the Function App has the optional DCR_STREAMS app setting set.
+$TableName = 'DeviceInventory_CL'
 # ----------------------------------------------------------------------------
 
 $ErrorActionPreference = 'Stop'
@@ -98,7 +103,22 @@ function New-DeviceJwt {
     )
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $x5t = [Convert]::ToBase64String($Cert.GetCertHash()).TrimEnd('=').Replace('+', '-').Replace('/', '_')
-    $x5c = [Convert]::ToBase64String($Cert.RawData)
+    $x5c = @([Convert]::ToBase64String($Cert.RawData))
+    $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
+    try {
+        $null = $chain.Build($Cert)
+        $chainValues = @(
+            $chain.ChainElements |
+            ForEach-Object { [Convert]::ToBase64String($_.Certificate.RawData) } |
+            Select-Object -Unique
+        )
+        if ($chainValues.Count -gt 0) {
+            $x5c = $chainValues
+        }
+    }
+    finally {
+        $chain.Dispose()
+    }
     $header = [ordered]@{ alg = 'RS256'; typ = 'JWT'; x5t = $x5t; x5c = $x5c }
     $payload = [ordered]@{
         tid   = $TenantId
@@ -211,7 +231,10 @@ function Get-DeviceData {
 function Send-Telemetry {
     param([object[]]$Records)
 
-    $body = ConvertTo-Json -InputObject @($Records) -Depth 10
+    # Send a table-keyed body so the Function routes the records to the
+    # Custom-<table> DCR stream directly (no dependency on the optional
+    # DCR_STREAMS app setting).
+    $body = ConvertTo-Json -InputObject ([ordered]@{ $TableName = @($Records) }) -Depth 10
     $uri = $FunctionUrl
     $headers = Get-AuthHeader
 
@@ -241,14 +264,36 @@ function Send-Telemetry {
                 }
                 catch { }
 
+                if (-not $responseText) {
+                    try {
+                        $response = $_.Exception.Response
+                        if ($response) {
+                            $stream = $response.GetResponseStream()
+                            if ($stream) {
+                                $reader = New-Object System.IO.StreamReader($stream)
+                                try {
+                                    $responseText = $reader.ReadToEnd()
+                                }
+                                finally {
+                                    $reader.Dispose()
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
                 $serverDetail = $null
                 if ($responseText) {
                     try {
                         $parsed = $responseText | ConvertFrom-Json -ErrorAction Stop
                         $pieces = @()
+                        if ($parsed.code) { $pieces += [string]$parsed.code }
                         if ($parsed.error) { $pieces += [string]$parsed.error }
                         if ($parsed.reason) { $pieces += [string]$parsed.reason }
                         if ($parsed.message) { $pieces += [string]$parsed.message }
+                        if ($parsed.configuredTables) { $pieces += "configuredTables=$([string]$parsed.configuredTables)" }
+                        if ($parsed.payloadType) { $pieces += "payloadType=$([string]$parsed.payloadType)" }
                         if ($pieces.Count -gt 0) { $serverDetail = ($pieces -join ' | ') }
                     }
                     catch {

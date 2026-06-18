@@ -52,11 +52,43 @@ function Get-NormalizedThumbprints {
     )
 }
 
+function Get-X5cCertificates {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$X5cValue)
+
+    $entries = @()
+    if ($X5cValue -is [System.Array]) {
+        $entries = @($X5cValue)
+    }
+    else {
+        $entries = @($X5cValue)
+    }
+
+    $certificates = New-Object System.Collections.Generic.List[System.Security.Cryptography.X509Certificates.X509Certificate2]
+    foreach ($entry in $entries) {
+        if (-not $entry) { continue }
+        try {
+            $certBytes = [Convert]::FromBase64String([string]$entry)
+            $certificates.Add([System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certBytes))
+        }
+        catch {
+            throw "Could not parse x5c cert: $($_.Exception.Message)"
+        }
+    }
+
+    if ($certificates.Count -eq 0) {
+        throw 'JWT header x5c did not contain any certificates.'
+    }
+
+    return @($certificates)
+}
+
 function Test-CertificateChainTrust {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [System.Security.Cryptography.X509Certificates.X509Certificate2[]]$AdditionalCertificates = @(),
         [string[]]$TrustedRootThumbprints = @(),
         [string[]]$TrustedIntermediateThumbprints = @(),
         [switch]$CheckRevocation
@@ -72,11 +104,40 @@ function Test-CertificateChainTrust {
             [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
         }
         $policy.RevocationFlag = [System.Security.Cryptography.X509Certificates.X509RevocationFlag]::ExcludeRoot
-        $policy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::NoFlag
+        $policy.VerificationFlags = if ($TrustedRootThumbprints.Count -gt 0) {
+            [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::NoFlag
+        }
+        else {
+            [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::AllowUnknownCertificateAuthority
+        }
         $policy.VerificationTime = [DateTime]::UtcNow
         $policy.UrlRetrievalTimeout = [TimeSpan]::FromSeconds(15)
+        foreach ($extraCert in $AdditionalCertificates) {
+            if ($null -ne $extraCert) {
+                [void]$policy.ExtraStore.Add($extraCert)
+            }
+        }
 
         $ok = $chain.Build($Certificate)
+        if (-not $ok) {
+            $allowedStatuses = @{}
+            if ($TrustedRootThumbprints.Count -eq 0) {
+                $allowedStatuses[[System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::UntrustedRoot] = $true
+                $allowedStatuses[[System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::PartialChain] = $true
+            }
+
+            $blockingStatuses = @(
+                $chain.ChainStatus |
+                Where-Object {
+                    $_.Status -ne [System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::NoError -and
+                    -not $allowedStatuses.ContainsKey($_.Status)
+                }
+            )
+            if ($blockingStatuses.Count -eq 0) {
+                $ok = $true
+            }
+        }
+
         if (-not $ok) {
             $details = @(
                 $chain.ChainStatus |
@@ -327,10 +388,11 @@ function Test-DeviceRequestJwt {
     }
 
     # --- Parse the client certificate from x5c ------------------------------
+    $presentedCerts = @()
     $clientCert = $null
     try {
-        $certBytes = [Convert]::FromBase64String([string]$peekHeader.x5c)
-        $clientCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certBytes)
+        $presentedCerts = @(Get-X5cCertificates -X5cValue $peekHeader.x5c)
+        $clientCert = $presentedCerts[0]
     }
     catch { return (& $result $false "Could not parse x5c cert: $($_.Exception.Message)" $null $null) }
 
@@ -349,6 +411,7 @@ function Test-DeviceRequestJwt {
     if ($requireCertChain) {
         $chainCheck = Test-CertificateChainTrust `
             -Certificate $clientCert `
+            -AdditionalCertificates @($presentedCerts | Select-Object -Skip 1) `
             -TrustedRootThumbprints $trustedRootThumbprints `
             -TrustedIntermediateThumbprints $trustedIntermediateThumbprints `
             -CheckRevocation:$checkCertRevocation

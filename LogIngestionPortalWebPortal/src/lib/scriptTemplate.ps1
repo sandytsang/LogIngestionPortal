@@ -100,7 +100,22 @@ function New-DeviceJwt {
     )
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $x5t = [Convert]::ToBase64String($Cert.GetCertHash()).TrimEnd('=').Replace('+', '-').Replace('/', '_')
-    $x5c = [Convert]::ToBase64String($Cert.RawData)
+    $x5c = @([Convert]::ToBase64String($Cert.RawData))
+    $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
+    try {
+        $null = $chain.Build($Cert)
+        $chainValues = @(
+            $chain.ChainElements |
+            ForEach-Object { [Convert]::ToBase64String($_.Certificate.RawData) } |
+            Select-Object -Unique
+        )
+        if ($chainValues.Count -gt 0) {
+            $x5c = $chainValues
+        }
+    }
+    finally {
+        $chain.Dispose()
+    }
     $header = [ordered]@{ alg = 'RS256'; typ = 'JWT'; x5t = $x5t; x5c = $x5c }
     $payload = [ordered]@{
         tid   = $TenantId
@@ -202,6 +217,44 @@ function Send-Telemetry {
             $status = $null
             try { $status = [int]$_.Exception.Response.StatusCode } catch { }
             $detail = if ($_.ErrorDetails -and $_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $null }
+            if (-not $detail) {
+                try {
+                    $response = $_.Exception.Response
+                    if ($response) {
+                        $stream = $response.GetResponseStream()
+                        if ($stream) {
+                            $reader = New-Object System.IO.StreamReader($stream)
+                            try {
+                                $detail = $reader.ReadToEnd()
+                            }
+                            finally {
+                                $reader.Dispose()
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if ($detail) {
+                try {
+                    $parsed = $detail | ConvertFrom-Json -ErrorAction Stop
+                    $pieces = @()
+                    if ($parsed.code) { $pieces += [string]$parsed.code }
+                    if ($parsed.error) { $pieces += [string]$parsed.error }
+                    if ($parsed.reason) { $pieces += [string]$parsed.reason }
+                    if ($parsed.message) { $pieces += [string]$parsed.message }
+                    if ($parsed.configuredTables) { $pieces += "configuredTables=$([string]$parsed.configuredTables)" }
+                    if ($parsed.payloadType) { $pieces += "payloadType=$([string]$parsed.payloadType)" }
+                    if ($pieces.Count -gt 0) {
+                        $detail = ($pieces -join ' | ')
+                    }
+                }
+                catch {
+                    $detail = ($detail -replace '[\r\n]+', ' ').Trim()
+                }
+            }
+
             $info = (@(if ($status) { "HTTP $status" }, $detail) | Where-Object { $_ }) -join ' - '
 
             # 4xx is a client/payload problem (e.g. a table not yet deployed to

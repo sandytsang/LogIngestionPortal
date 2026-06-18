@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "17489788753071176214"
+      "templateHash": "12949300988507463711"
     }
   },
   "parameters": {
@@ -110,14 +110,14 @@
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "When true, the deployment grants the Function App's managed identity Monitoring Metrics Publisher on the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately."
+        "description": "When true, the deployment grants the Function App's managed identity Monitoring Metrics Publisher on the resource group that holds the DCR. Set false when the deployer only has Contributor (no rights to create role assignments); the role must then be granted separately."
       }
     },
     "existingFunctionPrincipalId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Principal id of an existing Function App's managed identity to deploy against instead of creating a new Function App. When set, the Function App and its storage/plan/App Insights are NOT created; only the table, DCR and the DCR role assignment (for this principal) are deployed. deploy.ps1 sets this from -ExistingFunctionAppName and configures the existing app's settings + code separately."
+        "description": "Principal id of an existing Function App's managed identity to deploy against instead of creating a new Function App. When set, the Function App and its storage/plan/App Insights are NOT created; only the table, DCR and the resource-group role assignment (for this principal) are deployed. deploy.ps1 sets this from -ExistingFunctionAppName and configures the existing app's settings + code separately."
       }
     }
   },
@@ -290,7 +290,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "15418694896676101113"
+              "templateHash": "8014691010291581205"
             }
           },
           "parameters": {
@@ -347,9 +347,10 @@
             },
             {
               "copy": {
-                "name": "customTables",
+                "name": "customTablesManaged",
                 "count": "[length(parameters('tables'))]"
               },
+              "condition": "[parameters('manageWorkspace')]",
               "type": "Microsoft.OperationalInsights/workspaces/tables",
               "apiVersion": "2023-09-01",
               "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('tables')[copyIndex()].tableName)]",
@@ -364,6 +365,24 @@
               "dependsOn": [
                 "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
               ]
+            },
+            {
+              "copy": {
+                "name": "customTablesReferenced",
+                "count": "[length(parameters('tables'))]"
+              },
+              "condition": "[not(parameters('manageWorkspace'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('tables')[copyIndex()].tableName)]",
+              "properties": {
+                "totalRetentionInDays": "[parameters('retentionInDays')]",
+                "schema": {
+                  "name": "[parameters('tables')[copyIndex()].tableName]",
+                  "description": "[parameters('tables')[copyIndex()].description]",
+                  "columns": "[map(parameters('tables')[copyIndex()].columns, lambda('c', createObject('name', lambdaVariables('c').name, 'type', lambdaVariables('c').type)))]"
+                }
+              }
             }
           ],
           "outputs": {
@@ -549,7 +568,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "11540310060626425234"
+              "templateHash": "15553345587659373527"
             }
           },
           "parameters": {
@@ -622,6 +641,7 @@
             "planName": "[format('asp-{0}', parameters('functionAppName'))]",
             "aiName": "[format('appi-{0}', parameters('functionAppName'))]",
             "storageName": "[toLower(take(format('st{0}{1}', variables('sanitized'), variables('suffix')), 24))]",
+            "flexPackageContainerName": "[take(format('pkg-{0}-{1}', variables('sanitized'), variables('suffix')), 63)]",
             "defaultAudience": "[format('https://{0}.azurewebsites.net', variables('funcName'))]",
             "effectiveAudience": "[if(empty(parameters('jwtExpectedAudience')), variables('defaultAudience'), parameters('jwtExpectedAudience'))]",
             "isFlex": "[equals(parameters('functionPlanType'), 'Flex')]"
@@ -657,7 +677,7 @@
               "condition": "[variables('isFlex')]",
               "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
               "apiVersion": "2023-05-01",
-              "name": "[format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName'))]",
+              "name": "[format('{0}/default/{1}', variables('storageName'), variables('flexPackageContainerName'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
               ]
@@ -695,7 +715,7 @@
                   "http20Enabled": true,
                   "use32BitWorkerProcess": false,
                   "powerShellVersion": "7.4",
-                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('funcName'))), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1')), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
+                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('funcName'))), createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'powershell'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1')), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_CERT_CHAIN', 'value', 'true'), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
                 }
               },
               "dependsOn": [
@@ -760,7 +780,7 @@
                   "deployment": {
                     "storage": {
                       "type": "blobContainer",
-                      "value": "[format('{0}{1}-pkg', reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').primaryEndpoints.blob, variables('funcName'))]",
+                      "value": "[format('{0}{1}', reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').primaryEndpoints.blob, variables('flexPackageContainerName'))]",
                       "authentication": {
                         "type": "StorageAccountConnectionString",
                         "storageAccountConnectionStringName": "AzureWebJobsStorage"
@@ -781,12 +801,12 @@
                   "scmMinTlsVersion": "1.2",
                   "ftpsState": "Disabled",
                   "http20Enabled": true,
-                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
+                  "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value))), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString), createObject('name', 'DCR_ENDPOINT', 'value', parameters('dcrEndpoint')), createObject('name', 'DCR_IMMUTABLE_ID', 'value', parameters('dcrImmutableId')), createObject('name', 'JWT_ENFORCE', 'value', 'true'), createObject('name', 'JWT_EXPECTED_AUDIENCE', 'value', variables('effectiveAudience')), createObject('name', 'JWT_ALLOWED_TENANT_ID', 'value', parameters('jwtAllowedTenantId')), createObject('name', 'JWT_REQUIRE_CERT_CHAIN', 'value', 'true'), createObject('name', 'JWT_REQUIRE_ENTRA_DEVICE', 'value', toLower(string(parameters('jwtRequireEntraDevice'))))))]"
                 }
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Insights/components', variables('aiName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[0], split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[1], split(format('{0}/default/{1}-pkg', variables('storageName'), variables('funcName')), '/')[2])]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', split(format('{0}/default/{1}', variables('storageName'), variables('flexPackageContainerName')), '/')[0], split(format('{0}/default/{1}', variables('storageName'), variables('flexPackageContainerName')), '/')[1], split(format('{0}/default/{1}', variables('storageName'), variables('flexPackageContainerName')), '/')[2])]",
                 "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
               ]
@@ -849,9 +869,6 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "dcrName": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr'), '2025-04-01').outputs.dcrName.value]"
-          },
           "principalId": "[if(variables('createFunctionApp'), createObject('value', reference(resourceId('Microsoft.Resources/deployments', 'functionApp'), '2025-04-01').outputs.principalId.value), createObject('value', parameters('existingFunctionPrincipalId')))]",
           "roleDefinitionId": {
             "value": "[variables('monitoringMetricsPublisherRoleId')]"
@@ -864,16 +881,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "15389737917969367071"
+              "templateHash": "14370649828728273588"
             }
           },
           "parameters": {
-            "dcrName": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the DCR to scope the role assignment to."
-              }
-            },
             "principalId": {
               "type": "string",
               "metadata": {
@@ -891,8 +902,7 @@
             {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]",
-              "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), parameters('principalId'), parameters('roleDefinitionId'))]",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
               "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
                 "principalId": "[parameters('principalId')]",
@@ -903,7 +913,6 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('dcrRg')), 'Microsoft.Resources/deployments', 'dcr')]",
         "[resourceId('Microsoft.Resources/deployments', 'functionApp')]"
       ]
     }
