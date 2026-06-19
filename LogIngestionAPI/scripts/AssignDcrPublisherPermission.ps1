@@ -21,7 +21,7 @@
 param(
     [Parameter(Mandatory)] [Alias('frg')] [string]$FunctionResourceGroup,
     [Parameter(Mandatory)] [Alias('func')] [string]$FunctionAppName,
-    [Parameter(Mandatory)] [Alias('dcrrg')] [string]$DcrRg,
+    [Parameter(Mandatory)] [Alias('drg')] [string]$DcrRg,
     [string]$Subscription
 )
 
