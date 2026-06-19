@@ -35,7 +35,7 @@ const defaultConfig = (): PortalConfig => ({
   workspaceResourceGroup: '',
   location: '',
   workspaceLocation: '',
-  functionPlanType: 'Consumption',
+  functionPlanType: 'Flex',
 });
 
 const newTableId = (): string => `t-${Math.random().toString(36).slice(2, 9)}`;
@@ -193,7 +193,7 @@ export default function App() {
   const [workspaceName, setWorkspaceName] = useState(persisted.workspaceName ?? '');
   const [showContribute, setShowContribute] = useState(false);
   const [showSample, setShowSample] = useState(false);
-  const [config, setConfig] = useState<PortalConfig>(() => persisted.config ?? defaultConfig());
+  const [config, setConfig] = useState<PortalConfig>(() => ({ ...defaultConfig(), ...(persisted.config ?? {}) }));
 
   const knownCategories = useMemo(
     () => [...new Set(catalog.fields.filter((f) => !f.locked).map((f) => f.category))],
@@ -399,7 +399,7 @@ export default function App() {
         throw new Error(`Imported configuration is invalid: ${combined[0]}`);
       }
       setTables(importedTables);
-      setConfig(parsed.config);
+      setConfig({ ...defaultConfig(), ...parsed.config });
       setWorkspaceName(parsed.workspaceName ?? '');
       window.alert('Configuration imported successfully.');
     } catch (e) {
