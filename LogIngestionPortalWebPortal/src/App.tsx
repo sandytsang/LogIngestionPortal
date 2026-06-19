@@ -339,6 +339,10 @@ export default function App() {
     for (const path of scriptPaths) {
       if (!known.has(path)) files.push({ name: path, content: overrides[path] });
     }
+    const portalConfigPath = 'LogIngestionAPI/portal-config.json';
+    if (!known.has(portalConfigPath)) {
+      files.push({ name: portalConfigPath, content: byId['portal-config'] });
+    }
     return files;
   }, [tabs, scripts, config, workspaceName]);
 
