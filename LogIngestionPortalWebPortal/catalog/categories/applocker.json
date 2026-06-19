@@ -7,7 +7,7 @@
       "order": 200,
       "default": false,
       "setups": [],
-      "collector": "$warnIds=8003,8006,8021,8024,8028,8038\n$blockIds=8004,8007,8021,8024,8029,8040\n$allIds=$warnIds+$blockIds|Sort-Object -Unique\n$t=(Get-Date).AddHours(-24)\n$logs=@(@{L='Microsoft-Windows-AppLocker/EXE and DLL';T='Application'},@{L='Microsoft-Windows-AppLocker/MSI and Script';T='Script'})\n$raw=foreach($s in $logs){\n Get-WinEvent -FilterHashtable @{LogName=$s.L;Id=$allIds;StartTime=$t} -EA SilentlyContinue|%{\n  $d=([xml]$_.ToXml()).Event.UserData.RuleAndFileData\n  $rp=[string]$d.FilePath\n  $fp=$rp -replace '%OSDRIVE%',$env:SystemDrive\n  [pscustomobject]@{Ev=$_;Type=$s.T;Raw=$rp;Path=$fp}\n }\n}\n$pc=@{}\n$raw|%{if($_.Raw){$pc[$_.Raw]=[int]$pc[$_.Raw]+1}}\n$events=foreach($e in ($raw|Sort-Object {$_.Ev.RecordId} -Unique)){\n $ev=$e.Ev;$fp=$e.Path;$fn=if($fp){Split-Path -Leaf $fp}\n if([string]::IsNullOrEmpty($fp) -or $fp -match 'PSSCRIPTPOLICYTEST' -or -not(Test-Path $fp -EA SilentlyContinue)){continue}\n $vi=(Get-ItemProperty $fp -EA SilentlyContinue).VersionInfo\n $fd=if($vi.FileDescription){$vi.FileDescription}else{$fn}\n $pn=if($vi.ProductName){$vi.ProductName}else{$fd}\n $fv=if($vi.FileVersion){$vi.FileVersion}else{'Unavailable'}\n try{$fh=(Get-FileHash $fp -Algorithm SHA256 -EA Stop).Hash}catch{$fh='Access denied'}\n $fl=(Get-Item $fp -EA SilentlyContinue).Length\n $ai=Get-AppLockerFileInformation $fp -EA SilentlyContinue\n $pbn=$ai.Publisher.PublisherName\n if([string]::IsNullOrEmpty($pbn)){$pu='Unsigned';$fpub='N/A';$sg='No'}else{$pu=(($pbn -split ',')[0]).TrimStart('O=');$fpub=[string]$ai.Publisher;$sg='Yes'}\n if($sg -eq 'Yes' -and $pn -ne $fd){try{$pr=[string]($ai|New-AppLockerPolicy -RuleType Publisher -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$pr='Unsigned Application'}}else{$pr='Unsigned Application'}\n try{$hr=[string]($ai|New-AppLockerPolicy -RuleType Hash -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$hr=$null}\n try{$lr=[string]($ai|New-AppLockerPolicy -RuleType Path -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$lr=$null}\n [pscustomobject]@{\n  EventRecordId=[long]$ev.RecordId\n  EventType=if($blockIds -contains $ev.Id){'Denied'}else{'Audited'}\n  EventId=[int]$ev.Id\n  EventMessage=$ev.Message\n  RuleType=$e.Type\n  FileDescription=$fd\n  FileVersion=$fv\n  ProductName=$pn\n  FileHash=$fh\n  FileName=$fn\n  FilePath=$fp\n  FileLength=$fl\n  Publisher=$pu\n  FullPublisher=$fpub\n  FileUseCount=[int]$pc[$e.Raw]\n  AppLockerPublisherRule=$pr\n  AppLockerHashRule=$hr\n  AppLockerPathRule=$lr\n  Signed=$sg\n }\n}\n@($events)",
+      "collector": "$warnIds=8003,8006,8021,8024,8028,8038\n$blockIds=8004,8007,8021,8024,8029,8040\n$allIds=$warnIds+$blockIds|Sort-Object -Unique\n$t=(Get-Date).AddHours(-24)\n$logs=@(@{L='Microsoft-Windows-AppLocker/EXE and DLL';T='Application'},@{L='Microsoft-Windows-AppLocker/MSI and Script';T='Script'})\n$raw=foreach($s in $logs){\n Get-WinEvent -FilterHashtable @{LogName=$s.L;Id=$allIds;StartTime=$t} -EA SilentlyContinue|%{\n  $d=([xml]$_.ToXml()).Event.UserData.RuleAndFileData\n  $rp=[string]$d.FilePath\n  $fp=$rp -replace '%OSDRIVE%',$env:SystemDrive\n  [pscustomobject]@{Ev=$_;Type=$s.T;Data=$d;Raw=$rp;Path=$fp}\n }\n}\n$pc=@{}\n$raw|%{if($_.Raw){$pc[$_.Raw]=[int]$pc[$_.Raw]+1}}\n$events=foreach($e in ($raw|Sort-Object {$_.Ev.RecordId} -Unique)){\n $ev=$e.Ev;$d=$e.Data;$fp=$e.Path;$fn=if($fp){Split-Path -Leaf $fp}\n if([string]::IsNullOrEmpty($fp) -or $fp -match 'PSSCRIPTPOLICYTEST' -or -not(Test-Path $fp -EA SilentlyContinue)){continue}\n $vi=(Get-ItemProperty $fp -EA SilentlyContinue).VersionInfo\n $fd=if($vi.FileDescription){$vi.FileDescription}else{$fn}\n $pn=if($vi.ProductName){$vi.ProductName}else{$fd}\n $fv=if($vi.FileVersion){$vi.FileVersion}else{'Unavailable'}\n try{$fh=(Get-FileHash $fp -Algorithm SHA256 -EA Stop).Hash}catch{$fh='Access denied'}\n $fl=(Get-Item $fp -EA SilentlyContinue).Length\n $ai=Get-AppLockerFileInformation $fp -EA SilentlyContinue\n $pbn=$ai.Publisher.PublisherName\n if([string]::IsNullOrEmpty($pbn)){$pu='Unsigned';$fpub='N/A';$sg='No'}else{$pu=(($pbn -split ',')[0]).TrimStart('O=');$fpub=[string]$ai.Publisher;$sg='Yes'}\n if($sg -eq 'Yes' -and $pn -ne $fd){try{$pr=[string]($ai|New-AppLockerPolicy -RuleType Publisher -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$pr='Unsigned Application'}}else{$pr='Unsigned Application'}\n try{$hr=[string]($ai|New-AppLockerPolicy -RuleType Hash -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$hr=$null}\n try{$lr=[string]($ai|New-AppLockerPolicy -RuleType Path -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$lr=$null}\n $fqbn=[string]$d.Fqbn\n $fqobj=$null\n if($fqbn){$p=$fqbn -split '\\\\';$fqobj=[pscustomobject]@{PublisherDN=$p[0];ProductName=$p[1];BinaryName=$p[2];Version=$p[3]}}\n [pscustomobject]@{\n  EventRecordId=[long]$ev.RecordId\n  EventTime=$ev.TimeCreated.ToUniversalTime().ToString('o')\n  EventType=if($blockIds -contains $ev.Id){'Denied'}else{'Audited'}\n  EventId=[int]$ev.Id\n  EventMessage=$ev.Message\n  RuleType=$e.Type\n  PolicyName=[string]$d.PolicyName\n  RuleName=[string]$d.RuleName\n  TargetUser=[string]$d.TargetUser\n  FileDescription=$fd\n  FileVersion=$fv\n  ProductName=$pn\n  FileHash=$fh\n  FileName=$fn\n  FilePath=$fp\n  FileLength=$fl\n  Publisher=$pu\n  FullPublisher=$fpub\n  Fqbn=$fqobj\n  FileUseCount=[int]$pc[$e.Raw]\n  AppLockerPublisherRule=$pr\n  AppLockerHashRule=$hr\n  AppLockerPathRule=$lr\n  Signed=$sg\n }\n}\n@($events)",
       "column": {
         "name": "AppLockerEvents",
         "type": "dynamic",
@@ -20,6 +20,14 @@
             "name": "AppLockerEventRecordId",
             "type": "long",
             "description": "Per-log EventRecordId of the source event. Combine with DeviceName to dedupe overlapping uploads in KQL."
+          }
+        },
+        {
+          "expression": "$item.EventTime",
+          "column": {
+            "name": "AppLockerEventTime",
+            "type": "datetime",
+            "description": "UTC time the AppLocker event was logged (Event.TimeCreated). Distinct from TimeGenerated, which is the ingestion time."
           }
         },
         {
@@ -52,6 +60,30 @@
             "name": "AppLockerRuleType",
             "type": "string",
             "description": "AppLocker rule type the event came from: Application (EXE/DLL) or Script (MSI/Script)."
+          }
+        },
+        {
+          "expression": "$item.PolicyName",
+          "column": {
+            "name": "AppLockerPolicyName",
+            "type": "string",
+            "description": "AppLocker rule collection/policy name from the event (UserData.RuleAndFileData.PolicyName)."
+          }
+        },
+        {
+          "expression": "$item.RuleName",
+          "column": {
+            "name": "AppLockerRuleName",
+            "type": "string",
+            "description": "Name of the AppLocker rule that matched (UserData.RuleAndFileData.RuleName)."
+          }
+        },
+        {
+          "expression": "$item.TargetUser",
+          "column": {
+            "name": "AppLockerTargetUser",
+            "type": "string",
+            "description": "SID of the user the rule was evaluated for (UserData.RuleAndFileData.TargetUser)."
           }
         },
         {
@@ -124,6 +156,14 @@
             "name": "AppLockerFullPublisher",
             "type": "string",
             "description": "Full AppLocker publisher string from Get-AppLockerFileInformation (complete certificate subject); N/A for unsigned files."
+          }
+        },
+        {
+          "expression": "$item.Fqbn",
+          "column": {
+            "name": "AppLockerFqbn",
+            "type": "dynamic",
+            "description": "Fully Qualified Binary Name from the event, parsed into an object: PublisherDN, ProductName, BinaryName, Version. Null for unsigned files. Use dot/bracket access in KQL, e.g. AppLockerFqbn.ProductName."
           }
         },
         {
