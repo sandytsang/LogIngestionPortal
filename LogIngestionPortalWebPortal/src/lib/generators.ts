@@ -275,6 +275,7 @@ export function generateDeployReadme(
   const wsName = workspaceName?.trim() || '<workspace-name>';
   const dcrName = config.dcrName?.trim() || '<dcr-name>';
   const dcrRg = config.dcrResourceGroup?.trim();
+  const dcrScopeRg = dcrRg || rg;
   const wsRg = config.workspaceResourceGroup?.trim();
   const wsLoc = config.workspaceLocation?.trim();
   const isFlex = config.functionPlanType === 'Flex';
@@ -459,6 +460,16 @@ export function generateDeployReadme(
     `  ./scripts/AssignMSIPermisison.ps1 -ResourceGroup ${rg} -FunctionAppName ${funcName}`,
     '',
     'Propagation can take a few minutes. Until it is assigned, devices get 401.',
+    '',
+    'Step 3b — Grant DCR ingestion role (Monitoring Metrics Publisher)',
+    '---------------------------------------------------------------',
+    'The Function managed identity also needs Monitoring Metrics Publisher on the',
+    'RESOURCE GROUP that contains the DCR. Important: assign the role on the DCR',
+    'resource group scope, not on the DCR resource itself.',
+    '',
+    'If the deploy warns this role is missing, run:',
+    '',
+    `  ./scripts/AssignDcrPublisherPermission.ps1 -FunctionResourceGroup ${rg} -FunctionAppName ${funcName} -DcrRg ${dcrScopeRg}`,
     '',
     'Step 4 — Wire up Intune',
     '-----------------------',

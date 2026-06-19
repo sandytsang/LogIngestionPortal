@@ -147,7 +147,8 @@ flowchart LR
 
 `deploy.ps1` attempts both permissions by default. If assignment fails (for
 example, Contributor-only deployer or missing Entra admin rights), deployment
-continues and prints the exact manual commands to run afterwards.
+continues and prints manual follow-up commands. The native GitHub workflow also
+checks these permissions and warns (does not fail) when they are missing.
 
 ### Cloud Shell follow-up if permission assignment failed
 
@@ -155,26 +156,43 @@ For a full operator runbook (required roles, verification checks, and escalation
 inputs), see
 [Manual permission fallback runbook](docs/manual-permission-fallback-runbook.md).
 
-Replace placeholders first:
+Grant DCR ingestion permission (Monitoring Metrics Publisher) with the helper
+script (assigns on the DCR resource group scope):
 
-- `<subscription-id>`
-- `<dcr-resource-group>`
-- `<function-mi-object-id>` (Function managed identity object id)
+```powershell
+./scripts/AssignDcrPublisherPermission.ps1 `
+  -FunctionResourceGroup <function-resource-group> `
+  -FunctionAppName <function-app-name> `
+  -DcrRg <dcr-resource-group> `
+  -Subscription <subscription-id>
+```
 
-Grant DCR ingestion permission (Monitoring Metrics Publisher):
+Grant Graph Device.Read.All (when `JWT_REQUIRE_ENTRA_DEVICE=true`) with the
+helper script:
+
+```powershell
+./scripts/AssignMSIPermisison.ps1 `
+  -ResourceGroup <function-resource-group> `
+  -FunctionAppName <function-app-name>
+```
+
+Equivalent raw Azure CLI commands (advanced/troubleshooting):
 
 ```bash
+# Inputs needed for raw commands:
+# - <subscription-id>
+# - <dcr-resource-group>
+# - <function-mi-object-id>
+
+# 1) Monitoring Metrics Publisher on DCR resource group
 az account set --subscription <subscription-id>
 az role assignment create \
   --assignee-object-id <function-mi-object-id> \
   --assignee-principal-type ServicePrincipal \
   --role "Monitoring Metrics Publisher" \
   --scope "/subscriptions/<subscription-id>/resourceGroups/<dcr-resource-group>"
-```
 
-Grant Graph Device.Read.All (when `JWT_REQUIRE_ENTRA_DEVICE=true`):
-
-```bash
+# 2) Graph Device.Read.All
 MI="<function-mi-object-id>"
 GRAPH_SP=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query '[0].id' -o tsv)
 ROLE="7438b122-aefc-4978-80ed-43db9fcc7715"
@@ -207,4 +225,6 @@ In-depth guides:
 - infra/
 - function/
 - scripts/
+- scripts/AssignMSIPermisison.ps1
+- scripts/AssignDcrPublisherPermission.ps1
 - schema/columns.json

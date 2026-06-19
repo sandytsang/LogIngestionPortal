@@ -51,13 +51,14 @@ the folder you get from the portal's download bundle, pushed as your own repo).
 
 ### Deploy/update inputs
 
-Both `deploy.yml` and `update-columns.yml` offer a **method** input:
-
-- `native` — Bicep + `Azure/functions-action` only (no PowerShell script).
-- `script` — run `scripts/deploy.ps1` in CI (same path as a local deploy).
+Both `deploy.yml` and `update-columns.yml` are native-only (Bicep +
+`Azure/functions-action` for full deploy; Bicep schema-only path for
+`update-columns.yml`).
 
 `deploy.yml` exposes resource names, region, plan type, `requireEntraDevice`,
-and `skipRoleAssignment` as inputs (sensible defaults provided).
+and `skipRoleAssignment` as inputs (sensible defaults provided). Missing
+Graph/DCR permissions are reported as warnings with manual commands; they do
+not fail the workflow.
 
 ## Authentication for CI
 

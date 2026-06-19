@@ -78,8 +78,8 @@ cd scripts
   -SkipDcrRoleAssignment
 ```
 
-Then grant **Monitoring Metrics Publisher** separately (the script prints the
-exact command).
+Then grant **Monitoring Metrics Publisher** separately on the DCR resource
+group scope (not on the DCR resource itself).
 
 ### Cloud Shell manual permission grants (if deploy printed warnings)
 
@@ -87,23 +87,18 @@ Use the full operator checklist in
 [Manual permission fallback runbook](manual-permission-fallback-runbook.md)
 for prerequisites, exact placeholders, verification, and escalation inputs.
 
-```bash
-# 1) Monitoring Metrics Publisher on the DCR resource group
-az account set --subscription <subscription-id>
-az role assignment create \
-  --assignee-object-id <function-mi-object-id> \
-  --assignee-principal-type ServicePrincipal \
-  --role "Monitoring Metrics Publisher" \
-  --scope "/subscriptions/<subscription-id>/resourceGroups/<dcr-resource-group>"
+```powershell
+# 1) Monitoring Metrics Publisher on DCR resource-group scope
+./AssignDcrPublisherPermission.ps1 `
+  -FunctionResourceGroup <function-resource-group> `
+  -FunctionAppName <function-app-name> `
+  -DcrRg <dcr-resource-group> `
+  -Subscription <subscription-id>
 
 # 2) Graph Device.Read.All (required when JWT_REQUIRE_ENTRA_DEVICE=true)
-MI="<function-mi-object-id>"
-GRAPH_SP=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query '[0].id' -o tsv)
-ROLE="7438b122-aefc-4978-80ed-43db9fcc7715"
-az rest --method POST \
-  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$MI/appRoleAssignments" \
-  --headers 'Content-Type=application/json' \
-  --body "{\"principalId\":\"$MI\",\"resourceId\":\"$GRAPH_SP\",\"appRoleId\":\"$ROLE\"}"
+./AssignMSIPermisison.ps1 `
+  -ResourceGroup <function-resource-group> `
+  -FunctionAppName <function-app-name>
 ```
 
 ### Schema-only update (after a `columns.json` change)

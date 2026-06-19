@@ -150,6 +150,12 @@ export function DeployHelp() {
           identity has Microsoft Graph <span className="font-semibold">Device.Read.All</span> — the
           workflow checks it and warns if a Graph admin still needs to grant it manually.
         </p>
+
+        <p className="text-slate-500 dark:text-slate-400">
+          The Function identity also needs <span className="font-semibold">Monitoring Metrics Publisher</span>{' '}
+          on the <span className="font-semibold">resource group that contains the DCR</span>. Assign this role
+          on that resource-group scope (not on the DCR resource itself) if the workflow warns it is missing.
+        </p>
       </div>
     </details>
   );
