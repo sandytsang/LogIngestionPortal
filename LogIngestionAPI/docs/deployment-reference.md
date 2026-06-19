@@ -15,6 +15,10 @@ parameter, and common scenarios. For role/permission details see
    **Monitoring Metrics Publisher** on the DCR resource group.
 5. Prints a ready-to-run test command and the values the device script needs.
 
+Permission assignment is best-effort: the script tries both grants by default.
+If either fails (for example, missing Graph admin or RBAC write rights), deploy
+continues and prints exact manual commands.
+
 Every resource is **upserted**: created if missing, updated in place if present.
 You choose the exact name for every resource (no random hash, no naming
 convention is imposed).
@@ -76,6 +80,27 @@ cd scripts
 
 Then grant **Monitoring Metrics Publisher** separately (the script prints the
 exact command).
+
+### Cloud Shell manual permission grants (if deploy printed warnings)
+
+```bash
+# 1) Monitoring Metrics Publisher on the DCR resource group
+az account set --subscription <subscription-id>
+az role assignment create \
+  --assignee-object-id <function-mi-object-id> \
+  --assignee-principal-type ServicePrincipal \
+  --role "Monitoring Metrics Publisher" \
+  --scope "/subscriptions/<subscription-id>/resourceGroups/<dcr-resource-group>"
+
+# 2) Graph Device.Read.All (required when JWT_REQUIRE_ENTRA_DEVICE=true)
+MI="<function-mi-object-id>"
+GRAPH_SP=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query '[0].id' -o tsv)
+ROLE="7438b122-aefc-4978-80ed-43db9fcc7715"
+az rest --method POST \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$MI/appRoleAssignments" \
+  --headers 'Content-Type=application/json' \
+  --body "{\"principalId\":\"$MI\",\"resourceId\":\"$GRAPH_SP\",\"appRoleId\":\"$ROLE\"}"
+```
 
 ### Schema-only update (after a `columns.json` change)
 

@@ -136,6 +136,41 @@ flowchart LR
   is enabled.
 - DCR ingestion needs Monitoring Metrics Publisher role on the resource group that holds the DCR.
 
+`deploy.ps1` attempts both permissions by default. If assignment fails (for
+example, Contributor-only deployer or missing Entra admin rights), deployment
+continues and prints the exact manual commands to run afterwards.
+
+### Cloud Shell follow-up if permission assignment failed
+
+Replace placeholders first:
+
+- `<subscription-id>`
+- `<dcr-resource-group>`
+- `<function-mi-object-id>` (Function managed identity object id)
+
+Grant DCR ingestion permission (Monitoring Metrics Publisher):
+
+```bash
+az account set --subscription <subscription-id>
+az role assignment create \
+  --assignee-object-id <function-mi-object-id> \
+  --assignee-principal-type ServicePrincipal \
+  --role "Monitoring Metrics Publisher" \
+  --scope "/subscriptions/<subscription-id>/resourceGroups/<dcr-resource-group>"
+```
+
+Grant Graph Device.Read.All (when `JWT_REQUIRE_ENTRA_DEVICE=true`):
+
+```bash
+MI="<function-mi-object-id>"
+GRAPH_SP=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query '[0].id' -o tsv)
+ROLE="7438b122-aefc-4978-80ed-43db9fcc7715"
+az rest --method POST \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$MI/appRoleAssignments" \
+  --headers 'Content-Type=application/json' \
+  --body "{\"principalId\":\"$MI\",\"resourceId\":\"$GRAPH_SP\",\"appRoleId\":\"$ROLE\"}"
+```
+
 For a detailed explanation of how the device-signed JWT and certificate chain
 work (how the client sends the certificate and how the server validates it), see
 [Device authentication: JWT + certificate chain](docs/device-jwt-authentication.md).

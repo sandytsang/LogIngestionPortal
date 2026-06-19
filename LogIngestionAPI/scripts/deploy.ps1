@@ -277,6 +277,8 @@ foreach ($table in $tables) {
     $names = @{}
     foreach ($col in $table.columns) {
         if (-not $col.name) { throw "Table '$($table.tableName)': every column must have a name." }
+        if ($col.name.Length -gt 60) { throw "Table '$($table.tableName)', column '$($col.name)' exceeds max length 60." }
+        if ($col.name -notmatch '^[A-Za-z][A-Za-z0-9_]*$') { throw "Table '$($table.tableName)', column '$($col.name)' is invalid. Must match ^[A-Za-z][A-Za-z0-9_]*$." }
         if ($col.type -notin $allowedTypes) { throw "Table '$($table.tableName)', column '$($col.name)' has unsupported type '$($col.type)'. Allowed: $($allowedTypes -join ', ')." }
         if ($names.ContainsKey($col.name)) { throw "Table '$($table.tableName)': duplicate column name '$($col.name)'." }
         $names[$col.name] = $true

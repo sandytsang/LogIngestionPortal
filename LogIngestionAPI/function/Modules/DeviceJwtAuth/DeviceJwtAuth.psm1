@@ -6,6 +6,8 @@
 #   1.0.0 (2026-06-19) Initial documented release; added author and version
 #                      history header. Removed dead type-check branch in
 #                      Get-X5cCertificates.
+#   1.0.1 (2026-06-19) Added best-effort in-memory nonce replay protection for
+#                      short-lived JWTs.
 #
 # Device-bound request authentication for the Log Ingestion Function.
 #
@@ -27,6 +29,33 @@
 
 # Module-scoped Graph token cache (keyed by resource URI).
 $script:_tokenCache = @{}
+# Module-scoped nonce replay cache (keyed by tid|did|nonce, value = UTC expiry).
+$script:_nonceCache = @{}
+
+# Best-effort replay guard for JWT nonces. Keeps a short in-memory cache per
+# worker process and rejects duplicate tid+did+nonce tuples until expiry.
+function Test-AndRememberJwtNonce {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TenantId,
+        [Parameter(Mandatory)][string]$DeviceId,
+        [Parameter(Mandatory)][string]$Nonce,
+        [int]$TtlSeconds = 600
+    )
+
+    $now = [DateTime]::UtcNow
+    foreach ($k in @($script:_nonceCache.Keys)) {
+        if ($script:_nonceCache[$k] -le $now) { $script:_nonceCache.Remove($k) }
+    }
+
+    $key = "$TenantId|$DeviceId|$Nonce"
+    if ($script:_nonceCache.ContainsKey($key)) {
+        return $false
+    }
+
+    $script:_nonceCache[$key] = $now.AddSeconds([Math]::Max(60, $TtlSeconds))
+    return $true
+}
 
 # Writes a single structured log line to stdout (captured by Functions/App
 # Insights). Renders as: [Level] DeviceJwtAuth <message> key=value ... and skips
@@ -560,6 +589,15 @@ function Test-DeviceRequestJwt {
     $check = Test-DeviceJwt -Jwt $jwt -PublicKey $rsa -ExpectedAudience $expectedAudience
     if (-not $check.Valid) { return (& $result $false ("JWT validation failed: " + $check.Reason) $null $device) }
     $claims = $check.Claims
+
+    # Replay protection: nonce must be single-use for the token lifetime (+small
+    # skew window). This cache is worker-local (best effort) and complements the
+    # short token TTL.
+    $nowUnix = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $ttl = [Math]::Min(900, [Math]::Max(60, ([int64]$claims.exp - $nowUnix) + 300))
+    if (-not (Test-AndRememberJwtNonce -TenantId $claims.tid -DeviceId $claims.did -Nonce $claims.nonce -TtlSeconds $ttl)) {
+        return (& $result $false 'Replay detected (nonce already used)' $null $device)
+    }
 
     # Defense in depth: the signed 'did' claim must match the device we resolved,
     # so a valid token for device A can't be accepted as device B.

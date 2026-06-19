@@ -29,7 +29,7 @@ on:
         description: 'Deployment method'
         type: choice
         options: [native, script]
-        default: native
+        default: script
       resourceGroup:
         description: 'Target resource group (created if missing)'
         type: string
@@ -74,7 +74,7 @@ on:
       skipRoleAssignment:
         description: 'Do not create the resource group role assignment (use when the login identity only has Contributor; grant Monitoring Metrics Publisher separately)'
         type: boolean
-        default: true
+        default: false
 
 permissions:
   id-token: write   # required for OIDC (passwordless) Azure login
@@ -184,10 +184,9 @@ jobs:
         shell: pwsh
         working-directory: scripts
         run: |
-          # CI has no Entra admin to grant Graph Device.Read.All, so skip that
-          # step here and grant it once separately (see README). Everything else
-          # runs exactly like a local deploy.
-          $opt = @('-SkipDeviceGraphPermission')
+          # Try permission assignment in-band (recommended). deploy.ps1 handles
+          # failures as non-fatal and prints manual follow-up commands.
+          $opt = @()
           if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
           if ('${{ inputs.workspaceResourceGroup }}') { $opt += @('-WorkspaceResourceGroup', '${{ inputs.workspaceResourceGroup }}') }
           if ('${{ inputs.workspaceLocation }}') { $opt += @('-WorkspaceLocation', '${{ inputs.workspaceLocation }}') }

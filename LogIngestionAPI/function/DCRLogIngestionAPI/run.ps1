@@ -157,7 +157,7 @@ if (-not $authHeader) { $authHeader = $Request.Headers.authorization }
 $auth = Test-DeviceRequestJwt -AuthorizationHeader $authHeader
 if (-not $auth.Valid) {
     Write-Warning "Device JWT rejected: $($auth.Reason)"
-    Write-HttpResponse -StatusCode ([HttpStatusCode]::Unauthorized) -Body @{ error = 'Authentication failed.'; reason = $auth.Reason }
+    Write-HttpResponse -StatusCode ([HttpStatusCode]::Unauthorized) -Body @{ error = 'Authentication failed.' }
     return
 }
 Write-Information "Device authenticated (did=$($auth.Claims.did) tid=$($auth.Claims.tid))."
