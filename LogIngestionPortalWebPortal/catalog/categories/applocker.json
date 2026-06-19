@@ -7,36 +7,165 @@
       "order": 200,
       "default": false,
       "setups": [],
-      "collector": "$auditIds=8003,8006,8020,8021,8024,8028,8038\n$blockIds=8004,8007,8022,8029,8040\n$allIds=$auditIds+$blockIds|Sort-Object -Unique\n$t=(Get-Date).AddHours(-24)\n$logs=@('Microsoft-Windows-AppLocker/EXE and DLL','Microsoft-Windows-AppLocker/MSI and Script','Microsoft-Windows-AppLocker/Packaged app-Execution')\n$raw=foreach($log in $logs){\n Get-WinEvent -FilterHashtable @{LogName=$log;Id=$allIds;StartTime=$t} -EA SilentlyContinue|%{\n  $d=([xml]$_.ToXml()).Event.UserData.RuleAndFileData\n  $rp=[string]$d.FilePath\n  $fp=$rp -replace '%OSDRIVE%',$env:SystemDrive\n  [pscustomobject]@{E=$_;L=$log;D=$d;R=$rp;F=$fp}\n }\n}\n$pc=@{}\n$raw|%{if($_.R){$pc[$_.R]=[int]$pc[$_.R]+1}}\n$events=foreach($e in $raw){\n $ev=$e.E;$d=$e.D;$fp=$e.F\n $fn=if($fp){Split-Path -Leaf $fp}\n $rc=switch -Wildcard($e.L){'*EXE*'{'Exe/Dll'}'*MSI*'{'Msi/Script'}'*Pack*'{'PackagedApp'}default{$e.L}}\n $et=if($blockIds -contains $ev.Id){'Denied'}else{'Audited'}\n $uc=[int]$pc[$e.R]\n $fh=[string]$d.FileHash\n $fd=$null;$fv=$null;$pn=$null;$fl=$null;$pr=$null;$hr=$null;$lr=$null\n $fqbn=[string]$d.Fqbn\n if($fqbn -and $fqbn -match 'O='){$dn=($fqbn -split '\\\\')[0];$fu=$dn;$pu=(($dn -split ',')[0]).TrimStart('O=');$sg='Yes'}else{$pu='Unsigned';$fu='N/A';$sg='No'}\n if($fp -and (Test-Path $fp -EA SilentlyContinue)){\n  try{$vi=(Get-ItemProperty $fp -EA SilentlyContinue).VersionInfo;$fd=if($vi.FileDescription){$vi.FileDescription}else{$fn};$fv=if($vi.FileVersion){$vi.FileVersion}else{'Unavailable'};$pn=if($vi.ProductName){$vi.ProductName}else{$fd}}catch{}\n  try{$h=Get-FileHash $fp -Algorithm SHA256 -EA SilentlyContinue;if($h){$fh=$h.Hash}}catch{if($_.Exception.Message -match 'Denied'){$fh='Access denied'}}\n  try{$fl=(Get-Item $fp -EA SilentlyContinue).Length}catch{}\n  try{$ai=Get-AppLockerFileInformation $fp -EA SilentlyContinue;$pbn=$ai.Publisher.PublisherName;if([string]::IsNullOrEmpty($pbn)){if($sg -ne 'Yes'){$pu='Unsigned';$fu='N/A';$sg='No'}}else{$pu=(($pbn -split ',')[0]).TrimStart('O=');$fu=[string]$ai.Publisher;$sg='Yes'}}catch{}\n  if($sg -eq 'Yes' -and $ai){try{$pr=[string]($ai|New-AppLockerPolicy -RuleType Publisher -User Everyone -RuleNamePrefix $pn -XML -EA SilentlyContinue)}catch{$pr='Unsigned Application'}}else{$pr='Unsigned Application'}\n  if($ai){try{$hr=[string]($ai|New-AppLockerPolicy -RuleType Hash -User Everyone -RuleNamePrefix $pn -XML -EA SilentlyContinue)}catch{}\n  try{$lr=[string]($ai|New-AppLockerPolicy -RuleType Path -User Everyone -RuleNamePrefix $pn -XML -EA SilentlyContinue)}catch{}}\n }\n [pscustomobject]@{\n  EventTimeUtc=$ev.TimeCreated.ToUniversalTime().ToString('o')\n  EventRecordId=[long]$ev.RecordId\n  EventId=[int]$ev.Id\n  EventType=$et\n  EventMessage=$ev.Message\n  RuleCollection=$rc\n  PolicyName=[string]$d.PolicyName\n  RuleName=[string]$d.RuleName\n  FilePath=$fp\n  FileName=$fn\n  FileHash=$fh\n  FileDescription=$fd\n  FileVersion=$fv\n  ProductName=$pn\n  FileLength=$fl\n  Publisher=$pu\n  FullPublisher=$fu\n  FileUseCount=$uc\n  AppLockerPublisherRule=$pr\n  AppLockerHashRule=$hr\n  AppLockerPathRule=$lr\n  Signed=$sg\n  TargetUser=[string]$d.TargetUser\n }\n}\n@($events)",
+      "collector": "$warnIds=8003,8006,8021,8024,8028,8038\n$blockIds=8004,8007,8021,8024,8029,8040\n$allIds=$warnIds+$blockIds|Sort-Object -Unique\n$t=(Get-Date).AddHours(-24)\n$logs=@(@{L='Microsoft-Windows-AppLocker/EXE and DLL';T='Application'},@{L='Microsoft-Windows-AppLocker/MSI and Script';T='Script'})\n$raw=foreach($s in $logs){\n Get-WinEvent -FilterHashtable @{LogName=$s.L;Id=$allIds;StartTime=$t} -EA SilentlyContinue|%{\n  $d=([xml]$_.ToXml()).Event.UserData.RuleAndFileData\n  $rp=[string]$d.FilePath\n  $fp=$rp -replace '%OSDRIVE%',$env:SystemDrive\n  [pscustomobject]@{Ev=$_;Type=$s.T;Raw=$rp;Path=$fp}\n }\n}\n$pc=@{}\n$raw|%{if($_.Raw){$pc[$_.Raw]=[int]$pc[$_.Raw]+1}}\n$events=foreach($e in ($raw|Sort-Object {$_.Ev.RecordId} -Unique)){\n $ev=$e.Ev;$fp=$e.Path;$fn=if($fp){Split-Path -Leaf $fp}\n if([string]::IsNullOrEmpty($fp) -or $fp -match 'PSSCRIPTPOLICYTEST' -or -not(Test-Path $fp -EA SilentlyContinue)){continue}\n $vi=(Get-ItemProperty $fp -EA SilentlyContinue).VersionInfo\n $fd=if($vi.FileDescription){$vi.FileDescription}else{$fn}\n $pn=if($vi.ProductName){$vi.ProductName}else{$fd}\n $fv=if($vi.FileVersion){$vi.FileVersion}else{'Unavailable'}\n try{$fh=(Get-FileHash $fp -Algorithm SHA256 -EA Stop).Hash}catch{$fh='Access denied'}\n $fl=(Get-Item $fp -EA SilentlyContinue).Length\n $ai=Get-AppLockerFileInformation $fp -EA SilentlyContinue\n $pbn=$ai.Publisher.PublisherName\n if([string]::IsNullOrEmpty($pbn)){$pu='Unsigned';$fpub='N/A';$sg='No'}else{$pu=(($pbn -split ',')[0]).TrimStart('O=');$fpub=[string]$ai.Publisher;$sg='Yes'}\n if($sg -eq 'Yes' -and $pn -ne $fd){try{$pr=[string]($ai|New-AppLockerPolicy -RuleType Publisher -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$pr='Unsigned Application'}}else{$pr='Unsigned Application'}\n try{$hr=[string]($ai|New-AppLockerPolicy -RuleType Hash -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$hr=$null}\n try{$lr=[string]($ai|New-AppLockerPolicy -RuleType Path -User Everyone -RuleNamePrefix $pn -XML -EA Stop)}catch{$lr=$null}\n [pscustomobject]@{\n  EventRecordId=[long]$ev.RecordId\n  EventType=if($blockIds -contains $ev.Id){'Denied'}else{'Audited'}\n  EventId=[int]$ev.Id\n  EventMessage=$ev.Message\n  RuleType=$e.Type\n  FileDescription=$fd\n  FileVersion=$fv\n  ProductName=$pn\n  FileHash=$fh\n  FileName=$fn\n  FilePath=$fp\n  FileLength=$fl\n  Publisher=$pu\n  FullPublisher=$fpub\n  FileUseCount=[int]$pc[$e.Raw]\n  AppLockerPublisherRule=$pr\n  AppLockerHashRule=$hr\n  AppLockerPathRule=$lr\n  Signed=$sg\n }\n}\n@($events)",
       "column": {
         "name": "AppLockerEvents",
         "type": "dynamic",
-        "description": "AppLocker audited and denied execution events from the last 24h. Publisher fields are seeded from the event Fqbn (always present for signed files) and enriched with on-disk file metadata when the file is still present at collection time. Includes EventRecordId for KQL deduplication."
+        "description": "AppLocker audited and denied execution events from the last 24h, enriched from the on-disk file (description, version, product, SHA-256 hash, publisher, rule XML). Files no longer present are skipped. Includes EventRecordId for KQL dedup (AppLockerEventRecordId + DeviceName)."
       },
       "element": [
-        { "expression": "$item.EventTimeUtc", "column": { "name": "AppLockerEventTime", "type": "datetime", "description": "UTC time the AppLocker event was logged." } },
-        { "expression": "$item.EventRecordId", "column": { "name": "AppLockerEventRecordId", "type": "long", "description": "EventRecordId of the source event. Combine with DeviceName to deduplicate overlapping uploads in KQL." } },
-        { "expression": "$item.EventId", "column": { "name": "AppLockerEventId", "type": "int", "description": "AppLocker event ID (8003/8006/8020 audited; 8004/8007/8022 denied)." } },
-        { "expression": "$item.EventType", "column": { "name": "AppLockerEventType", "type": "string", "description": "Audited (would have been blocked) or Denied (blocked in enforce mode)." } },
-        { "expression": "$item.EventMessage", "column": { "name": "AppLockerEventMessage", "type": "string", "description": "Full text of the Windows event log message." } },
-        { "expression": "$item.RuleCollection", "column": { "name": "AppLockerRuleCollection", "type": "string", "description": "AppLocker rule collection: Exe/Dll, Msi/Script, or PackagedApp." } },
-        { "expression": "$item.PolicyName", "column": { "name": "AppLockerPolicyName", "type": "string", "description": "AppLocker policy name from the event (UserData.RuleAndFileData.PolicyName)." } },
-        { "expression": "$item.RuleName", "column": { "name": "AppLockerRuleName", "type": "string", "description": "AppLocker rule name from the event (UserData.RuleAndFileData.RuleName)." } },
-        { "expression": "$item.FilePath", "column": { "name": "AppLockerFilePath", "type": "string", "description": "Full resolved path of the file." } },
-        { "expression": "$item.FileName", "column": { "name": "AppLockerFileName", "type": "string", "description": "Leaf file name from the event file path." } },
-        { "expression": "$item.FileHash", "column": { "name": "AppLockerFileHash", "type": "string", "description": "SHA-256 hash of the file (Get-FileHash when on disk; AppLocker event hash as fallback)." } },
-        { "expression": "$item.FileDescription", "column": { "name": "AppLockerFileDescription", "type": "string", "description": "File description from VersionInfo; null if file not on disk at collection time." } },
-        { "expression": "$item.FileVersion", "column": { "name": "AppLockerFileVersion", "type": "string", "description": "File version from VersionInfo; null if file not on disk at collection time." } },
-        { "expression": "$item.ProductName", "column": { "name": "AppLockerProductName", "type": "string", "description": "Product name from VersionInfo; null if file not on disk at collection time." } },
-        { "expression": "$item.FileLength", "column": { "name": "AppLockerFileLength", "type": "long", "description": "File size in bytes; null if file not on disk at collection time." } },
-        { "expression": "$item.Publisher", "column": { "name": "AppLockerPublisher", "type": "string", "description": "Short publisher name (O= component of the certificate subject, e.g. 'MICROSOFT CORPORATION'); seeded from the event Fqbn, refined from disk when present; 'Unsigned' for unsigned files." } },
-        { "expression": "$item.FullPublisher", "column": { "name": "AppLockerFullPublisher", "type": "string", "description": "Full publisher distinguished name (from the event Fqbn, refined via Get-AppLockerFileInformation when the file is on disk); 'N/A' for unsigned files." } },
-        { "expression": "$item.FileUseCount", "column": { "name": "AppLockerFileUseCount", "type": "int", "description": "Number of AppLocker events for this file path in the 24-hour collection window." } },
-        { "expression": "$item.AppLockerPublisherRule", "column": { "name": "AppLockerPublisherRule", "type": "string", "description": "Ready-to-use AppLocker publisher rule XML from New-AppLockerPolicy; 'Unsigned Application' if unsigned; null if file not on disk." } },
-        { "expression": "$item.AppLockerHashRule", "column": { "name": "AppLockerHashRule", "type": "string", "description": "Ready-to-use AppLocker hash rule XML from New-AppLockerPolicy; null if file not on disk." } },
-        { "expression": "$item.AppLockerPathRule", "column": { "name": "AppLockerPathRule", "type": "string", "description": "Ready-to-use AppLocker path rule XML from New-AppLockerPolicy; null if file not on disk." } },
-        { "expression": "$item.Signed", "column": { "name": "AppLockerSigned", "type": "string", "description": "'Yes' if the file is signed (publisher present), 'No' if unsigned." } },
-        { "expression": "$item.TargetUser", "column": { "name": "AppLockerTargetUser", "type": "string", "description": "SID of the user the AppLocker rule was evaluated for." } }
+        {
+          "expression": "$item.EventRecordId",
+          "column": {
+            "name": "AppLockerEventRecordId",
+            "type": "long",
+            "description": "Per-log EventRecordId of the source event. Combine with DeviceName to dedupe overlapping uploads in KQL."
+          }
+        },
+        {
+          "expression": "$item.EventType",
+          "column": {
+            "name": "AppLockerEventType",
+            "type": "string",
+            "description": "Audited (would have been blocked in audit mode) or Denied (blocked in enforce mode)."
+          }
+        },
+        {
+          "expression": "$item.EventId",
+          "column": {
+            "name": "AppLockerEventId",
+            "type": "int",
+            "description": "AppLocker event id (warning 8003/8006/8021/8024/8028/8038, block 8004/8007/8021/8024/8029/8040)."
+          }
+        },
+        {
+          "expression": "$item.EventMessage",
+          "column": {
+            "name": "AppLockerEventMessage",
+            "type": "string",
+            "description": "Full text of the Windows AppLocker event log message."
+          }
+        },
+        {
+          "expression": "$item.RuleType",
+          "column": {
+            "name": "AppLockerRuleType",
+            "type": "string",
+            "description": "AppLocker rule type the event came from: Application (EXE/DLL) or Script (MSI/Script)."
+          }
+        },
+        {
+          "expression": "$item.FileDescription",
+          "column": {
+            "name": "AppLockerFileDescription",
+            "type": "string",
+            "description": "File description from the file VersionInfo; falls back to the file name."
+          }
+        },
+        {
+          "expression": "$item.FileVersion",
+          "column": {
+            "name": "AppLockerFileVersion",
+            "type": "string",
+            "description": "File version from the file VersionInfo; Unavailable if not present."
+          }
+        },
+        {
+          "expression": "$item.ProductName",
+          "column": {
+            "name": "AppLockerProductName",
+            "type": "string",
+            "description": "Product name from the file VersionInfo; falls back to the file description."
+          }
+        },
+        {
+          "expression": "$item.FileHash",
+          "column": {
+            "name": "AppLockerFileHash",
+            "type": "string",
+            "description": "SHA-256 hash of the file computed with Get-FileHash."
+          }
+        },
+        {
+          "expression": "$item.FileName",
+          "column": {
+            "name": "AppLockerFileName",
+            "type": "string",
+            "description": "Leaf file name parsed from the event file path."
+          }
+        },
+        {
+          "expression": "$item.FilePath",
+          "column": {
+            "name": "AppLockerFilePath",
+            "type": "string",
+            "description": "Full path of the file (with %OSDRIVE% expanded to the system drive)."
+          }
+        },
+        {
+          "expression": "$item.FileLength",
+          "column": {
+            "name": "AppLockerFileLength",
+            "type": "long",
+            "description": "File size in bytes."
+          }
+        },
+        {
+          "expression": "$item.Publisher",
+          "column": {
+            "name": "AppLockerPublisher",
+            "type": "string",
+            "description": "Short publisher name (the O= organisation component of the certificate subject); Unsigned for unsigned files."
+          }
+        },
+        {
+          "expression": "$item.FullPublisher",
+          "column": {
+            "name": "AppLockerFullPublisher",
+            "type": "string",
+            "description": "Full AppLocker publisher string from Get-AppLockerFileInformation (complete certificate subject); N/A for unsigned files."
+          }
+        },
+        {
+          "expression": "$item.FileUseCount",
+          "column": {
+            "name": "AppLockerFileUseCount",
+            "type": "int",
+            "description": "Number of AppLocker events seen for this file path in the 24-hour collection window."
+          }
+        },
+        {
+          "expression": "$item.AppLockerPublisherRule",
+          "column": {
+            "name": "AppLockerPublisherRule",
+            "type": "string",
+            "description": "Ready-to-use AppLocker publisher rule XML from New-AppLockerPolicy; Unsigned Application if the file is unsigned."
+          }
+        },
+        {
+          "expression": "$item.AppLockerHashRule",
+          "column": {
+            "name": "AppLockerHashRule",
+            "type": "string",
+            "description": "Ready-to-use AppLocker hash rule XML from New-AppLockerPolicy."
+          }
+        },
+        {
+          "expression": "$item.AppLockerPathRule",
+          "column": {
+            "name": "AppLockerPathRule",
+            "type": "string",
+            "description": "Ready-to-use AppLocker path rule XML from New-AppLockerPolicy."
+          }
+        },
+        {
+          "expression": "$item.Signed",
+          "column": {
+            "name": "AppLockerSigned",
+            "type": "string",
+            "description": "Yes if the file has a publisher (signed), No if unsigned."
+          }
+        }
       ]
     }
   ]
