@@ -231,6 +231,25 @@ if ($missing.Count -gt 0) {
     throw 'Prerequisites are missing.'
 }
 
+$didLogin = $false
+
+# Sign in to Azure CLI if needed. The script only signs out again if it opened
+# the session itself, so an existing user session is preserved.
+$account = az account show --query name --output tsv 2>$null
+if (-not $account) {
+    Write-Host '==> Signing in to Azure CLI (az login)' -ForegroundColor Cyan
+    az login --only-show-errors
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Azure CLI login failed.'
+    }
+    $didLogin = $true
+    $account = az account show --query name --output tsv 2>$null
+    if (-not $account) {
+        throw 'Azure CLI login completed, but no account is available.'
+    }
+}
+
+try {
 # Optional: force the Azure CLI subscription context used by all `az` commands.
 if ($Subscription) {
     az account set --subscription $Subscription 2>$null
@@ -978,6 +997,7 @@ Write-Host "Function URL : $ingestUrl"
 Write-Host ''
 Write-Host 'Get the function key from the Azure portal:' -ForegroundColor Cyan
 Write-Host "    Function App '$functionAppName' -> Functions -> DCRLogIngestionAPI ->" -ForegroundColor White
+
 Write-Host "    Function Keys -> copy 'default' (or use an App key under 'App keys')." -ForegroundColor White
 Write-Host '    (Right after a deploy the key may take a minute to appear, and on Flex' -ForegroundColor White
 Write-Host '    Consumption the CLI can return null while the portal shows it.)' -ForegroundColor White
@@ -989,3 +1009,12 @@ $sample = '[{ \"TimeGenerated\": \"' + (Get-Date).ToUniversalTime().ToString('o'
 Write-Host "Invoke-RestMethod -Method Post -Uri '$ingestUrl?code=<FUNCTION_KEY>' -ContentType 'application/json' -Body '$sample'"
 Write-Host ''
 Write-Host "Query results in Log Analytics:  $(($tables | ForEach-Object { "$($_.tableName) | take 20" }) -join '   /   ')"
+
+}
+finally {
+    if ($didLogin) {
+        az logout --only-show-errors 2>$null | Out-Null
+        az account clear --only-show-errors 2>$null | Out-Null
+        Write-Host '==> Azure CLI session disconnected.' -ForegroundColor Green
+    }
+}

@@ -26,6 +26,24 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$didLogin = $false
+
+$account = az account show --query name --output tsv 2>$null
+if (-not $account) {
+    Write-Host '==> Signing in to Azure CLI (az login)' -ForegroundColor Cyan
+    az login --only-show-errors
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Azure CLI login failed.'
+    }
+    $didLogin = $true
+    $account = az account show --query name --output tsv 2>$null
+    if (-not $account) {
+        throw 'Azure CLI login completed, but no account is available.'
+    }
+}
+
+try {
+
 # Function App managed-identity object id
 $miId = az functionapp identity show -g $ResourceGroup -n $FunctionAppName --query principalId -o tsv
 if (-not $miId) { throw "Could not find a managed identity on '$FunctionAppName' in '$ResourceGroup'." }
@@ -56,4 +74,13 @@ if ($exists) {
         Remove-Item $bodyFile -ErrorAction SilentlyContinue
     }
     Write-Host 'Device.Read.All assigned (propagation can take a few minutes).'
+}
+
+}
+finally {
+    if ($didLogin) {
+        az logout --only-show-errors 2>$null | Out-Null
+        az account clear --only-show-errors 2>$null | Out-Null
+        Write-Host '==> Azure CLI session disconnected.' -ForegroundColor Green
+    }
 }
