@@ -5,6 +5,9 @@
 # Version history:
 #   1.0.0 (2026-06-19) Initial documented release; added author and version
 #                      history header.
+#   1.1.0 (2026-06-19) Hardened auth failure responses to return a generic 401
+#                      body (no reason leakage) while preserving structured
+#                      diagnostics in server-side logs.
 # =============================================================================
 
 using namespace System.Net

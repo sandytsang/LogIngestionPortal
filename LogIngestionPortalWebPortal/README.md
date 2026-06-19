@@ -5,6 +5,7 @@ Browser-only generator for the LogIngestionAPI deployment package.
 It helps you pick telemetry fields and produces:
 - schema/columns.json
 - scripts/IntuneScript.ps1
+- portal-config.json (portable app state for future import)
 - README.txt (deploy instructions with your selected values)
 
 ## What it does
@@ -12,6 +13,7 @@ It helps you pick telemetry fields and produces:
 - Runs fully in browser (no backend).
 - Uses catalog definitions to keep script and schema in sync.
 - Downloads a ready-to-deploy LogIngestionAPI folder.
+- Exports and imports portal configuration so users can resume later.
 
 ## Use
 

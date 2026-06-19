@@ -83,6 +83,10 @@ exact command).
 
 ### Cloud Shell manual permission grants (if deploy printed warnings)
 
+Use the full operator checklist in
+[Manual permission fallback runbook](manual-permission-fallback-runbook.md)
+for prerequisites, exact placeholders, verification, and escalation inputs.
+
 ```bash
 # 1) Monitoring Metrics Publisher on the DCR resource group
 az account set --subscription <subscription-id>

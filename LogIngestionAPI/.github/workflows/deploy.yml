@@ -154,16 +154,23 @@ jobs:
             if [ "${{ inputs.skipRoleAssignment }}" = "true" ]; then
               params+=( assignDcrPublisherRole=false )
             fi
-            appName=$(az deployment group create \
+            outputs=$(az deployment group create \
               --resource-group "${{ inputs.resourceGroup }}" \
               --name "logapi-$(date +%Y%m%d%H%M%S)" \
               --template-file infra/main.bicep \
               --parameters infra/main.bicepparam \
               --parameters "${params[@]}" \
-              --query properties.outputs.functionAppName.value \
-              --output tsv)
+              --query properties.outputs \
+              --output json)
+            appName=$(echo "$outputs" | jq -r '.functionAppName.value // empty')
+            principalId=$(echo "$outputs" | jq -r '.functionPrincipalId.value // empty')
+            dcrRg=$(echo "$outputs" | jq -r '.dcrResourceGroup.value // empty')
+            roleId=$(echo "$outputs" | jq -r '.monitoringMetricsPublisherRoleId.value // empty')
             echo "Function App: ${appName:-<unchanged>}"
             echo "functionAppName=$appName" >> "$GITHUB_OUTPUT"
+            echo "functionPrincipalId=$principalId" >> "$GITHUB_OUTPUT"
+            echo "dcrResourceGroup=$dcrRg" >> "$GITHUB_OUTPUT"
+            echo "monitoringMetricsPublisherRoleId=$roleId" >> "$GITHUB_OUTPUT"
 
       - name: Publish function code
         if: ${{ inputs.method == 'native' }}
@@ -171,6 +178,74 @@ jobs:
         with:
           app-name: ${{ steps.infra.outputs.functionAppName }}
           package: function
+
+      - name: Validate post-deploy permissions (native)
+        if: ${{ inputs.method == 'native' }}
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            set -euo pipefail
+            fail=0
+
+            principalId="${{ steps.infra.outputs.functionPrincipalId }}"
+            dcrRg="${{ steps.infra.outputs.dcrResourceGroup }}"
+            roleId="${{ steps.infra.outputs.monitoringMetricsPublisherRoleId }}"
+            subId=$(az account show --query id --output tsv)
+
+            if [ -z "$principalId" ]; then
+              echo "::error::Could not resolve Function managed identity principalId from deployment outputs."
+              exit 1
+            fi
+            if [ -z "$dcrRg" ]; then
+              dcrRg="${{ inputs.dcrResourceGroup }}"
+            fi
+            if [ -z "$dcrRg" ]; then
+              dcrRg="${{ inputs.resourceGroup }}"
+            fi
+
+            # Validate Graph Device.Read.All when Entra device validation is enabled.
+            if [ "${{ inputs.requireEntraDevice }}" = "true" ]; then
+              graphRoleId="7438b122-aefc-4978-80ed-43db9fcc7715"
+              graphAssignment=$(az rest --method GET \
+                --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$principalId/appRoleAssignments" \
+                --query "value[?appRoleId=='$graphRoleId'] | [0].id" \
+                --output tsv 2>/dev/null || true)
+              if [ -z "$graphAssignment" ]; then
+                echo "::error::Missing Graph Device.Read.All for Function managed identity."
+                echo "Run manually (Cloud Shell):"
+                echo "  MI=\"$principalId\""
+                echo "  GRAPH_SP=\$(az ad sp list --filter \"appId eq '00000003-0000-0000-c000-000000000000'\" --query '[0].id' -o tsv)"
+                echo "  ROLE=\"7438b122-aefc-4978-80ed-43db9fcc7715\""
+                echo "  az rest --method POST --uri \"https://graph.microsoft.com/v1.0/servicePrincipals/\$MI/appRoleAssignments\" --headers 'Content-Type=application/json' --body \"{\\\"principalId\\\":\\\"\$MI\\\",\\\"resourceId\\\":\\\"\$GRAPH_SP\\\",\\\"appRoleId\\\":\\\"\$ROLE\\\"}\""
+                fail=1
+              fi
+            fi
+
+            # Validate Monitoring Metrics Publisher assignment on the DCR RG.
+            if [ -z "$roleId" ]; then
+              roleId="3913510d-42f4-4e42-8a64-420c390055eb"
+            fi
+            scope="/subscriptions/$subId/resourceGroups/$dcrRg"
+            roleDefinitionId="/subscriptions/$subId/providers/Microsoft.Authorization/roleDefinitions/$roleId"
+            roleAssignment=$(az role assignment list \
+              --assignee-object-id "$principalId" \
+              --scope "$scope" \
+              --query "[?roleDefinitionId=='$roleDefinitionId'] | [0].id" \
+              --output tsv 2>/dev/null || true)
+            if [ -z "$roleAssignment" ]; then
+              echo "::error::Missing Monitoring Metrics Publisher on DCR resource group '$dcrRg'."
+              echo "Run manually (Cloud Shell):"
+              echo "  az account set --subscription $subId"
+              echo "  az role assignment create --assignee-object-id $principalId --assignee-principal-type ServicePrincipal --role 'Monitoring Metrics Publisher' --scope '/subscriptions/$subId/resourceGroups/$dcrRg'"
+              fail=1
+            fi
+
+            if [ "$fail" -ne 0 ]; then
+              echo "::error::Post-deploy permission validation failed. See manual remediation commands above."
+              exit 1
+            fi
+            echo "Post-deploy permission validation passed."
 
       # ----------------------------------------------------------------------
       # Method B: script — run scripts/deploy.ps1 (same as deploying locally)

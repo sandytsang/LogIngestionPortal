@@ -132,6 +132,10 @@
     Version history:
         1.0.0 (2026-06-19) Initial documented release; added author and version
                            history header.
+        1.1.0 (2026-06-19) Added schema column-name validation guardrails,
+                           default permission assignment attempts with clearer
+                           manual fallback guidance, and improved Cloud Shell
+                           -SchemaPath handling.
 #>
 
 [CmdletBinding()]

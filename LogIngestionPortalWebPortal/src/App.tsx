@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { catalog } from './data/catalog';
 import { apiFiles } from './data/apiFiles';
 import type { CatalogField, MultiTableColumnsDocument, PortalConfig, TableConfig } from './types';
@@ -124,6 +124,47 @@ interface Persisted {
   workspaceName?: string;
 }
 
+interface PortalConfigExportV1 {
+  format: 'LogIngestionPortalConfig';
+  version: 1;
+  exportedAtUtc: string;
+  workspaceName: string;
+  config: PortalConfig;
+  tables: TableConfig[];
+}
+
+function isPortalConfigExportV1(value: unknown): value is PortalConfigExportV1 {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Partial<PortalConfigExportV1>;
+  return (
+    v.format === 'LogIngestionPortalConfig' &&
+    v.version === 1 &&
+    typeof v.workspaceName === 'string' &&
+    !!v.config &&
+    !!v.tables &&
+    Array.isArray(v.tables)
+  );
+}
+
+function normalizeImportedTables(raw: TableConfig[]): TableConfig[] {
+  // Ensure stable ids and required strings even when importing older exports.
+  const seen = new Set<string>();
+  const list = raw.map((t, i) => {
+    const id = (t.id && !seen.has(t.id)) ? t.id : newTableId();
+    seen.add(id);
+    return {
+      ...t,
+      id,
+      name: (t.name ?? '').trim(),
+      description: t.description ?? '',
+      fieldIds: Array.isArray(t.fieldIds) ? t.fieldIds : [],
+      scriptName: t.scriptName ?? DEFAULT_SCRIPT_GROUP,
+      color: t.color ?? colorTokenForIndex(i),
+    };
+  });
+  return list.filter((t) => t.name.length > 0);
+}
+
 function loadPersisted(): Persisted {
   // Settings are kept in sessionStorage only, so they survive a page reload but
   // are cleared when the browser/tab is closed. Purge any values left in
@@ -145,6 +186,7 @@ function loadPersisted(): Persisted {
 
 export default function App() {
   const persisted = useMemo(loadPersisted, []);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
   const [tables, setTables] = useState<TableConfig[]>(() =>
     persisted.tables && persisted.tables.length ? persisted.tables : defaultTables(),
   );
@@ -194,6 +236,20 @@ export default function App() {
     [tables, config],
   );
 
+  const exportedPortalConfig = useMemo<PortalConfigExportV1>(() => ({
+    format: 'LogIngestionPortalConfig',
+    version: 1,
+    exportedAtUtc: new Date().toISOString(),
+    workspaceName,
+    config,
+    tables,
+  }), [workspaceName, config, tables]);
+
+  const exportedPortalConfigJson = useMemo(
+    () => JSON.stringify(exportedPortalConfig, null, 2) + '\n',
+    [exportedPortalConfig],
+  );
+
   const tabs = useMemo<OutputTab[]>(
     () => [
       {
@@ -223,8 +279,15 @@ export default function App() {
           workspaceName.trim() || undefined,
         ),
       },
+      {
+        id: 'portal-config',
+        label: 'portal-config.json',
+        filename: 'portal-config.json',
+        language: 'JSON · reusable portal configuration export',
+        content: exportedPortalConfigJson,
+      },
     ],
-    [columnsDoc, scripts, tables, config, workspaceName],
+    [columnsDoc, scripts, tables, config, workspaceName, exportedPortalConfigJson],
   );
 
   // The full "Download all" bundle: the entire LogIngestionAPI backend plus the
@@ -236,6 +299,7 @@ export default function App() {
     const byId = Object.fromEntries(tabs.map((t) => [t.id, t.content]));
     const overrides: Record<string, string> = {
       'LogIngestionAPI/schema/columns.json': byId.columns,
+      'LogIngestionAPI/portal-config.json': byId['portal-config'],
     };
     // Emit one detection script per schedule group at its own path. The stock
     // example scripts/IntuneScript.ps1 is excluded (below) unless a group maps
@@ -313,6 +377,39 @@ export default function App() {
   const clearAll = () => setTables((prev) => prev.map((t) => ({ ...t, fieldIds: [] })));
   const resetDefaults = () => setTables(defaultTables());
 
+  const onImportPortalConfigClick = () => importFileRef.current?.click();
+
+  const onImportPortalConfigFile: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as unknown;
+      if (!isPortalConfigExportV1(parsed)) {
+        throw new Error('File is not a valid portal configuration export (expected format/version).');
+      }
+      const importedTables = normalizeImportedTables(parsed.tables);
+      if (importedTables.length === 0) {
+        throw new Error('Imported configuration has no valid tables.');
+      }
+      const schemaErrors = validateColumns(generateColumns(catalog, importedTables));
+      const configErrors = validatePortalConfig(parsed.config);
+      const combined = [...schemaErrors, ...configErrors];
+      if (combined.length > 0) {
+        throw new Error(`Imported configuration is invalid: ${combined[0]}`);
+      }
+      setTables(importedTables);
+      setConfig(parsed.config);
+      setWorkspaceName(parsed.workspaceName ?? '');
+      window.alert('Configuration imported successfully.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown import error.';
+      window.alert(`Import failed: ${msg}`);
+    } finally {
+      event.currentTarget.value = '';
+    }
+  };
+
   // --- Table (box) CRUD ------------------------------------------------------
   const addTable = () =>
     setTables((prev) => [
@@ -376,6 +473,19 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <input
+                ref={importFileRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={onImportPortalConfigFile}
+              />
+              <button
+                onClick={onImportPortalConfigClick}
+                className="btn-header-outline rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+              >
+                Import config
+              </button>
               <button
                 onClick={() => setShowSample(true)}
                 className="btn-header-outline rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"

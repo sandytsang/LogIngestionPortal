@@ -36,8 +36,17 @@ next steps.
 
 ## Cloud Shell option (no local admin install)
 
+If you already cloned this repo in Cloud Shell and want a clean re-clone:
+
 ```bash
+cd ~
+rm -rf LogIngestionPortal
 git clone https://github.com/sandytsang/LogIngestionPortal.git
+```
+
+Then deploy:
+
+```bash
 cd LogIngestionPortal/LogIngestionAPI/scripts
 pwsh ./deploy.ps1 \
   -Subscription <subscription-name-or-id> \
@@ -142,6 +151,10 @@ continues and prints the exact manual commands to run afterwards.
 
 ### Cloud Shell follow-up if permission assignment failed
 
+For a full operator runbook (required roles, verification checks, and escalation
+inputs), see
+[Manual permission fallback runbook](docs/manual-permission-fallback-runbook.md).
+
 Replace placeholders first:
 
 - `<subscription-id>`
@@ -177,7 +190,7 @@ work (how the client sends the certificate and how the server validates it), see
 
 ## Documentation
 
-In-depth guides are in [docs/](docs/README.md):
+In-depth guides:
 
 - [Architecture overview](docs/architecture-overview.md)
 - [Deployment reference](docs/deployment-reference.md)
@@ -187,6 +200,7 @@ In-depth guides are in [docs/](docs/README.md):
 - [Testing and CI](docs/testing-and-ci.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Device authentication: JWT + certificate chain](docs/device-jwt-authentication.md)
+- [Manual permission fallback runbook](docs/manual-permission-fallback-runbook.md)
 
 ## Project layout
 

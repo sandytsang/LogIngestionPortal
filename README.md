@@ -12,6 +12,7 @@ https://sandytsang.github.io/LogIngestionPortal/
 2. The portal generates:
    - schema/columns.json
    - scripts/IntuneScript.ps1
+  - portal-config.json (for import/export of portal configuration)
    - README.txt with deploy commands
 3. You run deploy.ps1 to create or update Azure resources.
 4. Devices run IntuneScript.ps1 and send data to your Function App.
@@ -38,7 +39,7 @@ https://sandytsang.github.io/LogIngestionPortal/
 
 ## Detailed documentation
 
-In-depth guides live in [LogIngestionAPI/docs/](LogIngestionAPI/docs/README.md):
+In-depth guides are listed below (and in [LogIngestionAPI/README.md](LogIngestionAPI/README.md)):
 
 - [Architecture overview](LogIngestionAPI/docs/architecture-overview.md)
 - [Device authentication: JWT + certificate chain](LogIngestionAPI/docs/device-jwt-authentication.md)
@@ -48,6 +49,7 @@ In-depth guides live in [LogIngestionAPI/docs/](LogIngestionAPI/docs/README.md):
 - [Security hardening](LogIngestionAPI/docs/security-hardening.md)
 - [Testing and CI](LogIngestionAPI/docs/testing-and-ci.md)
 - [Troubleshooting](LogIngestionAPI/docs/troubleshooting.md)
+- [Manual permission fallback runbook](LogIngestionAPI/docs/manual-permission-fallback-runbook.md)
 - [Catalog authoring](LogIngestionPortalWebPortal/docs/catalog-authoring.md)
 
 ## License

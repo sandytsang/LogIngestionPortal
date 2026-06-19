@@ -14,7 +14,8 @@ the **deployer**, the **Function App managed identity**, and (for CI) the
 
 If the deployer is Contributor-only, run with `-SkipDcrRoleAssignment` and have
 an admin grant the DCR role and the Graph permission separately. The script
-prints the exact commands.
+prints the exact commands. For an operator checklist with verification steps,
+see [Manual permission fallback runbook](manual-permission-fallback-runbook.md).
 
 ## 2. Function App managed identity (system-assigned)
 

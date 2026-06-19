@@ -83,6 +83,12 @@ export function DeployHelp() {
               <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">LogIngestionAPI</code>{' '}
               folder) and run the Cloud Shell command from the{' '}
               <span className="font-semibold">README.txt</span> tab.
+              <div className="mt-2 rounded-lg bg-slate-100 p-2 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <div>cd ~</div>
+                <div>rm -rf LogIngestionPortal</div>
+                <div>git clone https://github.com/sandytsang/LogIngestionPortal.git</div>
+                <div>cd LogIngestionPortal</div>
+              </div>
             </li>
             <li>
               Keep{' '}

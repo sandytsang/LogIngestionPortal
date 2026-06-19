@@ -8,6 +8,9 @@
 #                      Get-X5cCertificates.
 #   1.0.1 (2026-06-19) Added best-effort in-memory nonce replay protection for
 #                      short-lived JWTs.
+#   1.1.0 (2026-06-19) Added an early JWT signature verification gate before
+#                      Graph device resolution to fail invalid tokens faster and
+#                      reduce unnecessary upstream dependency load.
 #
 # Device-bound request authentication for the Log Ingestion Function.
 #
@@ -551,6 +554,18 @@ function Test-DeviceRequestJwt {
         if (-not $chainCheck.Valid) {
             return (& $result $false ("Certificate chain validation failed: " + $chainCheck.Reason) $null $null)
         }
+    }
+
+    # Early cryptographic gate: verify signature/time/audience once with the
+    # presented leaf cert BEFORE calling Graph. This rejects forged tokens
+    # cheaply and avoids turning Graph into a pre-auth bottleneck.
+    $presentedRsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPublicKey($clientCert)
+    if (-not $presentedRsa) {
+        return (& $result $false 'Could not read public key from client cert' $null $null)
+    }
+    $earlyCheck = Test-DeviceJwt -Jwt $jwt -PublicKey $presentedRsa -ExpectedAudience $expectedAudience
+    if (-not $earlyCheck.Valid) {
+        return (& $result $false ("JWT validation failed: " + $earlyCheck.Reason) $null $null)
     }
 
     # --- Establish the RSA public key used to verify the signature ----------
