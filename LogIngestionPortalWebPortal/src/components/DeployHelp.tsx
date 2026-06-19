@@ -11,11 +11,11 @@ export function DeployHelp() {
         How to deploy the downloaded zip
       </summary>
 
-      <div className="mt-3 space-y-4 text-[13px] leading-relaxed text-slate-700 dark:text-slate-300">
+      <div className="mt-3 space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
         <p>
           Click <span className="font-semibold">Download all (.zip)</span> above. The zip is the
-          complete <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">LogIngestionAPI</code>{' '}
-          backend with your <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">columns.json</code>{' '}
+          complete <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">LogIngestionAPI</code>{' '}
+          backend with your <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">columns.json</code>{' '}
           and Intune script already in place. Unzip it and pick one of the methods below — the
           exact command for your selection is in the <span className="font-semibold">README.txt</span> tab.
         </p>
@@ -35,11 +35,11 @@ export function DeployHelp() {
               <span className="font-semibold">Azure Functions Core Tools</span>.
             </li>
             <li>
-              Sign in: <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">az login</code>
+              Sign in: <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">az login</code>
             </li>
             <li>
               Open a terminal in the unzipped{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">LogIngestionAPI</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">LogIngestionAPI</code>{' '}
               folder and run the command from the{' '}
               <span className="font-semibold">README.txt</span> tab (it already has your resource
               group, region, and options filled in).
@@ -66,7 +66,7 @@ export function DeployHelp() {
                 href="https://shell.azure.com"
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-400"
+                className="font-semibold text-accent underline"
               >
                 shell.azure.com
               </a>
@@ -74,21 +74,21 @@ export function DeployHelp() {
             </li>
             <li>
               Upload your generated{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">columns.json</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">columns.json</code>{' '}
               file (Cloud Shell usually stores uploads under{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">/home/&lt;your-user&gt;/</code>).
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">/home/&lt;your-user&gt;/</code>).
             </li>
             <li>
               Clone this repo (or upload/unzip the generated{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">LogIngestionAPI</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">LogIngestionAPI</code>{' '}
               folder) and run the Cloud Shell command from the{' '}
               <span className="font-semibold">README.txt</span> tab.
             </li>
             <li>
               Keep{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">-SchemaPath /home/&lt;your-user&gt;/columns.json</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">-SchemaPath /home/&lt;your-user&gt;/columns.json</code>{' '}
               and{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">-Subscription &lt;subscription-name-or-id&gt;</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">-Subscription &lt;subscription-name-or-id&gt;</code>{' '}
               as shown in README.txt so deployment uses the right file and subscription.
             </li>
           </ol>
@@ -105,23 +105,23 @@ export function DeployHelp() {
           <ol className="mt-2 list-decimal space-y-1 pl-5">
             <li>
               Create a new repo in your GitHub org and push the unzipped{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">LogIngestionAPI</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">LogIngestionAPI</code>{' '}
               folder as the repo root (the bundled{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">.github/workflows</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">.github/workflows</code>{' '}
               come with it).
             </li>
             <li>
               Add an Entra app with an OIDC federated credential and set the repo secrets{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">AZURE_CLIENT_ID</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">AZURE_TENANT_ID</code>,{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">AZURE_SUBSCRIPTION_ID</code>.
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">AZURE_CLIENT_ID</code>,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">AZURE_TENANT_ID</code>,{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">AZURE_SUBSCRIPTION_ID</code>.
             </li>
             <li>
               Open <span className="font-semibold">Actions → Run workflow</span> on either{' '}
               <span className="font-semibold">Deploy LogIngestionAPI</span> for the full stack or{' '}
               <span className="font-semibold">Update data columns (schema-only)</span> for a
               table + DCR refresh, then pick a{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] dark:bg-slate-800">method</code>{' '}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">method</code>{' '}
               (native Bicep or the deploy.ps1 script).
             </li>
             <li>
@@ -131,7 +131,7 @@ export function DeployHelp() {
                 href="https://github.com/sandytsang/LogIngestionPortal/blob/main/LogIngestionAPI/README.md"
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-indigo-600 underline hover:text-indigo-500 dark:text-indigo-400"
+                className="font-semibold text-accent underline"
               >
                 README.md
               </a>

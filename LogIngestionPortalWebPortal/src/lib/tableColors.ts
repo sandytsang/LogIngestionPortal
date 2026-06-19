@@ -22,76 +22,67 @@ export interface TableColor {
 
 export const TABLE_COLORS: TableColor[] = [
   {
-    token: 'emerald',
-    label: 'Emerald',
-    swatch: 'bg-emerald-500',
-    dot: 'bg-emerald-400',
+    token: 'slate',
+    label: 'Slate',
+    swatch: 'bg-slate-500',
+    dot: 'bg-slate-500',
     chipActive:
-      'border-emerald-300 bg-emerald-100 text-emerald-800 shadow-sm hover:bg-emerald-200 dark:border-emerald-500/60 dark:bg-emerald-500/25 dark:text-emerald-100',
-    boxAccent: 'border-l-4 border-l-emerald-400',
+      'border-slate-300 bg-slate-100 text-slate-800 shadow-sm hover:bg-slate-200 dark:border-slate-500/60 dark:bg-slate-500/25 dark:text-slate-100',
+    boxAccent: 'border-l-4 border-l-slate-500',
   },
   {
-    token: 'sky',
-    label: 'Sky',
+    token: 'steel',
+    label: 'Steel',
+    swatch: 'bg-slate-600',
+    dot: 'bg-slate-600',
+    chipActive:
+      'border-slate-400 bg-slate-100 text-slate-800 shadow-sm hover:bg-slate-200 dark:border-slate-500/60 dark:bg-slate-500/25 dark:text-slate-100',
+    boxAccent: 'border-l-4 border-l-slate-600',
+  },
+  {
+    token: 'navy',
+    label: 'Navy',
+    swatch: 'bg-slate-700',
+    dot: 'bg-slate-700',
+    chipActive:
+      'border-slate-500 bg-slate-100 text-slate-800 shadow-sm hover:bg-slate-200 dark:border-slate-500/60 dark:bg-slate-500/25 dark:text-slate-100',
+    boxAccent: 'border-l-4 border-l-slate-700',
+  },
+  {
+    token: 'blue',
+    label: 'Blue',
+    swatch: 'bg-blue-500',
+    dot: 'bg-blue-500',
+    chipActive:
+      'border-blue-300 bg-blue-100 text-blue-800 shadow-sm hover:bg-blue-200 dark:border-blue-500/60 dark:bg-blue-500/25 dark:text-blue-100',
+    boxAccent: 'border-l-4 border-l-blue-500',
+  },
+  {
+    token: 'azure',
+    label: 'Azure',
     swatch: 'bg-sky-500',
-    dot: 'bg-sky-400',
+    dot: 'bg-sky-500',
     chipActive:
       'border-sky-300 bg-sky-100 text-sky-800 shadow-sm hover:bg-sky-200 dark:border-sky-500/60 dark:bg-sky-500/25 dark:text-sky-100',
-    boxAccent: 'border-l-4 border-l-sky-400',
-  },
-  {
-    token: 'violet',
-    label: 'Violet',
-    swatch: 'bg-violet-500',
-    dot: 'bg-violet-400',
-    chipActive:
-      'border-violet-300 bg-violet-100 text-violet-800 shadow-sm hover:bg-violet-200 dark:border-violet-500/60 dark:bg-violet-500/25 dark:text-violet-100',
-    boxAccent: 'border-l-4 border-l-violet-400',
-  },
-  {
-    token: 'amber',
-    label: 'Amber',
-    swatch: 'bg-amber-500',
-    dot: 'bg-amber-400',
-    chipActive:
-      'border-amber-300 bg-amber-100 text-amber-800 shadow-sm hover:bg-amber-200 dark:border-amber-500/60 dark:bg-amber-500/25 dark:text-amber-100',
-    boxAccent: 'border-l-4 border-l-amber-400',
-  },
-  {
-    token: 'rose',
-    label: 'Rose',
-    swatch: 'bg-rose-500',
-    dot: 'bg-rose-400',
-    chipActive:
-      'border-rose-300 bg-rose-100 text-rose-800 shadow-sm hover:bg-rose-200 dark:border-rose-500/60 dark:bg-rose-500/25 dark:text-rose-100',
-    boxAccent: 'border-l-4 border-l-rose-400',
-  },
-  {
-    token: 'teal',
-    label: 'Teal',
-    swatch: 'bg-teal-500',
-    dot: 'bg-teal-400',
-    chipActive:
-      'border-teal-300 bg-teal-100 text-teal-800 shadow-sm hover:bg-teal-200 dark:border-teal-500/60 dark:bg-teal-500/25 dark:text-teal-100',
-    boxAccent: 'border-l-4 border-l-teal-400',
+    boxAccent: 'border-l-4 border-l-sky-500',
   },
   {
     token: 'indigo',
     label: 'Indigo',
     swatch: 'bg-indigo-500',
-    dot: 'bg-indigo-400',
+    dot: 'bg-indigo-500',
     chipActive:
       'border-indigo-300 bg-indigo-100 text-indigo-800 shadow-sm hover:bg-indigo-200 dark:border-indigo-500/60 dark:bg-indigo-500/25 dark:text-indigo-100',
-    boxAccent: 'border-l-4 border-l-indigo-400',
+    boxAccent: 'border-l-4 border-l-indigo-500',
   },
   {
-    token: 'lime',
-    label: 'Lime',
-    swatch: 'bg-lime-500',
-    dot: 'bg-lime-400',
+    token: 'cool-gray',
+    label: 'Cool Gray',
+    swatch: 'bg-zinc-500',
+    dot: 'bg-zinc-500',
     chipActive:
-      'border-lime-300 bg-lime-100 text-lime-800 shadow-sm hover:bg-lime-200 dark:border-lime-500/60 dark:bg-lime-500/25 dark:text-lime-100',
-    boxAccent: 'border-l-4 border-l-lime-400',
+      'border-zinc-300 bg-zinc-100 text-zinc-800 shadow-sm hover:bg-zinc-200 dark:border-zinc-500/60 dark:bg-zinc-500/25 dark:text-zinc-100',
+    boxAccent: 'border-l-4 border-l-zinc-500',
   },
 ];
 

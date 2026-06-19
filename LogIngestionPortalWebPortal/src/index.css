@@ -6,6 +6,95 @@
 
 :root {
   color-scheme: light;
+
+  /* Theme tokens (default = Enterprise Slate). Overridden at runtime by applyTheme()
+     setting these custom properties on <html>, so the WHOLE UI re-themes. */
+  --app-bg: #f3f6fa;
+  --header-bg: #0f172a;
+  --header-fg: #f8fafc;
+  --header-muted: #cbd5e1;
+  --header-link: #93c5fd;
+  --header-border: #1e293b;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-soft: #eff6ff;
+  --accent-soft-fg: #1e3a8a;
+  --accent-ring: #bfdbfe;
+}
+
+/* --- Themeable semantic utilities (reference the CSS variables above) ------ */
+.app-shell {
+  background: var(--app-bg);
+}
+.app-header {
+  background: var(--header-bg);
+  color: var(--header-fg);
+  border-bottom: 1px solid var(--header-border);
+}
+.app-subtitle {
+  color: var(--header-muted);
+}
+.app-link {
+  color: var(--header-link);
+}
+.app-link:hover {
+  text-decoration: underline;
+}
+
+.bg-accent {
+  background: var(--accent);
+}
+.text-accent {
+  color: var(--accent);
+}
+.text-accent:hover {
+  color: var(--accent-hover);
+}
+.btn-accent {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.btn-accent:hover {
+  background: var(--accent-hover);
+}
+.btn-accent-outline {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.btn-accent-outline:hover {
+  background: var(--accent-soft);
+}
+.btn-header-outline {
+  border: 1px solid color-mix(in oklab, var(--header-fg) 35%, transparent);
+  color: var(--header-fg);
+}
+.btn-header-outline:hover {
+  background: color-mix(in oklab, var(--header-fg) 12%, transparent);
+}
+.badge-accent {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.chip-accent {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+}
+.selected-accent {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+}
+.cat-header {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+.focus-accent:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 
 html,
@@ -16,7 +105,7 @@ body,
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', 'Segoe UI Variable Text', Tahoma, Arial, sans-serif;
 }
 
 /* Thin, theme-aware scrollbars for the code panes. */

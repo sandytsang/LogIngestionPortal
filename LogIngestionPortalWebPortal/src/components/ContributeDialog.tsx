@@ -16,9 +16,9 @@ interface Props {
 }
 
 const input =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900';
-const label = 'block text-xs font-medium text-slate-600 dark:text-slate-300';
-const hint = 'mt-1 text-[11px] text-slate-400';
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus-accent dark:border-slate-700 dark:bg-slate-900';
+const label = 'block text-sm font-medium text-slate-600 dark:text-slate-300';
+const hint = 'mt-1 text-xs text-slate-400';
 
 export function ContributeDialog({ knownCategories, onClose }: Props) {
   const [draft, setDraft] = useState<FieldDraft>(emptyDraft);
@@ -54,7 +54,7 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
             <h2 className="text-lg font-semibold">Contribute a data point</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Share a property and its read-only PowerShell collector with the community.
             </p>
           </div>
@@ -67,7 +67,7 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400">
+          <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400">
             A “data point” is one column of device data. Fill in how it should appear,
             what its Log Analytics column is called, and a small read-only PowerShell
             snippet that returns the value. We generate the catalog entry for you to
@@ -91,9 +91,9 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
                     key={c}
                     type="button"
                     onClick={() => set({ category: c })}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                    className={`rounded-full border px-2 py-0.5 text-xs transition ${
                       draft.category === c
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200'
+                        ? 'selected-accent'
                         : 'border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                     }`}
                   >
@@ -172,7 +172,7 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
             <textarea
               id="c-collector"
               rows={4}
-              className={`${input} mt-1 font-mono text-xs`}
+              className={`${input} mt-1 font-mono text-sm`}
               value={draft.collector}
               onChange={(e) => set({ collector: e.target.value })}
               placeholder="e.g. (Get-CimInstance Win32_OperatingSystem).LastBootUpTime"
@@ -182,7 +182,7 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
               Must be read-only — no writes, downloads, installs, or service/process changes.
             </p>
             {draft.columnType === 'dynamic' && (
-              <p className="mt-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+              <p className="mt-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
                 <strong>dynamic</strong> stores a JSON object/array. Return a small,
                 projected object — pipe through <code>Select-Object Prop1, Prop2</code>
                 rather than emitting a whole .NET object (e.g.{' '}
@@ -198,7 +198,7 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
           </div>
 
           {errors.length > 0 ? (
-            <ul className="space-y-1 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+            <ul className="space-y-1 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
               {errors.map((e) => (
                 <li key={e}>• {e}</li>
               ))}
@@ -206,30 +206,30 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
           ) : (
             <div>
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
                   ✓ Passes the read-only security checks
                 </span>
                 <button
                   onClick={copyJson}
-                  className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                  className="rounded-md border border-slate-300 px-2.5 py-1 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
                 >
                   {copied ? 'Copied!' : 'Copy field JSON'}
                 </button>
               </div>
-              <pre className="scroll-thin max-h-48 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-800">
+              <pre className="scroll-thin max-h-48 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
                 <code>{fieldJson}</code>
               </pre>
             </div>
           )}
         </div>
 
-        <div className="space-y-2 rounded-b-2xl border-t border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+        <div className="space-y-2 rounded-b-2xl border-t border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
           {categoryExists ? (
             <p>
               <strong>“{draft.category.trim()}” already exists.</strong> Copy the field JSON above and add it
               to that category file, then open a pull request.{' '}
               <a
-                className="text-indigo-600 underline dark:text-indigo-400"
+                className="text-accent underline"
                 href={categoriesFolderUrl()}
                 target="_blank"
                 rel="noreferrer"
@@ -249,7 +249,7 @@ export function ContributeDialog({ knownCategories, onClose }: Props) {
             rel="noreferrer"
             aria-disabled={!valid}
             className={`inline-block rounded-lg px-4 py-2 text-sm font-medium text-white ${
-              valid ? 'bg-indigo-600 hover:bg-indigo-500' : 'pointer-events-none bg-slate-400'
+              valid ? 'btn-accent' : 'pointer-events-none bg-slate-400'
             }`}
           >
             Create on GitHub ↗

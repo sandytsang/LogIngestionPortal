@@ -38,9 +38,9 @@ export function OutputTabs({ tabs, bundle }: Props) {
             <button
               key={t.id}
               onClick={() => setActive(t.id)}
-              className={`rounded-t-lg px-3 py-2 text-xs font-medium transition ${
+              className={`rounded-t-lg px-3 py-2 text-sm font-medium transition ${
                 t.id === current.id
-                  ? 'bg-indigo-600 text-white'
+                  ? 'btn-accent'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -51,16 +51,16 @@ export function OutputTabs({ tabs, bundle }: Props) {
         <div className="flex gap-2 pb-1">
           <button
             onClick={onDownloadZip}
-            className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+            className="btn-accent rounded-md px-2.5 py-1 text-sm font-medium"
           >
             Download all (.zip)
           </button>
         </div>
       </div>
-      <pre className="scroll-thin min-h-0 flex-1 overflow-auto rounded-b-lg border border-slate-200 bg-slate-50 p-4 text-[12px] leading-relaxed text-slate-800">
+      <pre className="scroll-thin min-h-0 flex-1 overflow-auto rounded-b-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-800">
         <code>{current.content}</code>
       </pre>
-      <p className="mt-1 text-[11px] text-slate-400">
+      <p className="mt-1 text-xs text-slate-400">
         {current.filename} · {current.language}
       </p>
     </div>

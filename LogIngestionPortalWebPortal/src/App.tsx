@@ -5,10 +5,12 @@ import type { CatalogField, MultiTableColumnsDocument, PortalConfig, TableConfig
 import type { ZipEntry } from './lib/zip';
 import { CatalogBrowser } from './components/CatalogBrowser';
 import { ConfigPanel } from './components/ConfigPanel';
+import { TablesPanel } from './components/TablesPanel';
 import { OutputTabs, type OutputTab } from './components/OutputTabs';
 import { ContributeDialog } from './components/ContributeDialog';
 import { SampleColumnsDialog } from './components/SampleColumnsDialog';
 import { DeployHelp } from './components/DeployHelp';
+import { applyTheme, DEFAULT_THEME_ID } from './lib/theme';
 import {
   columnsToJson,
   generateColumns,
@@ -156,9 +158,17 @@ export default function App() {
     [],
   );
 
+  // Apply the fixed enterprise theme CSS variables to <html>.
+  useEffect(() => {
+    applyTheme(DEFAULT_THEME_ID);
+  }, []);
+
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ tables, config, workspaceName }));
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tables, config, workspaceName }),
+      );
     } catch {
       /* storage unavailable (private mode) — non-fatal */
     }
@@ -323,24 +333,25 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen app-shell text-slate-900">
       {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
+      <header className="app-header shadow-md">
+          <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 py-4">
             <div>
-              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+                <span className="inline-block h-3 w-3 rounded-sm bg-accent" />
                 Log Ingestion Portal
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="app-subtitle mt-1 text-sm">
                 Pick the device data you want · download columns.json, the Intune script, and a deploy
                 README as one zip · runs entirely in your browser
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="app-subtitle mt-1 text-sm">
                 <a
                   href="https://github.com/sandytsang/LogIngestionPortal"
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="font-medium app-link"
                 >
                   GitHub repo
                 </a>
@@ -349,7 +360,7 @@ export default function App() {
                   href="https://github.com/sandytsang/LogIngestionPortal/blob/main/docs/README.md"
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="font-medium app-link"
                 >
                   Documentation
                 </a>
@@ -358,7 +369,7 @@ export default function App() {
                   href="https://github.com/sandytsang/LogIngestionPortal/blob/main/LogIngestionAPI/docs/device-jwt-authentication.md"
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="font-medium app-link"
                 >
                   Device auth (JWT)
                 </a>
@@ -367,13 +378,13 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowSample(true)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="btn-header-outline rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
               >
                 Build columns.json from data
               </button>
               <button
                 onClick={() => setShowContribute(true)}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+                className="btn-accent rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors"
               >
                 + Contribute a field
               </button>
@@ -381,22 +392,39 @@ export default function App() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
-            {/* Left: catalog */}
-            <div>
+        <main className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 py-6">
+          {/* 1. Azure Resource Configuration — full width */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-900/5 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="mb-4 flex items-center gap-2 text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
+              <span className="h-4 w-1 rounded bg-accent" />
+              Azure Resource Configuration
+            </h2>
+            <ConfigPanel
+              config={config}
+              onChange={(patch) => setConfig((c) => ({ ...c, ...patch }))}
+              tables={tables}
+              workspaceName={workspaceName}
+              onWorkspaceChange={setWorkspaceName}
+              errors={errors}
+            />
+          </section>
+
+          {/* 2. Categories (2/3) + Tables (1/3) */}
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            {/* Left: catalog (2/3) */}
+            <div className="lg:col-span-2">
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                <span className="badge-accent rounded-full px-3 py-1 text-sm font-semibold">
                   {selectedCount} {selectedCount === 1 ? 'field' : 'fields'} selected · {tables.length}{' '}
                   {tables.length === 1 ? 'table' : 'tables'}
                 </span>
-                <button onClick={resetDefaults} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
+                <button onClick={resetDefaults} className="text-sm text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
                   Reset to defaults
                 </button>
-                <button onClick={selectAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
+                <button onClick={selectAll} className="text-sm text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
                   Select all
                 </button>
-                <button onClick={clearAll} className="text-xs text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
+                <button onClick={clearAll} className="text-sm text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
                   Clear
                 </button>
               </div>
@@ -408,21 +436,15 @@ export default function App() {
               />
             </div>
 
-            {/* Right: configuration (sticky, full column height) */}
-            <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+            {/* Right: tables (1/3, sticky) */}
+            <div className="lg:col-span-1 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
               <div className="flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <h2 className="mb-3 shrink-0 text-sm font-semibold">Configuration</h2>
                 <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pr-1">
-                  <ConfigPanel
-                    config={config}
-                    onChange={(patch) => setConfig((c) => ({ ...c, ...patch }))}
+                  <TablesPanel
                     tables={tables}
                     onAddTable={addTable}
                     onRemoveTable={removeTable}
                     onUpdateTable={updateTable}
-                    workspaceName={workspaceName}
-                    onWorkspaceChange={setWorkspaceName}
-                    errors={errors}
                   />
                 </div>
               </div>
@@ -438,7 +460,7 @@ export default function App() {
           <DeployHelp />
         </main>
 
-        <footer className="mx-auto max-w-7xl px-4 pb-8 text-center text-xs text-slate-400">
+        <footer className="mx-auto max-w-7xl px-4 pb-8 text-center text-sm text-slate-400">
           100% client-side · no sign-in, no backend, no data leaves your browser · generates artifacts for the
           LogIngestionAPI solution.
           <br />
