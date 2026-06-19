@@ -12,9 +12,7 @@ name: Deploy LogIngestionAPI
 # just the table + DCR after a columns.json change without touching the Function
 # App, use the separate update-columns.yml workflow instead.
 #
-# Pick how you want to deploy with the "method" input:
-#   - native : no PowerShell script. Bicep + Azure/functions-action only.
-#   - script : run scripts/deploy.ps1 in CI (same path as deploying locally).
+# This workflow uses the native path only: Bicep + Azure/functions-action.
 #
 # One-time setup (see README "Deploy from your own GitHub"):
 #   1. Create an Entra app registration with a federated credential for this repo.
@@ -25,11 +23,6 @@ name: Deploy LogIngestionAPI
 on:
   workflow_dispatch:
     inputs:
-      method:
-        description: 'Deployment method'
-        type: choice
-        options: [native, script]
-        default: script
       resourceGroup:
         description: 'Target resource group (created if missing)'
         type: string
@@ -115,11 +108,7 @@ jobs:
               --location "${{ inputs.location }}" \
               --output none
 
-      # ----------------------------------------------------------------------
-      # Method A: native (no deploy.ps1) — Bicep + functions-action
-      # ----------------------------------------------------------------------
       - name: Deploy infrastructure (Bicep)
-        if: ${{ inputs.method == 'native' }}
         id: infra
         uses: azure/cli@v2
         with:
@@ -173,14 +162,12 @@ jobs:
             echo "monitoringMetricsPublisherRoleId=$roleId" >> "$GITHUB_OUTPUT"
 
       - name: Publish function code
-        if: ${{ inputs.method == 'native' }}
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ steps.infra.outputs.functionAppName }}
           package: function
 
       - name: Validate post-deploy permissions (native)
-        if: ${{ inputs.method == 'native' }}
         uses: azure/cli@v2
         with:
           azcliversion: latest
@@ -247,41 +234,10 @@ jobs:
             fi
             echo "Post-deploy permission validation passed."
 
-      # ----------------------------------------------------------------------
-      # Method B: script — run scripts/deploy.ps1 (same as deploying locally)
-      # ----------------------------------------------------------------------
-      - name: Install Azure Functions Core Tools
-        if: ${{ inputs.method == 'script' }}
-        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
-
-      - name: Deploy with deploy.ps1
-        if: ${{ inputs.method == 'script' }}
-        shell: pwsh
-        working-directory: scripts
-        run: |
-          # Try permission assignment in-band (recommended). deploy.ps1 handles
-          # failures as non-fatal and prints manual follow-up commands.
-          $opt = @()
-          if ('${{ inputs.dcrName }}') { $opt += @('-DcrName', '${{ inputs.dcrName }}') }
-          if ('${{ inputs.workspaceResourceGroup }}') { $opt += @('-WorkspaceResourceGroup', '${{ inputs.workspaceResourceGroup }}') }
-          if ('${{ inputs.workspaceLocation }}') { $opt += @('-WorkspaceLocation', '${{ inputs.workspaceLocation }}') }
-          if ('${{ inputs.dcrResourceGroup }}') { $opt += @('-DcrResourceGroup', '${{ inputs.dcrResourceGroup }}') }
-          # Contributor-only login: don't create the resource group role assignment here.
-          if ('${{ inputs.skipRoleAssignment }}' -eq 'true') { $opt += '-SkipDcrRoleAssignment' }
-          ./deploy.ps1 `
-            -ResourceGroup '${{ inputs.resourceGroup }}' `
-            -Location '${{ inputs.location }}' `
-            -FunctionAppName '${{ inputs.functionAppName }}' `
-            -WorkspaceName '${{ inputs.workspaceName }}' `
-            -DcrName '${{ inputs.dcrName }}' `
-            -FunctionPlanType '${{ inputs.functionPlanType }}' `
-            -Force `
-            @opt
-
       - name: Summary
         if: ${{ always() }}
         run: |
-          echo "### LogIngestionAPI deploy (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "### LogIngestionAPI deploy" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Resource group: ${{ inputs.resourceGroup }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Region: ${{ inputs.location }}" >> "$GITHUB_STEP_SUMMARY"

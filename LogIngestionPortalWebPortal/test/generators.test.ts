@@ -359,10 +359,6 @@ describe('generateWorkflowYaml', () => {
     'on:',
     '  workflow_dispatch:',
     '    inputs:',
-    '      method:',
-    '        type: choice',
-    '        options: [native, script]',
-    '        default: native',
     '      resourceGroup:',
     '        type: string',
     '        default: rg-logingestion',
@@ -410,8 +406,6 @@ describe('generateWorkflowYaml', () => {
     expect(out).toContain("        default: 'rg-log-demo'");
     expect(out).toContain("        default: 'northeurope'");
     expect(out).toContain('        default: Flex');
-    // method is not portal-controlled, so it keeps its file default.
-    expect(out).toContain('        default: native');
     // requireEntraDevice is left untouched.
     expect(out).toContain('        default: true');
   });

@@ -10,9 +10,7 @@ name: Update data columns (schema-only)
 # Like deploy.yml, this is meant to run from a repository whose ROOT is this
 # LogIngestionAPI folder, so paths below (infra/, scripts/) are relative to it.
 #
-# Pick how you want to apply the update with the "method" input:
-#   - native : no PowerShell script. Bicep only (schemaOnly=true).
-#   - script : run scripts/deploy.ps1 -SchemaOnly in CI.
+# This workflow uses the native path only: Bicep with schemaOnly=true.
 #
 # One-time setup is identical to deploy.yml (see README "Deploy from your own
 # GitHub"): an Entra app with a federated credential for this repo and the
@@ -21,11 +19,6 @@ name: Update data columns (schema-only)
 on:
   workflow_dispatch:
     inputs:
-      method:
-        description: 'Update method'
-        type: choice
-        options: [native, script]
-        default: native
       workspaceName:
         description: 'Log Analytics workspace name (the workspace that holds the table to update).'
         type: string
@@ -82,11 +75,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # ----------------------------------------------------------------------
-      # Method A: native (no deploy.ps1) — Bicep with schemaOnly=true
-      # ----------------------------------------------------------------------
       - name: Update schema (Bicep)
-        if: ${{ inputs.method == 'native' }}
         uses: azure/cli@v2
         with:
           azcliversion: latest
@@ -113,31 +102,10 @@ jobs:
               --output none
             echo "Schema-only update complete (table + DCR; Function App untouched)."
 
-      # ----------------------------------------------------------------------
-      # Method B: script — run scripts/deploy.ps1 -SchemaOnly
-      # ----------------------------------------------------------------------
-      - name: Update schema with deploy.ps1
-        if: ${{ inputs.method == 'script' }}
-        shell: pwsh
-        working-directory: scripts
-        run: |
-          # CI has no Entra admin to grant Graph Device.Read.All; the function
-          # app isn't touched here anyway, so skip that step. For a schema-only
-          # update deploy.ps1 needs the workspace + DCR only.
-          $dcrRg = '${{ inputs.dcrResourceGroup }}'
-          if (-not $dcrRg) { $dcrRg = '${{ inputs.workspaceResourceGroup }}' }
-          ./deploy.ps1 `
-            -SchemaOnly `
-            -SkipDeviceGraphPermission `
-            -WorkspaceName '${{ inputs.workspaceName }}' `
-            -WorkspaceResourceGroup '${{ inputs.workspaceResourceGroup }}' `
-            -DcrName '${{ inputs.dcrName }}' `
-            -DcrResourceGroup $dcrRg
-
       - name: Summary
         if: ${{ always() }}
         run: |
-          echo "### LogIngestionAPI schema-only update (${{ inputs.method }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "### LogIngestionAPI schema-only update" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Workspace: ${{ inputs.workspaceName }} (RG ${{ inputs.workspaceResourceGroup }})" >> "$GITHUB_STEP_SUMMARY"
           echo "- DCR: ${{ inputs.dcrName }}" >> "$GITHUB_STEP_SUMMARY"
