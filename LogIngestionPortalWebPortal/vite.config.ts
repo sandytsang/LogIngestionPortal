@@ -7,6 +7,18 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   base: '/LogIngestionPortal/',
   plugins: [react(), tailwindcss()],
+  // Split the React runtime into its own long-lived vendor chunk so the main
+  // app bundle stays under Vite's 500 kB warning threshold and browsers can
+  // cache the rarely-changing framework code separately from app code.
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
   // The "Download all" bundle raw-imports files from the sibling LogIngestionAPI
   // folder (one level above this app), so let the dev server read the parent.
   server: {
