@@ -121,6 +121,74 @@ function Get-RecordBatches {
     return $batches
 }
 
+# Pulls an HTTP status code from a failed Invoke-RestMethod exception when
+# available. Returns $null for network/transport failures with no response.
+function Get-HttpStatusCode {
+    param($Exception)
+
+    try {
+        if ($Exception.Response -and $Exception.Response.StatusCode) {
+            if ($Exception.Response.StatusCode.value__) {
+                return [int]$Exception.Response.StatusCode.value__
+            }
+            return [int]$Exception.Response.StatusCode
+        }
+    }
+    catch { }
+    return $null
+}
+
+# True for failures that are typically transient and worth retrying.
+function Test-IsRetriableIngestionFailure {
+    param(
+        [Nullable[int]]$StatusCode,
+        [string]$Message
+    )
+
+    if ($null -eq $StatusCode) { return $true }
+    if ($StatusCode -in @(408, 429, 500, 502, 503, 504)) { return $true }
+
+    if ($Message -match '(?i)timed out|timeout|temporarily unavailable|connection reset|name resolution|dns') {
+        return $true
+    }
+    return $false
+}
+
+# Posts one ingestion batch with retry/backoff for transient network/API errors.
+function Invoke-IngestionPostWithRetry {
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter(Mandatory)][string]$Body,
+        [Parameter(Mandatory)][hashtable]$Headers,
+        [Parameter(Mandatory)][string]$Table,
+        [Parameter(Mandatory)][int]$BatchIndex,
+        [Parameter(Mandatory)][int]$BatchCount
+    )
+
+    $maxAttempts = if ($env:INGEST_RETRY_ATTEMPTS) { [int]$env:INGEST_RETRY_ATTEMPTS } else { 4 }
+    if ($maxAttempts -lt 1) { $maxAttempts = 1 }
+    $timeoutSec = if ($env:INGEST_TIMEOUT_SEC) { [int]$env:INGEST_TIMEOUT_SEC } else { 120 }
+    if ($timeoutSec -lt 10) { $timeoutSec = 10 }
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+            $null = Invoke-RestMethod -Method Post -Uri $Uri -Body $Body -Headers $Headers -TimeoutSec $timeoutSec
+            return
+        }
+        catch {
+            $statusCode = Get-HttpStatusCode -Exception $_.Exception
+            $message = $_.Exception.Message
+            $canRetry = ($attempt -lt $maxAttempts) -and (Test-IsRetriableIngestionFailure -StatusCode $statusCode -Message $message)
+
+            if (-not $canRetry) { throw }
+
+            $delaySeconds = [Math]::Min(30, [Math]::Pow(2, $attempt))
+            Write-Warning "Transient ingestion failure for table $Table batch $BatchIndex/$BatchCount (attempt $attempt/$maxAttempts, HTTP $statusCode): $message. Retrying in $delaySeconds second(s)."
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
+}
+
 # --- Read configuration injected by the Bicep deployment --------------------
 $dcrEndpoint    = $env:DCR_ENDPOINT
 $dcrImmutableId = $env:DCR_IMMUTABLE_ID
@@ -271,12 +339,12 @@ foreach ($group in $groups) {
         try {
             # Suppress pipeline output so the Functions host doesn't emit empty
             # "OUTPUT:" log lines for each successful ingestion call.
-            $null = Invoke-RestMethod -Method Post -Uri $ingestUri -Body $body -Headers $ingestHeaders
+            Invoke-IngestionPostWithRetry -Uri $ingestUri -Body $body -Headers $ingestHeaders -Table $group.Table -BatchIndex $batchIndex -BatchCount $batches.Count
             $tableIngested += $batch.Count
         }
         catch {
             $statusCode = $null
-            try { $statusCode = $_.Exception.Response.StatusCode.value__ } catch { }
+            try { $statusCode = Get-HttpStatusCode -Exception $_.Exception } catch { }
             Write-Error "Ingestion failed for table $($group.Table) batch $batchIndex/$($batches.Count) (HTTP $statusCode): $($_.Exception.Message)"
             Write-HttpResponse -StatusCode ([HttpStatusCode]::BadGateway) -Body @{
                 error      = 'Ingestion endpoint rejected the request.'
