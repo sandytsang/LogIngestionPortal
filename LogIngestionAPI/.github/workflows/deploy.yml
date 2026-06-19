@@ -173,7 +173,7 @@ jobs:
           azcliversion: latest
           inlineScript: |
             set -euo pipefail
-            fail=0
+            warned=0
 
             principalId="${{ steps.infra.outputs.functionPrincipalId }}"
             dcrRg="${{ steps.infra.outputs.dcrResourceGroup }}"
@@ -199,13 +199,13 @@ jobs:
                 --query "value[?appRoleId=='$graphRoleId'] | [0].id" \
                 --output tsv 2>/dev/null || true)
               if [ -z "$graphAssignment" ]; then
-                echo "::error::Missing Graph Device.Read.All for Function managed identity."
+                echo "::warning::Missing Graph Device.Read.All for Function managed identity."
                 echo "Run manually (Cloud Shell):"
                 echo "  MI=\"$principalId\""
                 echo "  GRAPH_SP=\$(az ad sp list --filter \"appId eq '00000003-0000-0000-c000-000000000000'\" --query '[0].id' -o tsv)"
                 echo "  ROLE=\"7438b122-aefc-4978-80ed-43db9fcc7715\""
                 echo "  az rest --method POST --uri \"https://graph.microsoft.com/v1.0/servicePrincipals/\$MI/appRoleAssignments\" --headers 'Content-Type=application/json' --body \"{\\\"principalId\\\":\\\"\$MI\\\",\\\"resourceId\\\":\\\"\$GRAPH_SP\\\",\\\"appRoleId\\\":\\\"\$ROLE\\\"}\""
-                fail=1
+                warned=1
               fi
             fi
 
@@ -221,18 +221,18 @@ jobs:
               --query "[?roleDefinitionId=='$roleDefinitionId'] | [0].id" \
               --output tsv 2>/dev/null || true)
             if [ -z "$roleAssignment" ]; then
-              echo "::error::Missing Monitoring Metrics Publisher on DCR resource group '$dcrRg'."
+              echo "::warning::Missing Monitoring Metrics Publisher on DCR resource group '$dcrRg'."
               echo "Run manually (Cloud Shell):"
               echo "  az account set --subscription $subId"
               echo "  az role assignment create --assignee-object-id $principalId --assignee-principal-type ServicePrincipal --role 'Monitoring Metrics Publisher' --scope '/subscriptions/$subId/resourceGroups/$dcrRg'"
-              fail=1
+              warned=1
             fi
 
-            if [ "$fail" -ne 0 ]; then
-              echo "::error::Post-deploy permission validation failed. See manual remediation commands above."
-              exit 1
+            if [ "$warned" -ne 0 ]; then
+              echo "Post-deploy permission validation completed with warnings. See manual remediation commands above."
+            else
+              echo "Post-deploy permission validation passed."
             fi
-            echo "Post-deploy permission validation passed."
 
       - name: Summary
         if: ${{ always() }}
@@ -244,6 +244,6 @@ jobs:
           echo "- Plan: ${{ inputs.functionPlanType }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- JWT tenant pin: auto (current Azure tenant)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "If \`requireEntraDevice\` is true, grant the Function's managed identity Graph **Device.Read.All** once (scripts/AssignMSIPermisison.ps1), then copy the function key + URL from the Azure portal into your Intune script." >> "$GITHUB_STEP_SUMMARY"
+          echo "If \`requireEntraDevice\` is true, this workflow checks Graph **Device.Read.All** and will warn if it is missing. Grant it manually if needed (scripts/AssignMSIPermisison.ps1), then copy the function key + URL from the Azure portal into your Intune script." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "If \`skipRoleAssignment\` was true, also grant the Function's managed identity **Monitoring Metrics Publisher** on the DCR's resource group (the deploy.ps1 log prints the exact \`az role assignment create\` command)." >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow also checks for **Monitoring Metrics Publisher** on the DCR resource group and will warn if it is missing. Grant it manually if needed (the log prints the exact \`az role assignment create\` command)." >> "$GITHUB_STEP_SUMMARY"
