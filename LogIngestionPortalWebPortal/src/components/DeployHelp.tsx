@@ -127,9 +127,7 @@ export function DeployHelp() {
               Open <span className="font-semibold">Actions → Run workflow</span> on either{' '}
               <span className="font-semibold">Deploy LogIngestionAPI</span> for the full stack or{' '}
               <span className="font-semibold">Update data columns (schema-only)</span> for a
-              table + DCR refresh, then pick a{' '}
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-sm dark:bg-slate-800">method</code>{' '}
-              (native Bicep or the deploy.ps1 script).
+              table + DCR refresh. The workflows use the native Bicep path only.
             </li>
             <li>
               Full setup details (roles, federated-credential subject, prod approval gate) are in the
@@ -149,8 +147,8 @@ export function DeployHelp() {
 
         <p className="text-slate-500 dark:text-slate-400">
           Either way, the first request from a device only succeeds after the Function App's managed
-          identity has Microsoft Graph <span className="font-semibold">Device.Read.All</span> — both
-          paths attempt this automatically and tell you how to finish it if a Graph admin is needed.
+          identity has Microsoft Graph <span className="font-semibold">Device.Read.All</span> — the
+          workflow checks it and warns if a Graph admin still needs to grant it manually.
         </p>
       </div>
     </details>
