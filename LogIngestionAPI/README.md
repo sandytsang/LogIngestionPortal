@@ -213,6 +213,7 @@ In-depth guides:
 - [Architecture overview](docs/architecture-overview.md)
 - [Deployment reference](docs/deployment-reference.md)
 - [Schema and columns](docs/schema-and-columns.md)
+- [AppLocker events: querying and dedup](docs/applocker.md)
 - [RBAC and permissions](docs/rbac-and-permissions.md)
 - [Security hardening](docs/security-hardening.md)
 - [Testing and CI](docs/testing-and-ci.md)

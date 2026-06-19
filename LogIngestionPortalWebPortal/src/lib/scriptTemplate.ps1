@@ -87,6 +87,13 @@ $script:LogMaxFiles  = 5    # Number of timestamped archives to retain (older on
 $script:Warnings     = New-Object System.Collections.Generic.List[string]
 $script:SendSummary  = ''
 
+# State a collector wants persisted ONLY after a successful upload (e.g. an
+# event-log high-watermark). Each entry is a @{ Path = <file>; Json = <text> }
+# object; the actual write happens host-side here (collectors are read-only) so a
+# failed upload leaves the old state in place and the next run re-reads the same
+# events (at-least-once).
+$script:PendingState = New-Object System.Collections.Generic.List[object]
+
 # Rotates the active log when it exceeds $script:LogMaxBytes by renaming it with a
 # UTC timestamp suffix (mirrors the IME log naming, e.g. *-20260620-001800.log) and
 # pruning the oldest archives so at most $script:LogMaxFiles are kept. Best-effort.
@@ -374,6 +381,17 @@ try {
     Write-Log -Level INFO -Message ('Intune script v' + $ScriptVersion + ' started.')
     $data = Get-DeviceData
     Send-Telemetry -Payload $data | Out-Null
+
+    # Upload succeeded: persist any incremental collector state (e.g. the
+    # AppLocker event-log watermark) so the next run only ships new data.
+    foreach ($state in $script:PendingState) {
+        try {
+            $dir = Split-Path -Parent $state.Path
+            if ($dir -and -not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
+            Set-Content -Path $state.Path -Value $state.Json -Encoding UTF8
+        }
+        catch { Write-Log -Level WARN -Message "State write failed ($($state.Path)): $($_.Exception.Message)" }
+    }
 
     if ($script:Warnings.Count -gt 0) {
         $summary = "Telemetry uploaded with $($script:Warnings.Count) collector warning(s): " + ($script:Warnings -join '; ')

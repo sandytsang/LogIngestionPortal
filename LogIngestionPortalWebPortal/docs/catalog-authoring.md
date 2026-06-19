@@ -98,26 +98,19 @@ npm test                             # generator + mapping unit tests
 expression, and each `setups` snippet with the PowerShell language parser, so a
 typo in a collector is caught before it ships.
 
-## AppLocker (example: a row-source dataset)
+## Row-source datasets (many rows per device)
 
-The **AppLocker** category ([`catalog/categories/applocker.json`](../catalog/categories/applocker.json))
-is a good example of a *row-source* field — a `collector` that returns an array
-plus an `element[]` schema, so each item becomes its own row.
+A field becomes a *row-source* when its `collector` returns an array and it
+defines an `element[]` schema, so each array item becomes its own row. Use this
+pattern for any "many rows per device" inventory (events, drivers, hotfixes):
+`collector` returns the array, `element[]` defines the per-row columns, and
+deploying (or `-SchemaOnly`) creates the table and DCR stream automatically — no
+Function or Bicep change.
 
-- The collector reads the last 24h of AppLocker events from the Windows
-  AppLocker event logs and classifies each as **Audited** (would have been
-  blocked) or **Denied** (blocked), using the structured event XML
-  (`UserData.RuleAndFileData`) rather than parsing message text.
-- Its `element[]` columns (`AppLockerEventTime`, `AppLockerEventType`,
-  `AppLockerFilePath`, `AppLockerFileHash`, `AppLockerPublisher`, …) make it a
-  one-row-per-event table, mapped to `AppLockerEvents_CL`.
-- Because it is schema-driven like every other field, deploying (or
-  `-SchemaOnly`) creates the table and DCR stream automatically — no Function or
-  Bicep change.
-
-Use this pattern for any "many rows per device" inventory (events, drivers,
-hotfixes): `collector` returns the array, `element[]` defines the per-row
-columns.
+The **AppLocker** category
+([`catalog/categories/applocker.json`](../catalog/categories/applocker.json)) is
+the reference example, including its incremental, watermark-based collection.
+See [AppLocker collection](applocker.md).
 
 ## Tips
 

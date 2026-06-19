@@ -45,7 +45,9 @@ Add or update fields through:
 - catalog/categories/*.json directly
 
 See [Catalog authoring](docs/catalog-authoring.md) for the field/column schema,
-shared setups, and validation steps.
+shared setups, and validation steps. For the AppLocker dataset specifically
+(row-source schema and incremental, watermark-based collection), see
+[AppLocker collection](docs/applocker.md).
 
 Validate before PR:
 

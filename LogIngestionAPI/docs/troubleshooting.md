@@ -48,26 +48,8 @@ includes a `reason`. Match it below.
 
 ## Quick verification KQL
 
-```kusto
-// Create/update a helper function that returns deduplicated AppLocker rows.
-// Uses DeviceName + AppLockerEventRecordId as the stable event identity and
-// keeps the newest row when the same event was uploaded more than once.
-.create-or-alter function with (
-	folder = "LogIngestion",
-	docstring = "Deduplicated AppLocker events by DeviceName + AppLockerEventRecordId"
-) AppLockerEvents_Deduped() {
-	AppLockerEvents_CL
-	| summarize arg_max(TimeGenerated, *) by DeviceName, AppLockerEventRecordId
-}
-```
-
-```kusto
-// Example usage: deduplicated events in the last 24h
-AppLockerEvents_Deduped()
-| where TimeGenerated > ago(24h)
-| project TimeGenerated, DeviceName, AppLockerEventType, AppLockerFilePath, AppLockerRuleName
-| order by TimeGenerated desc
-```
+For AppLocker-specific queries (including the deduplication helper), see
+[AppLocker events: querying and dedup](applocker.md).
 
 ```kusto
 // Did anything arrive in the last hour?
