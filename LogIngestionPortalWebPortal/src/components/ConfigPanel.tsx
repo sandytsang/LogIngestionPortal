@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { PortalConfig, TableConfig } from '../types';
+import { getRequiredFieldWarnings } from '../lib/validation';
 
 interface Props {
   config: PortalConfig;
@@ -69,28 +70,8 @@ export function ConfigPanel({
   errors,
 }: Props) {
   const isUpdate = config.action === 'updateColumns';
-
-  // Required-field check for the whole panel. Lists the mandatory inputs that
-  // are still empty for the chosen action so the user gets one clear warning of
-  // everything missing before they download the artifacts.
   const isBlank = (value?: string): boolean => (value ?? '').trim() === '';
-  const requiredWarnings: string[] = [];
-  if (isBlank(config.scriptVersion)) requiredWarnings.push('Intune script version');
-  tables.forEach((t, i) => {
-    if (isBlank(t.name)) requiredWarnings.push(`Table ${i + 1} name`);
-  });
-  if (isUpdate) {
-    if (isBlank(workspaceName)) requiredWarnings.push('Workspace name');
-    if (isBlank(config.workspaceResourceGroup)) requiredWarnings.push('Workspace resource group');
-    if (isBlank(config.dcrName)) requiredWarnings.push('DCR name');
-    if (isBlank(config.dcrResourceGroup)) requiredWarnings.push('DCR resource group');
-  } else {
-    if (isBlank(config.resourceGroup)) requiredWarnings.push('Resource group');
-    if (isBlank(config.functionAppName)) requiredWarnings.push('Function App name');
-    if (isBlank(config.location)) requiredWarnings.push('Region');
-    if (isBlank(workspaceName)) requiredWarnings.push('Workspace name');
-    if (isBlank(config.dcrName)) requiredWarnings.push('DCR name');
-  }
+  const requiredWarnings = getRequiredFieldWarnings(config, tables, workspaceName);
 
   // A free-form text field with a one-click "suggested name". Names are NOT
   // forced into any convention: the suggestion is only a recommendation (the
@@ -133,16 +114,18 @@ export function ConfigPanel({
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
         />
-        {suggestion && (
-          <button
-            type="button"
-            onClick={() => setValue(suggestion)}
-            className="mt-1 text-sm text-accent underline"
-            title="Suggested name — you can use any name your tenant prefers"
-          >
-            {empty ? `Use suggested: ${suggestion}` : `Suggested: ${suggestion} — click to use`}
-          </button>
-        )}
+        <div className="mt-1 min-h-5">
+          {suggestion && (
+            <button
+              type="button"
+              onClick={() => setValue(suggestion)}
+              className="text-sm text-accent underline"
+              title="Suggested name — you can use any name your tenant prefers"
+            >
+              {empty ? `Use suggested: ${suggestion}` : `Suggested: ${suggestion} — click to use`}
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -200,7 +183,7 @@ export function ConfigPanel({
 
   // A bordered section grouping one resource's region / resource group / name.
   const section = (title: string, children: ReactNode) => (
-    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+    <div className="flex h-full flex-col rounded-xl border border-slate-300 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-900">
       <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</p>
       <div className="space-y-3">{children}</div>
     </div>
@@ -292,114 +275,139 @@ export function ConfigPanel({
           {/* Deploy: three resource sections, each with its own region /
               resource group / name. Everything is upserted (created if missing,
               updated in place if it exists). On wide screens they sit side by side. */}
-          <div className="grid items-start gap-3 lg:grid-cols-3">
-          {section(
-            'Function App',
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                {regionSelect('location', 'Region', config.location, (v) => onChange({ location: v }))}
-                {textField('resourceGroup', 'Resource group', config.resourceGroup, set('resourceGroup'), {
-                  placeholder: 'rg-logingestion',
-                  suggested: 'rg-logingestion',
-                  prefix: 'rg-',
+          <div className="grid items-stretch gap-3 lg:grid-cols-3">
+            <div className="h-full">{section(
+              'Function App',
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {regionSelect('location', 'Region', config.location, (v) => onChange({ location: v }))}
+                  {textField('resourceGroup', 'Resource group', config.resourceGroup, set('resourceGroup'), {
+                    placeholder: 'rg-logingestion',
+                    suggested: 'rg-logingestion',
+                    prefix: 'rg-',
+                  })}
+                </div>
+                {textField('functionAppName', 'Name', config.functionAppName, set('functionAppName'), {
+                  placeholder: 'func-logingestion',
+                  prefix: 'func-',
+                  suggestWhenEmpty: false,
                 })}
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  The name has no random hash and must be globally unique (it becomes{' '}
+                  <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">&lt;name&gt;.azurewebsites.net</code>).
+                  If an app with this name already exists in your subscription, the deploy updates it
+                  in place after a warning — a zip deploy replaces all functions in that app. If the
+                  name is taken in another tenant, the deploy stops and asks you to pick a different one.
+                </p>
+                <div>
+                  <label className={label} htmlFor="functionPlanType">
+                    Hosting plan
+                  </label>
+                  <select
+                    id="functionPlanType"
+                    className={`${field} mt-1`}
+                    value={config.functionPlanType}
+                    onChange={(e) => onChange({ functionPlanType: e.target.value as 'Consumption' | 'Flex' })}
+                  >
+                    <option value="Consumption">Consumption (Windows Y1 · classic serverless)</option>
+                    <option value="Flex">Flex Consumption (Linux FC1 · PowerShell 7.4)</option>
+                  </select>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    {config.functionPlanType === 'Flex'
+                      ? 'Flex: faster cold starts and VNet support, but not available in every region — verify region support.'
+                      : 'Consumption: widely available, pay-per-execution. Pick Flex for VNet or reduced cold starts.'}
+                  </p>
+                </div>
+              </>,
+            )}</div>
+
+            <div className="flex h-full flex-col gap-3 lg:col-span-2">
+              <div className="grid items-stretch gap-3 md:grid-cols-2">
+                {section(
+                  'Log Analytics Workspace',
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      {regionSelect(
+                        'workspaceLocation',
+                        <>
+                          Region <span className="text-slate-400">(optional)</span>
+                        </>,
+                        config.workspaceLocation,
+                        (v) => onChange({ workspaceLocation: v }),
+                        { required: false, placeholder: 'Same as Function App region' },
+                      )}
+                      {textField(
+                        'workspaceResourceGroup',
+                        <>
+                          Resource group <span className="text-slate-400">(optional)</span>
+                        </>,
+                        config.workspaceResourceGroup,
+                        set('workspaceResourceGroup'),
+                        { placeholder: 'defaults to Function App RG', required: false, prefix: 'rg-' },
+                      )}
+                    </div>
+                    {textField('workspaceName', 'Name', workspaceName, onWorkspaceChange, {
+                      placeholder: 'log-logingestion',
+                      suggested: 'log-logingestion',
+                      prefix: 'log-',
+                    })}
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      Leave the region blank to create the workspace in the Function App region. An
+                      existing workspace keeps its current region (it cannot be moved).
+                    </p>
+                  </>,
+                )}
+
+                {section(
+                  'Data Collection Rule',
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      {regionReadOnly(
+                        'dcrLocation',
+                        'Region',
+                        config.workspaceLocation || config.location,
+                        'Matches the Log Analytics workspace region.',
+                      )}
+                      {textField(
+                        'dcrResourceGroup',
+                        <>
+                          Resource group <span className="text-slate-400">(optional)</span>
+                        </>,
+                        config.dcrResourceGroup,
+                        set('dcrResourceGroup'),
+                        { placeholder: 'defaults to Function App RG', required: false, prefix: 'rg-' },
+                      )}
+                    </div>
+                    {textField('dcrName', 'Name', config.dcrName, set('dcrName'), {
+                      placeholder: 'dcr-logingestion',
+                      suggested: 'dcr-logingestion',
+                      prefix: 'dcr-',
+                    })}
+                  </>,
+                )}
               </div>
-              {textField('functionAppName', 'Name', config.functionAppName, set('functionAppName'), {
-                placeholder: 'func-logingestion',
-                prefix: 'func-',
-                suggestWhenEmpty: false,
-              })}
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                The name has no random hash and must be globally unique (it becomes{' '}
-                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">&lt;name&gt;.azurewebsites.net</code>).
-                If an app with this name already exists in your subscription, the deploy updates it
-                in place after a warning — a zip deploy replaces all functions in that app. If the
-                name is taken in another tenant, the deploy stops and asks you to pick a different one.
-              </p>
-              <div>
-                <label className={label} htmlFor="functionPlanType">
-                  Hosting plan
-                </label>
-                <select
-                  id="functionPlanType"
-                  className={`${field} mt-1`}
-                  value={config.functionPlanType}
-                  onChange={(e) => onChange({ functionPlanType: e.target.value as 'Consumption' | 'Flex' })}
-                >
-                  <option value="Consumption">Consumption (Windows Y1 · classic serverless)</option>
-                  <option value="Flex">Flex Consumption (Linux FC1 · PowerShell 7.4)</option>
-                </select>
+
+              <div className="flex flex-1 flex-col rounded-xl border border-slate-300 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-900">
+                <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Intune script version
+                  {reqPill(isBlank(config.scriptVersion))}
+                </p>
+                <input
+                  id="scriptVersion"
+                  className={`${field} ${isBlank(config.scriptVersion) ? requiredRing : ''}`}
+                  value={config.scriptVersion}
+                  onChange={(e) => onChange({ scriptVersion: e.target.value })}
+                  placeholder="1.0.0"
+                />
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                  {config.functionPlanType === 'Flex'
-                    ? 'Flex: faster cold starts and VNet support, but not available in every region — verify region support.'
-                    : 'Consumption: widely available, pay-per-execution. Pick Flex for VNet or reduced cold starts.'}
+                  Required. Stamped into the <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">IntuneScriptVersion</code>{' '}
+                  column (added to every table automatically) so you can tell whether data came from an older
+                  script or the current one (e.g.{' '}
+                  <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">where IntuneScriptVersion == "{config.scriptVersion || '1.0.0'}"</code>).
+                  Bump it whenever you change the script.
                 </p>
               </div>
-            </>,
-          )}
-
-          {section(
-            'Log Analytics Workspace',
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                {regionSelect(
-                  'workspaceLocation',
-                  <>
-                    Region <span className="text-slate-400">(optional)</span>
-                  </>,
-                  config.workspaceLocation,
-                  (v) => onChange({ workspaceLocation: v }),
-                  { required: false, placeholder: 'Same as Function App region' },
-                )}
-                {textField(
-                  'workspaceResourceGroup',
-                  <>
-                    Resource group <span className="text-slate-400">(optional)</span>
-                  </>,
-                  config.workspaceResourceGroup,
-                  set('workspaceResourceGroup'),
-                  { placeholder: 'defaults to Function App RG', required: false, prefix: 'rg-' },
-                )}
-              </div>
-              {textField('workspaceName', 'Name', workspaceName, onWorkspaceChange, {
-                placeholder: 'log-logingestion',
-                suggested: 'log-logingestion',
-                prefix: 'log-',
-              })}
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                Leave the region blank to create the workspace in the Function App region. An
-                existing workspace keeps its current region (it cannot be moved).
-              </p>
-            </>,
-          )}
-
-          {section(
-            'Data Collection Rule',
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                {regionReadOnly(
-                  'dcrLocation',
-                  'Region',
-                  config.workspaceLocation || config.location,
-                  'Always matches the Log Analytics workspace region.',
-                )}
-                {textField(
-                  'dcrResourceGroup',
-                  <>
-                    Resource group <span className="text-slate-400">(optional)</span>
-                  </>,
-                  config.dcrResourceGroup,
-                  set('dcrResourceGroup'),
-                  { placeholder: 'defaults to Function App RG', required: false, prefix: 'rg-' },
-                )}
-              </div>
-              {textField('dcrName', 'Name', config.dcrName, set('dcrName'), {
-                placeholder: 'dcr-logingestion',
-                suggested: 'dcr-logingestion',
-                prefix: 'dcr-',
-              })}
-            </>,
-          )}
+            </div>
           </div>
 
           <p className="text-xs text-slate-600 dark:text-slate-300">
@@ -409,27 +417,6 @@ export function ConfigPanel({
           </p>
         </>
       )}
-
-      <div>
-        <label className={label} htmlFor="scriptVersion">
-          Intune script version
-          {reqPill(isBlank(config.scriptVersion))}
-        </label>
-        <input
-          id="scriptVersion"
-          className={`${field} mt-1 ${isBlank(config.scriptVersion) ? requiredRing : ''}`}
-          value={config.scriptVersion}
-          onChange={(e) => onChange({ scriptVersion: e.target.value })}
-          placeholder="1.0.0"
-        />
-        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-          Required. Stamped into the <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">IntuneScriptVersion</code>{' '}
-          column (added to every table automatically) so you can tell whether data came from an older
-          script or the current one (e.g.{' '}
-          <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">where IntuneScriptVersion == "{config.scriptVersion || '1.0.0'}"</code>).
-          Bump it whenever you change the script.
-        </p>
-      </div>
 
       {errors.length > 0 && (
         <ul className="space-y-1 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">

@@ -11,7 +11,7 @@ import {
   generateWorkflowYaml,
   tableFields,
 } from '../src/lib/generators';
-import { validateColumns, validatePortalConfig } from '../src/lib/validation';
+import { getRequiredFieldWarnings, validateColumns, validatePortalConfig } from '../src/lib/validation';
 import expectedColumns from './fixtures/columns.json';
 
 const baseConfig: PortalConfig = {
@@ -317,6 +317,40 @@ describe('validatePortalConfig', () => {
   it('accepts a valid direct DCR name', () => {
     const errors = validatePortalConfig({ ...baseConfig, dcrName: 'dcr-logingestion-dev' });
     expect(errors).toEqual([]);
+  });
+});
+
+describe('getRequiredFieldWarnings', () => {
+  it('returns the missing deploy fields for a full solution download', () => {
+    const warnings = getRequiredFieldWarnings(
+      { ...baseConfig, action: 'deploy', scriptVersion: '' },
+      [{ id: 't1', name: '', description: '', fieldIds: [] }],
+      '',
+    );
+    expect(warnings).toEqual([
+      'Intune script version',
+      'Table 1 name',
+      'Resource group',
+      'Function App name',
+      'Region',
+      'Workspace name',
+      'DCR name',
+    ]);
+  });
+
+  it('returns the missing schema-only fields for an update-columns download', () => {
+    const warnings = getRequiredFieldWarnings(
+      { ...baseConfig, action: 'updateColumns', scriptVersion: '' },
+      [{ id: 't1', name: 'Devices_CL', description: '', fieldIds: [] }],
+      '',
+    );
+    expect(warnings).toEqual([
+      'Intune script version',
+      'Workspace name',
+      'Workspace resource group',
+      'DCR name',
+      'DCR resource group',
+    ]);
   });
 });
 

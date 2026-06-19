@@ -124,8 +124,7 @@ export function TablesPanel({ tables, onAddTable, onRemoveTable, onUpdateTable }
                 </p>
               )}
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned (plus
-                TimeGenerated, IntuneScriptVersion &amp; identity columns).
+                {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned.
               </p>
             </div>
           );

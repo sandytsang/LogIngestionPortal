@@ -3,6 +3,7 @@ import {
   type ColumnsDocument,
   type MultiTableColumnsDocument,
   type PortalConfig,
+  type TableConfig,
 } from '../types';
 
 const DIRECT_DCR_NAME_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{1,28}[A-Za-z0-9])?$/;
@@ -34,6 +35,39 @@ export function validatePortalConfig(config: PortalConfig): string[] {
   }
 
   return errors;
+}
+
+/**
+ * Returns the labels for any required inputs that are still empty for the
+ * chosen action. Used to keep the warning banner and download gating in sync.
+ */
+export function getRequiredFieldWarnings(
+  config: PortalConfig,
+  tables: TableConfig[],
+  workspaceName: string,
+): string[] {
+  const isBlank = (value?: string): boolean => (value ?? '').trim() === '';
+  const warnings: string[] = [];
+
+  if (isBlank(config.scriptVersion)) warnings.push('Intune script version');
+  tables.forEach((t, i) => {
+    if (isBlank(t.name)) warnings.push(`Table ${i + 1} name`);
+  });
+
+  if (config.action === 'updateColumns') {
+    if (isBlank(workspaceName)) warnings.push('Workspace name');
+    if (isBlank(config.workspaceResourceGroup)) warnings.push('Workspace resource group');
+    if (isBlank(config.dcrName)) warnings.push('DCR name');
+    if (isBlank(config.dcrResourceGroup)) warnings.push('DCR resource group');
+  } else {
+    if (isBlank(config.resourceGroup)) warnings.push('Resource group');
+    if (isBlank(config.functionAppName)) warnings.push('Function App name');
+    if (isBlank(config.location)) warnings.push('Region');
+    if (isBlank(workspaceName)) warnings.push('Workspace name');
+    if (isBlank(config.dcrName)) warnings.push('DCR name');
+  }
+
+  return warnings;
 }
 
 /**

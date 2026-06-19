@@ -7,8 +7,9 @@
 export function DeployHelp() {
   return (
     <details open className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <summary className="cursor-pointer select-none text-sm font-semibold text-slate-800 dark:text-slate-100">
-        How to deploy the downloaded zip
+      <summary className="flex cursor-pointer select-none items-center gap-2 text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
+        <span className="h-4 w-1 rounded bg-accent" />
+        Step 5: Read the instruction
       </summary>
 
       <div className="mt-3 space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">

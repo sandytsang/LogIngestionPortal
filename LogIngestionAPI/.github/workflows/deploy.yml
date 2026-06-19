@@ -74,7 +74,7 @@ on:
       skipRoleAssignment:
         description: 'Do not create the resource group role assignment (use when the login identity only has Contributor; grant Monitoring Metrics Publisher separately)'
         type: boolean
-        default: false
+        default: true
 
 permissions:
   id-token: write   # required for OIDC (passwordless) Azure login

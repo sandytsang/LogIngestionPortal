@@ -18,7 +18,7 @@ import {
   generateScripts,
   generateWorkflowYaml,
 } from './lib/generators';
-import { validateColumns, validatePortalConfig } from './lib/validation';
+import { getRequiredFieldWarnings, validateColumns, validatePortalConfig } from './lib/validation';
 import { colorTokenForIndex } from './lib/tableColors';
 
 const STORAGE_KEY = 'logingestion-portal.v7';
@@ -225,6 +225,12 @@ export default function App() {
     const configErrors = validatePortalConfig(config);
     return [...schemaErrors, ...configErrors];
   }, [columnsDoc, config]);
+
+  const requiredWarnings = useMemo(
+    () => getRequiredFieldWarnings(config, tables, workspaceName),
+    [config, tables, workspaceName],
+  );
+  const canDownloadZip = requiredWarnings.length === 0;
 
   // Distinct (non-locked) fields assigned to at least one table.
   const selectedCount = useMemo(() => new Set(tables.flatMap((t) => t.fieldIds)).size, [tables]);
@@ -511,7 +517,7 @@ export default function App() {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-900/5 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-4 flex items-center gap-2 text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
               <span className="h-4 w-1 rounded bg-accent" />
-              Azure Resource Configuration
+              Step 1: Azure Resource Configuration
             </h2>
             <ConfigPanel
               config={config}
@@ -523,10 +529,41 @@ export default function App() {
             />
           </section>
 
-          {/* 2. Categories (2/3) + Tables (1/3) */}
+          {/* 2. Tables (1/3) + Categories (2/3) */}
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
-            {/* Left: catalog (2/3) */}
+            {/* Left: tables (1/3, sticky) */}
+            <div className="lg:col-span-1 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
+              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="mb-3 flex items-center gap-2 text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  <span className="h-4 w-1 rounded bg-accent" />
+                  Step 2: Create or Change Tables
+                </h2>
+                <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                  Build the table set, then place fields into the right tables.
+                </p>
+                <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pr-1">
+                  <TablesPanel
+                    tables={tables}
+                    onAddTable={addTable}
+                    onRemoveTable={removeTable}
+                    onUpdateTable={updateTable}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Right: catalog (2/3) */}
             <div className="lg:col-span-2">
+              <div className="mb-2">
+                <h2 className="flex items-center gap-2 text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                  <span className="h-4 w-1 rounded bg-accent" />
+                  Step 3: Select Category and properties to the table
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Pick the categories and properties you want each table to collect.
+                </p>
+              </div>
+
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <span className="badge-accent rounded-full px-3 py-1 text-sm font-semibold">
                   {selectedCount} {selectedCount === 1 ? 'field' : 'fields'} selected · {tables.length}{' '}
@@ -549,25 +586,15 @@ export default function App() {
                 onSetManyForTable={setManyForTable}
               />
             </div>
-
-            {/* Right: tables (1/3, sticky) */}
-            <div className="lg:col-span-1 lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
-              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pr-1">
-                  <TablesPanel
-                    tables={tables}
-                    onAddTable={addTable}
-                    onRemoveTable={removeTable}
-                    onUpdateTable={updateTable}
-                  />
-                </div>
-              </div>
-            </div>
           </div>
 
-          {/* Output: full width under the catalog + configuration */}
+          {/* 4. Review and download */}
           <div className="mt-6 flex h-128 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <OutputTabs tabs={tabs} bundle={bundleFiles} />
+            <h2 className="mb-3 flex items-center gap-2 text-base font-bold tracking-tight text-slate-800 dark:text-slate-100">
+              <span className="h-4 w-1 rounded bg-accent" />
+              Step 4: Review and Download the ready deploy Zip file
+            </h2>
+            <OutputTabs tabs={tabs} bundle={bundleFiles} downloadDisabled={!canDownloadZip} missingFields={requiredWarnings} />
           </div>
 
           {/* How-to-deploy guidance for the downloaded zip */}
@@ -578,7 +605,26 @@ export default function App() {
           100% client-side · no sign-in, no backend, no data leaves your browser · generates artifacts for the
           LogIngestionAPI solution.
           <br />
-          Author: Sandy Zeng
+          <span className="inline-flex items-center gap-1.5">
+            Author: Sandy Zeng
+            <a
+              href="https://www.linkedin.com/in/sandy-tsang/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Sandy Zeng on LinkedIn"
+              title="Sandy Zeng | LinkedIn"
+              className="text-[#0a66c2] transition-colors hover:text-[#004182]"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />
+              </svg>
+            </a>
+          </span>
         </footer>
 
         {showContribute && (
