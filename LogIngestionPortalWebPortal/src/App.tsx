@@ -378,12 +378,6 @@ export default function App() {
       }),
     );
 
-  const allNonLockedIds = useMemo(
-    () => catalog.fields.filter((f) => !f.locked).map((f) => f.id),
-    [],
-  );
-  const selectAll = () =>
-    setTables((prev) => prev.map((t) => ({ ...t, fieldIds: [...allNonLockedIds] })));
   const clearAll = () => setTables((prev) => prev.map((t) => ({ ...t, fieldIds: [] })));
   const resetDefaults = () => setTables(defaultTables());
 
@@ -571,9 +565,6 @@ export default function App() {
                 </span>
                 <button onClick={resetDefaults} className="text-sm text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
                   Reset to defaults
-                </button>
-                <button onClick={selectAll} className="text-sm text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
-                  Select all
                 </button>
                 <button onClick={clearAll} className="text-sm text-slate-500 underline hover:text-slate-800 dark:hover:text-slate-200">
                   Clear
