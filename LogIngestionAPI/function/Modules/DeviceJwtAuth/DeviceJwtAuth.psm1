@@ -1,5 +1,12 @@
 # DeviceJwtAuth.psm1
 #
+# Author : Sandy Zeng
+#
+# Version history:
+#   1.0.0 (2026-06-19) Initial documented release; added author and version
+#                      history header. Removed dead type-check branch in
+#                      Get-X5cCertificates.
+#
 # Device-bound request authentication for the Log Ingestion Function.
 #
 # A device proves possession of its Entra-join (MS-Organization-Access) certificate
@@ -21,6 +28,9 @@
 # Module-scoped Graph token cache (keyed by resource URI).
 $script:_tokenCache = @{}
 
+# Writes a single structured log line to stdout (captured by Functions/App
+# Insights). Renders as: [Level] DeviceJwtAuth <message> key=value ... and skips
+# any context entries whose value is null/empty.
 function Write-JwtLog {
     [CmdletBinding()]
     param([string]$Level, [string]$Message, [hashtable]$Context = @{})
@@ -33,6 +43,9 @@ function Write-JwtLog {
     Write-Host ($parts -join ' ')
 }
 
+# Decodes a base64url string (JWT segments use '-'/'_' instead of '+'/'/' and
+# omit '=' padding) into raw bytes, restoring the standard alphabet and padding
+# first.
 function ConvertFrom-Base64Url {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Value)
@@ -41,6 +54,9 @@ function ConvertFrom-Base64Url {
     return [Convert]::FromBase64String($s)
 }
 
+# Parses a comma-separated thumbprint allow-list (from an app setting) into a
+# normalized array: trimmed, with spaces/hyphens stripped and upper-cased so it
+# can be compared directly against X509Certificate2.Thumbprint.
 function Get-NormalizedThumbprints {
     [CmdletBinding()]
     param([string]$Csv)
@@ -52,17 +68,14 @@ function Get-NormalizedThumbprints {
     )
 }
 
+# Turns the JWT header 'x5c' value (a single base64 cert or an array of them)
+# into X509Certificate2 objects. The leaf (client) cert is first; any remaining
+# entries are chain/intermediate certs. Throws if nothing could be parsed.
 function Get-X5cCertificates {
     [CmdletBinding()]
     param([Parameter(Mandatory)]$X5cValue)
 
-    $entries = @()
-    if ($X5cValue -is [System.Array]) {
-        $entries = @($X5cValue)
-    }
-    else {
-        $entries = @($X5cValue)
-    }
+    $entries = @($X5cValue)
 
     $certificates = New-Object System.Collections.Generic.List[System.Security.Cryptography.X509Certificates.X509Certificate2]
     foreach ($entry in $entries) {
@@ -83,6 +96,11 @@ function Get-X5cCertificates {
     return @($certificates)
 }
 
+# Builds and validates the X.509 trust chain for the client certificate.
+# Optionally pins acceptable root/intermediate thumbprints and toggles online
+# revocation (CRL/OCSP) checks. When no roots are pinned, an unknown/partial
+# chain is tolerated (self-issued Entra device certs); returns an object with
+# Valid plus a Reason describing the first blocking failure.
 function Test-CertificateChainTrust {
     [CmdletBinding()]
     param(
@@ -94,9 +112,16 @@ function Test-CertificateChainTrust {
         [switch]$CheckRevocation
     )
 
+    # An X509Chain walks upward from the leaf (client) cert through any
+    # intermediates to a root, checking signatures, validity dates and
+    # (optionally) revocation at each link. We configure its policy first, then
+    # call Build().
     $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
     try {
         $policy = $chain.ChainPolicy
+        # Revocation (CRL/OCSP) is a network call, so it is OFF by default. When
+        # enabled we still ExcludeRoot, because a trusted root never publishes a
+        # CRL about itself.
         $policy.RevocationMode = if ($CheckRevocation) {
             [System.Security.Cryptography.X509Certificates.X509RevocationMode]::Online
         }
@@ -104,6 +129,11 @@ function Test-CertificateChainTrust {
             [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
         }
         $policy.RevocationFlag = [System.Security.Cryptography.X509Certificates.X509RevocationFlag]::ExcludeRoot
+        # If the caller pinned specific root thumbprints we want the strictest
+        # build (NoFlag) and we enforce the pin ourselves below. If no roots are
+        # pinned, Entra device certs chain to a root the machine doesn't trust,
+        # so we tell the chain engine to tolerate an unknown CA here and rely on
+        # the signature + Entra checks elsewhere for trust.
         $policy.VerificationFlags = if ($TrustedRootThumbprints.Count -gt 0) {
             [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::NoFlag
         }
@@ -112,12 +142,19 @@ function Test-CertificateChainTrust {
         }
         $policy.VerificationTime = [DateTime]::UtcNow
         $policy.UrlRetrievalTimeout = [TimeSpan]::FromSeconds(15)
+        # The intermediates/root the client sent in the JWT 'x5c' aren't in any
+        # local store, so add them to the ExtraStore. The chain engine pulls
+        # missing links from here when building the path.
         foreach ($extraCert in $AdditionalCertificates) {
             if ($null -ne $extraCert) {
                 [void]$policy.ExtraStore.Add($extraCert)
             }
         }
 
+        # Build() returns $false if ANY status flag is set. A return of $false is
+        # therefore not automatically fatal: when we aren't pinning roots we
+        # expect UntrustedRoot/PartialChain and treat only OTHER problems
+        # (expired, bad signature, revoked, ...) as real failures.
         $ok = $chain.Build($Certificate)
         if (-not $ok) {
             $allowedStatuses = @{}
@@ -126,6 +163,8 @@ function Test-CertificateChainTrust {
                 $allowedStatuses[[System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::PartialChain] = $true
             }
 
+            # Keep only the status flags that are NOT in our allow-list. If none
+            # remain, the chain is acceptable for our purposes.
             $blockingStatuses = @(
                 $chain.ChainStatus |
                 Where-Object {
@@ -138,6 +177,8 @@ function Test-CertificateChainTrust {
             }
         }
 
+        # Still failing -> surface every status message the chain reported so the
+        # caller (and logs) can see exactly why.
         if (-not $ok) {
             $details = @(
                 $chain.ChainStatus |
@@ -148,16 +189,24 @@ function Test-CertificateChainTrust {
             return [pscustomobject]@{ Valid = $false; Reason = $details }
         }
 
+        # ChainElements are ordered leaf-first, root-last. The last element is
+        # therefore the root we resolved to.
         $certs = @($chain.ChainElements | ForEach-Object { $_.Certificate })
         if ($certs.Count -eq 0) {
             return [pscustomobject]@{ Valid = $false; Reason = 'empty certificate chain' }
         }
 
+        # Root pinning: when an allow-list is configured, the resolved root's
+        # thumbprint must be on it. This is what actually establishes trust when
+        # AllowUnknownCertificateAuthority was used above.
         $rootThumb = $certs[-1].Thumbprint.ToUpperInvariant()
         if ($TrustedRootThumbprints.Count -gt 0 -and ($TrustedRootThumbprints -notcontains $rootThumb)) {
             return [pscustomobject]@{ Valid = $false; Reason = "untrusted root '$rootThumb'" }
         }
 
+        # Intermediate pinning: at least one of the chain's intermediate certs
+        # (everything between the leaf at [0] and the root at [-1]) must match the
+        # configured allow-list. Guards against a valid-but-unexpected issuing CA.
         if ($TrustedIntermediateThumbprints.Count -gt 0) {
             $intermediateThumbs = @()
             if ($certs.Count -gt 2) {
@@ -182,6 +231,10 @@ function Test-CertificateChainTrust {
     }
 }
 
+# Acquires an access token for the given resource (default Microsoft Graph) from
+# the Function App's managed identity endpoint. Results are cached per-resource
+# in $script:_tokenCache until ~5 minutes before expiry. Supports both the
+# current (IDENTITY_ENDPOINT) and legacy (MSI_ENDPOINT) identity contracts.
 function Get-GraphToken {
     [CmdletBinding()]
     param([string]$Resource = 'https://graph.microsoft.com')
@@ -215,6 +268,10 @@ function Get-GraphToken {
     return $token
 }
 
+# Calls Microsoft Graph with a managed-identity bearer token, prefixing the
+# base URL/api-version when a relative path is given. Retries transient failures
+# (429/5xx) with exponential backoff; 404 and other 4xx errors are thrown
+# immediately.
 function Invoke-GraphRequest {
     [CmdletBinding()]
     param(
@@ -242,6 +299,9 @@ function Invoke-GraphRequest {
     }
 }
 
+# Resolves an Entra (Azure AD) device object by its deviceId, selecting the
+# fields needed for validation (including alternativeSecurityIds). Returns $null
+# when the device does not exist (Graph 404); other errors are thrown.
 function Get-EntraDevice {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$DeviceId)
@@ -258,6 +318,10 @@ function Get-EntraDevice {
     }
 }
 
+# Confirms the presented certificate is registered to the Entra device by
+# scanning the device's alternativeSecurityIds for an entry containing both the
+# cert thumbprint and the SHA-256 hash of its public key. On a match, returns
+# the cert's RSA public key (used to verify the JWT signature); otherwise $null.
 function Get-DeviceCertPublicKey {
     [CmdletBinding()]
     param(
@@ -266,12 +330,18 @@ function Get-DeviceCertPublicKey {
     )
     if (-not $Device.alternativeSecurityIds) { return $null }
 
+    # Compute the two fingerprints Entra stores for a registered cert: the cert
+    # thumbprint (SHA-1, hex) and the SHA-256 hash of the public key (base64).
     $thumbHex = $Certificate.Thumbprint.ToUpperInvariant()
     $pubKeyBytes = $Certificate.GetPublicKey()
     $sha256 = [System.Security.Cryptography.SHA256]::Create()
     try { $pubHashB64 = [Convert]::ToBase64String($sha256.ComputeHash($pubKeyBytes)) }
     finally { $sha256.Dispose() }
 
+    # alternativeSecurityIds holds the device's registered key credentials. Each
+    # 'key' is base64 of a UTF-16 (Unicode) string that embeds the thumbprint and
+    # public-key hash. We require BOTH to appear in the same entry so a cert is
+    # only trusted if it exactly matches what Entra recorded for this device.
     foreach ($entry in $Device.alternativeSecurityIds) {
         if (-not $entry.key) { continue }
         $decoded = $null
@@ -282,12 +352,18 @@ function Get-DeviceCertPublicKey {
         catch { continue }
         if (-not $decoded) { continue }
         if ($decoded.Contains($thumbHex) -and $decoded.Contains($pubHashB64)) {
+            # Match: this is the device's own cert, so its public key can be
+            # trusted to verify the JWT signature.
             return [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPublicKey($Certificate)
         }
     }
     return $null
 }
 
+# Verifies a device JWT against a known RSA public key: checks the 3-segment
+# shape, RS256 algorithm, required claims, iat/exp freshness (within the allowed
+# clock skew), optional audience, and finally the RS256 signature. Returns an
+# object with Valid, the decoded Claims, and a Reason on failure.
 function Test-DeviceJwt {
     [CmdletBinding()]
     param(
@@ -297,10 +373,14 @@ function Test-DeviceJwt {
         [int]$MaxClockSkewSeconds = 300
     )
     $fail = { param($r) [pscustomobject]@{ Valid = $false; Claims = $null; Reason = $r } }
+    # A JWS compact token is exactly three base64url segments joined by dots:
+    #   header '.' payload '.' signature
     $parts = $Jwt.Split('.')
     if ($parts.Count -ne 3) { return (& $fail 'Malformed JWT (expected 3 segments)') }
 
     try {
+        # Decode each segment. Header and payload are JSON; the signature is raw
+        # bytes over ASCII("header.payload").
         $payloadJson = [Text.Encoding]::UTF8.GetString((ConvertFrom-Base64Url $parts[1]))
         $signature = ConvertFrom-Base64Url $parts[2]
         $header = ([Text.Encoding]::UTF8.GetString((ConvertFrom-Base64Url $parts[0]))) | ConvertFrom-Json
@@ -308,17 +388,30 @@ function Test-DeviceJwt {
     }
     catch { return (& $fail "Failed to decode JWT segments: $($_.Exception.Message)") }
 
+    # Only accept RS256. Pinning the algorithm prevents 'alg' confusion attacks
+    # (e.g. a forged token claiming alg=none or a symmetric algorithm).
     if ($header.alg -ne 'RS256') { return (& $fail "Unsupported alg '$($header.alg)'") }
+    # Every claim we rely on for identity/replay must be present.
     foreach ($c in 'tid', 'did', 'nonce', 'iat', 'exp') {
         if (-not ($payload.PSObject.Properties.Name -contains $c)) { return (& $fail "Missing required claim '$c'") }
     }
 
+    # Freshness window: reject tokens issued in the future, issued too long ago,
+    # or already expired. The skew tolerance absorbs small clock differences
+    # between the device and the Function host. This bounds how long a captured
+    # token could be replayed.
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     if ([int64]$payload.iat - $now -gt $MaxClockSkewSeconds) { return (& $fail 'iat is in the future') }
     if ($now - [int64]$payload.iat -gt $MaxClockSkewSeconds) { return (& $fail 'iat is too old') }
     if ($now -gt [int64]$payload.exp + $MaxClockSkewSeconds) { return (& $fail 'Token expired') }
+    # Optional audience binding: ensures a token minted for this Function can't be
+    # replayed against a different endpoint.
     if ($ExpectedAudience -and $payload.aud -ne $ExpectedAudience) { return (& $fail "Audience mismatch (got '$($payload.aud)')") }
 
+    # Cryptographic proof: verify the RS256 signature over the EXACT signing
+    # input (the first two segments, unchanged) using the device cert's public
+    # key. Success proves the holder of the matching private key produced this
+    # token and that header/payload were not tampered with.
     $signingBytes = [Text.Encoding]::ASCII.GetBytes("$($parts[0]).$($parts[1])")
     $ok = $PublicKey.VerifyData($signingBytes, $signature,
         [System.Security.Cryptography.HashAlgorithmName]::SHA256,
@@ -371,6 +464,9 @@ function Test-DeviceRequestJwt {
     if ($parts.Count -ne 3) { return (& $result $false 'Malformed JWT' $null $null) }
 
     # --- Peek at header + payload before verifying the signature -------------
+    # We decode (NOT trust) the header/payload first so we can read the device id
+    # and the certificate the client claims to be using. Nothing here is trusted
+    # until the signature is checked at the end with the cert's public key.
     try {
         $peekHeader = ([Text.Encoding]::UTF8.GetString((ConvertFrom-Base64Url $parts[0]))) | ConvertFrom-Json
         $peek = ([Text.Encoding]::UTF8.GetString((ConvertFrom-Base64Url $parts[1]))) | ConvertFrom-Json
@@ -388,6 +484,8 @@ function Test-DeviceRequestJwt {
     }
 
     # --- Parse the client certificate from x5c ------------------------------
+    # x5c is the cert (and any chain) the device embedded in the JWT header. The
+    # first entry is the leaf (client) cert whose private key signed the token.
     $presentedCerts = @()
     $clientCert = $null
     try {
@@ -396,7 +494,9 @@ function Test-DeviceRequestJwt {
     }
     catch { return (& $result $false "Could not parse x5c cert: $($_.Exception.Message)" $null $null) }
 
-    # Integrity: x5t (if present) must match SHA-1(cert.RawData).
+    # Integrity: x5t is the base64url SHA-1 thumbprint of the cert. If present it
+    # must match the leaf cert we just parsed, confirming header self-consistency
+    # (x5t and x5c describe the same certificate).
     if ($peekHeader.x5t) {
         try {
             $x5tBytes = ConvertFrom-Base64Url ([string]$peekHeader.x5t)
@@ -408,6 +508,10 @@ function Test-DeviceRequestJwt {
         catch { return (& $result $false 'Invalid x5t' $null $null) }
     }
 
+    # Chain trust (optional): confirm the leaf cert builds a valid chain (dates,
+    # signatures, optional root/intermediate pinning and revocation) using the
+    # other x5c entries as intermediates. This rejects malformed or expired certs
+    # before we do the more expensive Graph lookup and signature check.
     if ($requireCertChain) {
         $chainCheck = Test-CertificateChainTrust `
             -Certificate $clientCert `
@@ -421,9 +525,14 @@ function Test-DeviceRequestJwt {
     }
 
     # --- Establish the RSA public key used to verify the signature ----------
+    # The whole scheme hinges on choosing the RIGHT public key. We never trust a
+    # key just because it was in the token; we bind it to a known device.
     $rsa = $null
     $device = $null
     if ($requireEntraDevice) {
+        # Strong path: look the device up in Entra, then confirm THIS certificate
+        # is registered to it (via alternativeSecurityIds). Only then do we use
+        # the cert's public key. This ties the token to a real, enabled device.
         try { $device = Get-EntraDevice -DeviceId $peek.did }
         catch {
             Write-JwtLog 'ERROR' "Graph device lookup failed: $($_.Exception.Message)" @{ tid = $peek.tid; did = $peek.did }
@@ -445,11 +554,15 @@ function Test-DeviceRequestJwt {
     }
 
     # --- Verify signature + freshness + audience ----------------------------
+    # Final gate: the JWT must be signed by the private key matching the public
+    # key we just established, and pass all claim/time checks. Possession of that
+    # private key (TPM-bound on the device) is the actual proof of identity.
     $check = Test-DeviceJwt -Jwt $jwt -PublicKey $rsa -ExpectedAudience $expectedAudience
     if (-not $check.Valid) { return (& $result $false ("JWT validation failed: " + $check.Reason) $null $device) }
     $claims = $check.Claims
 
-    # Defense in depth: claim must match the resolved device.
+    # Defense in depth: the signed 'did' claim must match the device we resolved,
+    # so a valid token for device A can't be accepted as device B.
     if ($device -and $claims.did -ne $device.deviceId) {
         return (& $result $false 'Claim/device mismatch' $null $device)
     }

@@ -36,6 +36,20 @@ https://sandytsang.github.io/LogIngestionPortal/
 - LogIngestionAPI/README.md: deployment and operations details.
 - LogIngestionPortalWebPortal/README.md: portal development and contribution.
 
+## Detailed documentation
+
+In-depth guides live in [LogIngestionAPI/docs/](LogIngestionAPI/docs/README.md):
+
+- [Architecture overview](LogIngestionAPI/docs/architecture-overview.md)
+- [Device authentication: JWT + certificate chain](LogIngestionAPI/docs/device-jwt-authentication.md)
+- [Deployment reference](LogIngestionAPI/docs/deployment-reference.md)
+- [Schema and columns](LogIngestionAPI/docs/schema-and-columns.md)
+- [RBAC and permissions](LogIngestionAPI/docs/rbac-and-permissions.md)
+- [Security hardening](LogIngestionAPI/docs/security-hardening.md)
+- [Testing and CI](LogIngestionAPI/docs/testing-and-ci.md)
+- [Troubleshooting](LogIngestionAPI/docs/troubleshooting.md)
+- [Catalog authoring](LogIngestionPortalWebPortal/docs/catalog-authoring.md)
+
 ## License
 
 MIT (see LICENSE).

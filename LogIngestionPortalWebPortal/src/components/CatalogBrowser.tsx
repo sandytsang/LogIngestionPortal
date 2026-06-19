@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Catalog, CatalogField, TableConfig } from '../types';
+import { tableColor } from '../lib/tableColors';
 
 interface Props {
   catalog: Catalog;
@@ -10,7 +11,11 @@ interface Props {
 
 export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyForTable }: Props) {
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Start with every category collapsed so the page loads compact; users expand
+  // the categories they care about (or click "Expand all").
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(catalog.fields.filter((f) => !f.locked).map((f) => f.category)),
+  );
 
   const singleTable = tables.length === 1;
   const isAssigned = (f: CatalogField) =>
@@ -59,10 +64,10 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
   }, [catalog.fields, query]);
 
   const chip = (active: boolean) =>
-    `rounded-full border px-2.5 py-1 text-[13px] font-medium transition-all duration-200 active:scale-95 ${
+    `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-medium transition-all duration-200 active:scale-95 ${
       active
-        ? 'border-emerald-300 bg-emerald-100 text-emerald-800 shadow-sm hover:bg-emerald-200 dark:border-emerald-500/60 dark:bg-emerald-500/25 dark:text-emerald-100'
-        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+        ? 'border-slate-300 bg-white text-slate-800 shadow-sm dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100'
+        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
     }`;
 
 
@@ -197,19 +202,27 @@ export function CatalogBrowser({ catalog, tables, onToggleAssignment, onSetManyF
                     </label>
                     {!singleTable && (
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {tables.map((t) => (
+                        {tables.map((t, ti) => {
+                          const inThisTable = t.fieldIds.includes(f.id);
+                          return (
                           <button
                             key={t.id}
                             type="button"
                             onClick={() => onToggleAssignment(f.id, t.id)}
-                            className={chip(t.fieldIds.includes(f.id))}
-                            title={
-                              t.fieldIds.includes(f.id) ? `Remove from ${t.name}` : `Add to ${t.name}`
-                            }
+                            className={chip(inThisTable)}
+                            title={inThisTable ? `Remove from ${t.name}` : `Add to ${t.name}`}
                           >
+                            <span
+                              className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                                inThisTable
+                                  ? tableColor(t.color, ti).dot
+                                  : 'bg-slate-300 dark:bg-slate-600'
+                              }`}
+                            />
                             {t.name || 'Untitled'}
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

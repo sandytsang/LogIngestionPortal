@@ -5,6 +5,9 @@ import {
   generateColumns,
   generateDeployReadme,
   generateScript,
+  generateScripts,
+  groupTablesByScript,
+  scriptFileName,
   generateWorkflowYaml,
   tableFields,
 } from '../src/lib/generators';
@@ -172,6 +175,50 @@ describe('row-source tables', () => {
   it('a normal table still emits a single record (no foreach)', () => {
     const script = generateScript(catalog, defaultTables(), baseConfig);
     expect(script).not.toContain('foreach ($item in');
+  });
+});
+
+describe('generateScriptGroups', () => {
+  const fids = defaultFieldIds();
+  const groupedTables: TableConfig[] = [
+    { id: 't1', name: 'Devices_CL', description: '', fieldIds: fids, scriptName: 'DeviceDaily' },
+    { id: 't2', name: 'WindowsUpdate_CL', description: '', fieldIds: fids, scriptName: 'DeviceDaily' },
+    { id: 't3', name: 'AppLockerEvents_CL', description: '', fieldIds: fids, scriptName: 'AppLockerHourly' },
+  ];
+
+  it('builds the IntuneScript-<name>.ps1 file name (and the default fallback)', () => {
+    expect(scriptFileName('AppLockerHourly')).toBe('IntuneScript-AppLockerHourly.ps1');
+    expect(scriptFileName('App Locker / Hourly')).toBe('IntuneScript-AppLockerHourly.ps1');
+    expect(scriptFileName('')).toBe('IntuneScript.ps1');
+    expect(scriptFileName(undefined)).toBe('IntuneScript.ps1');
+  });
+
+  it('groups tables by scriptName preserving first-seen order', () => {
+    const groups = groupTablesByScript(groupedTables);
+    expect(groups.map((g) => g.scriptName)).toEqual(['DeviceDaily', 'AppLockerHourly']);
+    expect(groups[0].tables.map((t) => t.name)).toEqual(['Devices_CL', 'WindowsUpdate_CL']);
+    expect(groups[1].tables.map((t) => t.name)).toEqual(['AppLockerEvents_CL']);
+  });
+
+  it('generates one script per group, each collecting only its own tables', () => {
+    const scripts = generateScripts(catalog, groupedTables, baseConfig);
+    expect(scripts.map((s) => s.filename)).toEqual([
+      'IntuneScript-DeviceDaily.ps1',
+      'IntuneScript-AppLockerHourly.ps1',
+    ]);
+    const daily = scripts[0].content;
+    expect(daily).toContain("'Devices_CL' = @(");
+    expect(daily).toContain("'WindowsUpdate_CL' = @(");
+    expect(daily).not.toContain("'AppLockerEvents_CL' = @(");
+    const hourly = scripts[1].content;
+    expect(hourly).toContain("'AppLockerEvents_CL' = @(");
+    expect(hourly).not.toContain("'Devices_CL' = @(");
+  });
+
+  it('lists every generated script in the deploy README', () => {
+    const readme = generateDeployReadme(baseConfig, groupedTables);
+    expect(readme).toContain('IntuneScript-DeviceDaily.ps1');
+    expect(readme).toContain('IntuneScript-AppLockerHourly.ps1');
   });
 });
 

@@ -79,7 +79,7 @@ export function SampleColumnsDialog({ tableName, tableDescription, onClose }: Pr
                 className={`${input} mt-1`}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="DeviceInventory_CL"
+                placeholder="Devices_CL"
               />
               {nameError && <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{nameError}</p>}
             </div>

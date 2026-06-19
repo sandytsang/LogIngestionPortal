@@ -1,7 +1,7 @@
 {
   "tables": [
     {
-      "tableName": "DeviceInventory_CL",
+      "tableName": "Devices_CL",
       "description": "Custom telemetry collected by Intune Proactive Remediation scripts and ingested via the Logs Ingestion API.",
       "columns": [
         {
@@ -78,11 +78,6 @@
           "name": "TotalMemoryGB",
           "type": "real",
           "description": "Installed physical memory in GB."
-        },
-        {
-          "name": "UserName",
-          "type": "string",
-          "description": "Currently logged-on user (UPN or sAMAccountName)."
         }
       ]
     },

@@ -136,6 +136,23 @@ flowchart LR
   is enabled.
 - DCR ingestion needs Monitoring Metrics Publisher role on the resource group that holds the DCR.
 
+For a detailed explanation of how the device-signed JWT and certificate chain
+work (how the client sends the certificate and how the server validates it), see
+[Device authentication: JWT + certificate chain](docs/device-jwt-authentication.md).
+
+## Documentation
+
+In-depth guides are in [docs/](docs/README.md):
+
+- [Architecture overview](docs/architecture-overview.md)
+- [Deployment reference](docs/deployment-reference.md)
+- [Schema and columns](docs/schema-and-columns.md)
+- [RBAC and permissions](docs/rbac-and-permissions.md)
+- [Security hardening](docs/security-hardening.md)
+- [Testing and CI](docs/testing-and-ci.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Device authentication: JWT + certificate chain](docs/device-jwt-authentication.md)
+
 ## Project layout
 
 - infra/

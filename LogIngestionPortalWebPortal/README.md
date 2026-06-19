@@ -42,6 +42,9 @@ Add or update fields through:
 - In-app Contribute flow, or
 - catalog/categories/*.json directly
 
+See [Catalog authoring](docs/catalog-authoring.md) for the field/column schema,
+shared setups, and validation steps.
+
 Validate before PR:
 
 ```powershell

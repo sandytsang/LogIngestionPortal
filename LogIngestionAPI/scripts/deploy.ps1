@@ -125,6 +125,13 @@
     # Update data columns only (no Function App changes)
     ./deploy.ps1 -SchemaOnly -WorkspaceName log-shared -WorkspaceResourceGroup rg-logs `
         -DcrResourceGroup rg-dcr -DcrName dcr-contoso
+
+.NOTES
+    Author : Sandy Zeng
+
+    Version history:
+        1.0.0 (2026-06-19) Initial documented release; added author and version
+                           history header.
 #>
 
 [CmdletBinding()]
@@ -297,6 +304,8 @@ function Test-DirectDcrName {
     return $Name -match '^[A-Za-z0-9](?:[A-Za-z0-9-]{1,28}[A-Za-z0-9])?$'
 }
 
+# Validates a DCR name and throws a clear preflight error (with the exact rules
+# and an example) when it is invalid, instead of letting ARM fail later.
 function Assert-DirectDcrName {
     param([string]$Name)
 

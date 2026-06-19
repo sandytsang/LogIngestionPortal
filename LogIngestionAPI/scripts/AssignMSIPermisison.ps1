@@ -9,6 +9,13 @@
 
 .EXAMPLE
     ./AssignMSIPermisison.ps1 -ResourceGroup rg-log-ingestion-api -FunctionAppName func-logapi-dev-ab12c
+
+.NOTES
+    Author : Sandy Zeng
+
+    Version history:
+        1.0.0 (2026-06-19) Initial documented release; added author and version
+                           history header.
 #>
 
 [CmdletBinding()]

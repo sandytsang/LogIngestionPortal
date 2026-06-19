@@ -156,6 +156,64 @@ export function generateScript(
     .replace('__GET_DEVICE_DATA_BODY__', () => body);
 }
 
+/** A group of tables collected by one generated Intune script (schedule group). */
+export interface ScriptGroup {
+  /** The script group name (TableConfig.scriptName); '' is the default group. */
+  scriptName: string;
+  /** The generated detection script file name, e.g. IntuneScript-AppLockerHourly.ps1. */
+  filename: string;
+  /** The tables this script collects. */
+  tables: TableConfig[];
+}
+
+/** Sanitizes a script group name into the IntuneScript-<name>.ps1 file name. */
+export function scriptFileName(scriptName: string | undefined): string {
+  const safe = (scriptName ?? '').trim().replace(/[^A-Za-z0-9-_]+/g, '');
+  return safe ? `IntuneScript-${safe}.ps1` : 'IntuneScript.ps1';
+}
+
+/**
+ * Groups the configured tables by their script group (TableConfig.scriptName),
+ * preserving first-seen order. Tables with no scriptName fall into a single
+ * default group. Each group becomes its own Intune detection script so different
+ * datasets can run on different schedules while sharing the one DCR/columns.json.
+ */
+export function groupTablesByScript(tables: TableConfig[]): ScriptGroup[] {
+  const order: string[] = [];
+  const byKey = new Map<string, TableConfig[]>();
+  for (const t of tables) {
+    const key = (t.scriptName ?? '').trim();
+    if (!byKey.has(key)) {
+      byKey.set(key, []);
+      order.push(key);
+    }
+    byKey.get(key)!.push(t);
+  }
+  return order.map((key) => ({
+    scriptName: key,
+    filename: scriptFileName(key),
+    tables: byKey.get(key)!,
+  }));
+}
+
+/**
+ * Generates one Intune detection script per script group. Each script collects
+ * ONLY its group's tables (a table-keyed payload), so the groups can be deployed
+ * as separate Proactive Remediations with independent schedules. They all post
+ * to the same Function and share the one DCR/columns.json.
+ */
+export function generateScripts(
+  catalog: Catalog,
+  tables: TableConfig[],
+  config: PortalConfig,
+): { scriptName: string; filename: string; content: string }[] {
+  return groupTablesByScript(tables).map((g) => ({
+    scriptName: g.scriptName,
+    filename: g.filename,
+    content: generateScript(catalog, g.tables, config),
+  }));
+}
+
 /**
  * Emits a row-source table block: a foreach over the field's pre-computed array
  * ($<id>) producing one [pscustomobject] per item. Device-level fields reference
@@ -205,6 +263,12 @@ export function generateDeployReadme(
       ? '<table>'
       : tables.map((t) => `"${t.name}"`).join(', ');
   const tableWord = tables.length > 1 ? 'tables' : 'table';
+
+  // Script (schedule) groups: each becomes its own IntuneScript-<name>.ps1 so
+  // different datasets can run on different Proactive Remediation schedules.
+  const groups = groupTablesByScript(tables);
+  const multiScript = groups.length > 1;
+  const firstScriptFile = groups[0]?.filename ?? 'IntuneScript.ps1';
   const rg = config.resourceGroup?.trim() || 'rg-logingestion';
   const loc = config.location?.trim() || 'eastus';
   const funcName = config.functionAppName?.trim() || '<function-app-name>';
@@ -236,7 +300,14 @@ export function generateDeployReadme(
       'This archive is a ready-to-deploy copy of the LogIngestionAPI backend with',
       'your updated schema already applied:',
       '  - schema/columns.json       The updated Log Analytics table schema you selected.',
-      '  - scripts/IntuneScript.ps1  The matching Intune detection script.',
+      ...(multiScript
+        ? [
+            '  - scripts/IntuneScript-*.ps1  One matching detection script per schedule group:',
+            ...groups.map(
+              (g) => `                                • ${g.filename}  →  ${g.tables.map((t) => t.name).join(', ')}`,
+            ),
+          ]
+        : [`  - scripts/${firstScriptFile}  The matching Intune detection script.`]),
       '  - README.txt                This file.',
       '',
       'This updates ONLY the custom table and Data Collection Rule from your new',
@@ -263,8 +334,8 @@ export function generateDeployReadme(
       'The DCR name above must match the Data Collection Rule you deployed earlier',
       '(it is the exact resource name, not derived from the workload name).',
       '',
-      'No Intune changes are needed for a column update — re-upload IntuneScript.ps1',
-      'only if you want devices to start sending the new columns.',
+      'No Intune changes are needed for a column update — re-upload the generated',
+      'detection script(s) only if you want devices to start sending the new columns.',
       '',
     ].join('\n');
   }
@@ -309,8 +380,19 @@ export function generateDeployReadme(
     '(Function App code, Bicep/ARM infra, and deploy scripts) with your selections',
     'already applied:',
     '  - schema/columns.json       The Log Analytics table schema you selected.',
-    '  - scripts/IntuneScript.ps1  The Intune Proactive Remediation detection script',
-    `                              that collects the data and posts it to your ${tableList} ${tableWord}.`,
+    ...(multiScript
+      ? [
+          '  - scripts/IntuneScript-*.ps1  One Intune Proactive Remediation detection script',
+          '                              per schedule group — upload each separately so they can',
+          '                              run on their own frequency:',
+          ...groups.map(
+            (g) => `                                • ${g.filename}  →  ${g.tables.map((t) => t.name).join(', ')}`,
+          ),
+        ]
+      : [
+          `  - scripts/${firstScriptFile}  The Intune Proactive Remediation detection script`,
+          `                              that collects the data and posts it to your ${tableList} ${tableWord}.`,
+        ]),
     '  - README.txt                This file.',
     '',
     'Everything is already in place — nothing to clone or copy.',
@@ -380,11 +462,24 @@ export function generateDeployReadme(
     '',
     'Step 4 — Wire up Intune',
     '-----------------------',
-    'The deploy prints the Function URL and key. Set $FunctionUrl at the top of',
-    'IntuneScript.ps1 to that URL (including ?code=<function-key>), then upload',
-    'IntuneScript.ps1 as an Intune Proactive Remediation detection script. Device-',
-    'signed JWT authentication is always required, so the targeted devices must be',
-    'Entra-joined.',
+    'The deploy prints the Function URL and key. In each generated script set',
+    '$FunctionUrl at the top to that URL (including ?code=<function-key>), then',
+    ...(multiScript
+      ? [
+          'upload EACH script as its own Intune Proactive Remediation detection script',
+          'so you can give them different schedules:',
+          ...groups.map(
+            (g) => `  • ${g.filename}  (collects ${g.tables.map((t) => t.name).join(', ')})`,
+          ),
+          '',
+          'For example, run a high-frequency dataset (like AppLocker events) hourly and',
+          'the rest daily. They all post to the same Function and DCR.',
+        ]
+      : [
+          `upload ${firstScriptFile} as an Intune Proactive Remediation detection script.`,
+        ]),
+    'Device-signed JWT authentication is always required, so the targeted devices',
+    'must be Entra-joined.',
     '',
   ].join('\n');
 }

@@ -1,5 +1,5 @@
 {
-  "tableName": "DeviceInventory_CL",
+  "tableName": "Devices_CL",
   "description": "Custom telemetry collected by Intune Proactive Remediation scripts and ingested via the Logs Ingestion API.",
   "setupOrder": ["cs", "os", "bios", "cpu", "disk", "net", "tpm", "secureBoot", "systemEnclosure", "bitLockerSys", "mp", "bitLocker"]
 }

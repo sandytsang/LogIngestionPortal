@@ -114,11 +114,25 @@ export interface PortalConfig {
 export interface TableConfig {
   /** Stable internal id (independent of the editable table name). */
   id: string;
-  /** Custom table name, must end in _CL, e.g. "DeviceInventory_CL". */
+  /** Custom table name, must end in _CL, e.g. "Devices_CL". */
   name: string;
   description: string;
   /** Ids of the non-locked catalog fields assigned to this table. */
   fieldIds: string[];
+  /**
+   * Optional palette color token (see lib/tableColors) used only to visually
+   * distinguish tables in the UI. Never written to columns.json or any artifact.
+   */
+  color?: string;
+  /**
+   * Name of the Intune script (schedule group) that collects this table. Tables
+   * that share a scriptName are collected by one generated detection script, so
+   * they can be deployed as a single Proactive Remediation with one schedule.
+   * Different scriptNames produce separate scripts that can run on different
+   * frequencies (e.g. AppLocker hourly vs. device inventory daily). All tables
+   * still share the one DCR / columns.json. Blank groups into the default script.
+   */
+  scriptName?: string;
 }
 
 /** One table's serialized schema (a single entry in columns.json's tables[]). */

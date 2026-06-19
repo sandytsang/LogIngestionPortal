@@ -13,6 +13,24 @@
     redeploy the infrastructure with deploy.ps1.
 
 .NOTES
+    Author : Sandy Zeng
+
+    Credits / acknowledgements:
+        Portions of this solution are based on the work of the MSEndpointMgr
+        community (https://msendpointmgr.com):
+          - Jan Ketil Skanke   (@JankeSkanke)
+          - Maurice Daly       (@MoDaly_IT)
+          - Nickolaj Andersen  (@NickolajA)
+        In particular the Entra (Azure AD) device-id / tenant-id retrieval and
+        locating the device's MS-Organization-Access certificate by its issuer
+        (Nickolaj Andersen), and the device inventory, Delivery Optimization, and
+        AppLocker event collection approaches. Many thanks to the community for 
+        sharing their knowledge and scripts!
+
+    Version history:
+        1.0.0 (2026-06-19) Initial documented release; added author and version
+                           history header.
+
     Run in the DETECTION slot of a Proactive Remediation on a schedule. It exits
     0 after a successful upload (device stays 'compliant') and exits 1 only on a
     real failure, which is surfaced in the Intune Output column and the IME log.
@@ -47,7 +65,7 @@ $RemediationName = 'DeviceInventory'
 # Destination custom table. The body is sent table-keyed ({ "<table>": [ ... ] })
 # so the Function routes it to the Custom-<table> DCR stream directly. This works
 # whether or not the Function App has the optional DCR_STREAMS app setting set.
-$TableName = 'DeviceInventory_CL'
+$TableName = 'Devices_CL'
 # ----------------------------------------------------------------------------
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +80,9 @@ $script:LogDir   = Join-Path $env:ProgramData 'Microsoft\IntuneManagementExtensi
 $script:LogFile  = Join-Path $script:LogDir 'LogIngestion-Remediate.log'
 $script:Warnings = New-Object System.Collections.Generic.List[string]
 
+# Appends a timestamped, leveled line to the IME log file (best-effort; never
+# throws). WARN messages are also collected so the end-of-run summary can report
+# them in the Intune Output column.
 function Write-Log {
     param([ValidateSet('INFO', 'WARN', 'ERROR')][string]$Level = 'INFO', [string]$Message)
     $line = "$((Get-Date).ToUniversalTime().ToString('o')) [$Level] $Message"
@@ -73,6 +94,10 @@ function Write-Log {
     if ($Level -eq 'WARN') { $script:Warnings.Add($Message) }
 }
 
+# Finds the device's Entra-join (MS-Organization-Access) certificate by reading
+# the CloudDomainJoin/JoinInfo registry key, then matching it in the LocalMachine
+# store. Throws if the device is not Entra-joined or the private key is missing
+# (the key is TPM-bound and only readable as SYSTEM).
 function Get-EntraJoinCertificate {
     $joinKeyPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\JoinInfo'
     if (-not (Test-Path $joinKeyPath)) { throw 'Device is not Entra-joined (CloudDomainJoin/JoinInfo missing).' }
@@ -88,12 +113,17 @@ function Get-EntraJoinCertificate {
     return $cert
 }
 
+# Reads the Entra tenant id from the CloudDomainJoin/TenantInfo registry key.
 function Get-EntraTenantId {
     $p = 'HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\TenantInfo'
     if (-not (Test-Path $p)) { throw 'TenantInfo registry key missing.' }
     return (Get-ChildItem -Path $p | Select-Object -First 1 -ExpandProperty PSChildName)
 }
 
+# Builds and RS256-signs a short-lived (5-minute) device JWT proving possession
+# of the Entra-join certificate. The header carries x5t/x5c (the cert chain); the
+# payload carries tenant id, device id, a random nonce and iat/exp. Signed with
+# the cert's private key so the Function can verify it server-side.
 function New-DeviceJwt {
     param(
         [System.Security.Cryptography.X509Certificates.X509Certificate2]$Cert,
@@ -102,8 +132,15 @@ function New-DeviceJwt {
         [string]$Audience
     )
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    # x5t = base64url(SHA-1 thumbprint of the cert). Lets the server confirm x5t
+    # and x5c refer to the same certificate.
     $x5t = [Convert]::ToBase64String($Cert.GetCertHash()).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    # x5c carries the certificate itself (and, below, its chain) so the server
+    # can validate it without having the cert installed locally.
     $x5c = @([Convert]::ToBase64String($Cert.RawData))
+    # Build the cert chain (leaf -> intermediates -> root) and send every link in
+    # x5c so the server can verify the full path. Falls back to the leaf-only x5c
+    # above if the chain can't be built.
     $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
     try {
         $null = $chain.Build($Cert)
@@ -119,7 +156,11 @@ function New-DeviceJwt {
     finally {
         $chain.Dispose()
     }
+    # Standard JWS header: RS256 signature, plus the cert (x5c) and its thumbprint
+    # (x5t) so the server knows which key to verify with.
     $header = [ordered]@{ alg = 'RS256'; typ = 'JWT'; x5t = $x5t; x5c = $x5c }
+    # Claims: tenant + device identify the caller; a random nonce makes each token
+    # unique; iat/exp bound it to a 5-minute window to limit replay.
     $payload = [ordered]@{
         tid   = $TenantId
         did   = $DeviceId
@@ -129,6 +170,7 @@ function New-DeviceJwt {
     }
     if ($Audience) { $payload.aud = $Audience }
 
+    # Helper: JSON-encode an object and base64url it (the JWT segment encoding).
     $b64url = {
         param($o)
         $bytes = [Text.Encoding]::UTF8.GetBytes(($o | ConvertTo-Json -Compress -Depth 5))
@@ -136,6 +178,9 @@ function New-DeviceJwt {
     }
     $h = & $b64url $header
     $p = & $b64url $payload
+    # Sign ASCII("header.payload") with the cert's PRIVATE key. On Entra-joined
+    # devices this key is TPM-bound and only reachable as SYSTEM. The signature is
+    # what proves possession of the device certificate to the server.
     $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Cert)
     if (-not $rsa) { throw 'Failed to get RSA private key from device cert.' }
     $sig = $rsa.SignData(
@@ -143,9 +188,14 @@ function New-DeviceJwt {
         [System.Security.Cryptography.HashAlgorithmName]::SHA256,
         [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
     $s = [Convert]::ToBase64String($sig).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    # Final token: the three base64url segments joined with dots.
     "$h.$p.$s"
 }
 
+# Produces the request's Authorization header. When JWT auth is enabled it loads
+# the device cert, mints a JWT and returns 'Bearer <jwt>'; otherwise an empty
+# header set. Surfaces a clear, actionable error when signing fails because the
+# script is not running as SYSTEM (the private key is TPM-bound).
 function Get-AuthHeader {
     if (-not $UseDeviceJwt) { return @{} }
 
@@ -211,7 +261,6 @@ function Get-DeviceData {
     [pscustomobject]@{
         TimeGenerated            = (Get-Date).ToUniversalTime().ToString('o')
         DeviceName               = $env:COMPUTERNAME
-        UserName                 = $cs.UserName
         OSVersion                = "$($os.Caption) $($os.Version)"
         RemediationName          = $RemediationName
         Status                   = 'Remediated'

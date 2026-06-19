@@ -7,6 +7,13 @@
     language parser. Run locally or in CI:
 
         pwsh -File scripts/Test-Collectors.ps1
+
+.NOTES
+    Author : Sandy Zeng
+
+    Version history:
+        1.0.0 (2026-06-19) Initial documented release; added author and version
+                           history header.
 #>
 [CmdletBinding()]
 param()
@@ -18,6 +25,8 @@ $setupsPath = Join-Path $root 'catalog/setups.json'
 
 $failures = New-Object System.Collections.Generic.List[string]
 
+# Parses a snippet of PowerShell with the built-in language parser (no
+# execution) and records any syntax errors against the given label.
 function Test-PowerShell {
     param([string]$Label, [string]$Code)
     $tokens = $null

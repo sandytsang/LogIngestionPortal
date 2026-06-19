@@ -1,3 +1,12 @@
+# =============================================================================
+# DCRLogIngestionAPI / run.ps1
+# Author : Sandy Zeng
+#
+# Version history:
+#   1.0.0 (2026-06-19) Initial documented release; added author and version
+#                      history header.
+# =============================================================================
+
 using namespace System.Net
 
 # Generic Logs Ingestion forwarder (multi-table).
@@ -13,6 +22,8 @@ using namespace System.Net
 
 param($Request, $TriggerMetadata)
 
+# Writes the HTTP response back to the Functions host: sets the status code,
+# JSON content type, and serializes the body (deep enough for nested records).
 function Write-HttpResponse {
     param(
         [HttpStatusCode]$StatusCode,
@@ -25,6 +36,8 @@ function Write-HttpResponse {
     })
 }
 
+# Emits a 400 Bad Request with a machine-readable error code plus optional
+# context, and logs the same detail as a warning for diagnostics.
 function Write-BadRequestResponse {
     param(
         [Parameter(Mandatory)][string]$Code,

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { PortalConfig, TableConfig } from '../types';
 import { catalog } from '../data/catalog';
 import { rowSourceField } from '../lib/generators';
+import { TABLE_COLORS, colorTokenForIndex, tableColor } from '../lib/tableColors';
 
 interface Props {
   config: PortalConfig;
@@ -77,6 +78,11 @@ export function ConfigPanel({
   errors,
 }: Props) {
   const isUpdate = config.action === 'updateColumns';
+
+  // Distinct script (schedule) group names, for the table editor's datalist.
+  const scriptGroups = [
+    ...new Set(tables.map((t) => (t.scriptName ?? '').trim()).filter(Boolean)),
+  ];
 
   // Required-field check for the whole panel. Lists the mandatory inputs that
   // are still empty for the chosen action so the user gets one clear warning of
@@ -436,9 +442,21 @@ export function ConfigPanel({
           <p className="text-[11px] text-slate-600 dark:text-slate-300">
             Each table becomes its own custom Log Analytics table (must end in
             <code className="mx-1 rounded bg-slate-100 px-1 dark:bg-slate-800">_CL</code>) and DCR
-            stream. Assign fields to tables in the catalog on the left. TimeGenerated and
-            IntuneScriptVersion are added to every table automatically.
+            stream. Assign fields to tables in the catalog on the left. TimeGenerated,
+            IntuneScriptVersion and the device identity columns (DeviceName, Entra/Intune
+            ids) are added to every table automatically.
           </p>
+          <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
+            <span className="font-semibold">Script (schedule group):</span> tables that share a
+            script name are collected by one generated Intune script, so they run on one schedule.
+            Give a table a different script name to collect it separately — e.g. noisy AppLocker
+            events hourly while everything else runs daily. All scripts share the single DCR.
+          </p>
+          <datalist id="script-groups">
+            {scriptGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
           <div className="mt-2 space-y-2">
             {tables.map((t, i) => {
               // A table automatically becomes "one row per item" when a per-item
@@ -451,7 +469,7 @@ export function ConfigPanel({
               return (
               <div
                 key={t.id}
-                className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40"
+                className={`rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40 ${tableColor(t.color, i).boxAccent}`}
               >
                 <div className="flex items-center gap-2">
                   <input
@@ -478,6 +496,46 @@ export function ConfigPanel({
                   placeholder="Table description (optional)"
                   aria-label={`Table ${i + 1} description`}
                 />
+                <div className="mt-2">
+                  <label
+                    className="block text-[11px] font-medium text-slate-600 dark:text-slate-300"
+                    htmlFor={`scriptGroup-${t.id}`}
+                  >
+                    Intune script (schedule group)
+                  </label>
+                  <input
+                    id={`scriptGroup-${t.id}`}
+                    className={`${field} mt-1`}
+                    value={t.scriptName ?? ''}
+                    onChange={(e) => onUpdateTable(t.id, { scriptName: e.target.value })}
+                    placeholder="DeviceDaily"
+                    list="script-groups"
+                    aria-label={`Table ${i + 1} script group`}
+                  />
+                </div>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="mr-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                    Color
+                  </span>
+                  {TABLE_COLORS.map((c) => {
+                    const selected = (t.color ?? colorTokenForIndex(i)) === c.token;
+                    return (
+                      <button
+                        key={c.token}
+                        type="button"
+                        onClick={() => onUpdateTable(t.id, { color: c.token })}
+                        className={`h-4 w-4 rounded-full ${c.swatch} ${
+                          selected
+                            ? 'ring-2 ring-slate-500 ring-offset-1 dark:ring-offset-slate-900'
+                            : 'opacity-70 hover:opacity-100'
+                        }`}
+                        title={c.label}
+                        aria-label={`Set ${t.name || 'table'} color to ${c.label}`}
+                        aria-pressed={selected}
+                      />
+                    );
+                  })}
+                </div>
                 {rs && (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200">
@@ -492,7 +550,7 @@ export function ConfigPanel({
                 )}
                 <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
                   {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned (plus
-                  TimeGenerated &amp; IntuneScriptVersion).
+                  TimeGenerated, IntuneScriptVersion &amp; identity columns).
                 </p>
               </div>
               );
