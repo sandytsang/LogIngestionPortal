@@ -154,6 +154,21 @@ function Test-IsRetriableIngestionFailure {
     return $false
 }
 
+# Normalizes text that may contain encoding/rendering artifacts before it lands
+# in Log Analytics. Keeps normal Unicode while stripping problematic controls.
+function Normalize-DisplayString {
+    param([string]$Value)
+
+    if ($null -eq $Value) { return $null }
+    $s = [string]$Value
+    $s = $s -replace [char]0xFFFD, ''
+    $s = $s -replace '[\u0000-\u001F\u007F]', ''
+    $s = $s -replace '[\u200B-\u200D\uFEFF]', ''
+    $s = $s -replace '[\u202A-\u202E\u2066-\u2069]', ''
+    $s = $s -replace '[\s\u00A0]+', ' '
+    return $s.Trim()
+}
+
 # Posts one ingestion batch with retry/backoff for transient network/API errors.
 function Invoke-IngestionPostWithRetry {
     param(
@@ -288,9 +303,24 @@ foreach ($group in $groups) {
             if (-not $record.Contains('TimeGenerated') -or [string]::IsNullOrWhiteSpace([string]$record['TimeGenerated'])) {
                 $record['TimeGenerated'] = $nowUtc
             }
+            if ($record.Contains('AppLockerPublisher')) {
+                $record['AppLockerPublisher'] = Normalize-DisplayString -Value ([string]$record['AppLockerPublisher'])
+            }
+            elseif ($record.Contains('Publisher')) {
+                # Backward compatibility with any payloads that still use "Publisher".
+                $record['Publisher'] = Normalize-DisplayString -Value ([string]$record['Publisher'])
+            }
         }
-        elseif (-not $record.PSObject.Properties['TimeGenerated'] -or [string]::IsNullOrWhiteSpace($record.TimeGenerated)) {
-            $record | Add-Member -NotePropertyName 'TimeGenerated' -NotePropertyValue $nowUtc -Force
+        else {
+            if (-not $record.PSObject.Properties['TimeGenerated'] -or [string]::IsNullOrWhiteSpace($record.TimeGenerated)) {
+                $record | Add-Member -NotePropertyName 'TimeGenerated' -NotePropertyValue $nowUtc -Force
+            }
+            if ($record.PSObject.Properties['AppLockerPublisher']) {
+                $record.AppLockerPublisher = Normalize-DisplayString -Value ([string]$record.AppLockerPublisher)
+            }
+            elseif ($record.PSObject.Properties['Publisher']) {
+                $record.Publisher = Normalize-DisplayString -Value ([string]$record.Publisher)
+            }
         }
     }
 }
