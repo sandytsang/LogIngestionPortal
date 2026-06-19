@@ -80,7 +80,28 @@ $ErrorActionPreference = 'Stop'
 # ----------------------------------------------------------------------------
 $script:LogDir   = Join-Path $env:ProgramData 'Microsoft\IntuneManagementExtension\Logs'
 $script:LogFile  = Join-Path $script:LogDir 'LogIngestion-Remediate.log'
+$script:LogMaxBytes = 3MB  # Roll the active log over once it grows past this size.
+$script:LogMaxFiles = 5    # Number of timestamped archives to retain (older ones are pruned).
 $script:Warnings = New-Object System.Collections.Generic.List[string]
+
+# Rotates the active log when it exceeds $script:LogMaxBytes by renaming it with a
+# UTC timestamp suffix (mirrors the IME log naming, e.g. *-20260620-001800.log) and
+# pruning the oldest archives so at most $script:LogMaxFiles are kept. Best-effort.
+function Invoke-LogRotation {
+    try {
+        $item = Get-Item -Path $script:LogFile -ErrorAction Stop
+        if ($item.Length -lt $script:LogMaxBytes) { return }
+        $stamp   = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+        $base    = [IO.Path]::GetFileNameWithoutExtension($script:LogFile)
+        $ext     = [IO.Path]::GetExtension($script:LogFile)
+        $archive = Join-Path $script:LogDir ("$base-$stamp$ext")
+        Move-Item -Path $script:LogFile -Destination $archive -Force
+        $old = Get-ChildItem -Path $script:LogDir -Filter "$base-*$ext" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip $script:LogMaxFiles
+        foreach ($f in $old) { Remove-Item -Path $f.FullName -Force -ErrorAction SilentlyContinue }
+    }
+    catch { }
+}
 
 # Appends a timestamped, leveled line to the IME log file (best-effort; never
 # throws). WARN messages are also collected so the end-of-run summary can report
@@ -90,6 +111,7 @@ function Write-Log {
     $line = "$((Get-Date).ToUniversalTime().ToString('o')) [$Level] $Message"
     try {
         if (-not (Test-Path $script:LogDir)) { New-Item -Path $script:LogDir -ItemType Directory -Force | Out-Null }
+        Invoke-LogRotation
         Add-Content -Path $script:LogFile -Value $line
     }
     catch { }
