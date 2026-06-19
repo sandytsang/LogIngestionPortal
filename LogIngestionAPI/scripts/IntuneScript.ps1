@@ -30,6 +30,8 @@
     Version history:
         1.0.0 (2026-06-19) Initial documented release; added author and version
                            history header.
+        1.0.1 (2026-06-19) Reviewed with PSScriptAnalyzer for cmdlet aliases and
+                           approved verbs; no alias issues found.
 
     Run in the DETECTION slot of a Proactive Remediation on a schedule. It exits
     0 after a successful upload (device stays 'compliant') and exits 1 only on a

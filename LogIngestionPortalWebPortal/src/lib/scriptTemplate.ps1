@@ -30,6 +30,13 @@
     Version history:
         1.0.0 (2026-06-19) Initial documented release; added author and version
                            history header.
+        1.1.0 (2026-06-19) Expanded AppLocker path macros (%SYSTEM32% %WINDIR%
+                           %PROGRAMFILES%, with 32-bit fallback) so audited
+                           system DLLs are no longer silently dropped; rewrote
+                           the collector with full, descriptive names and full
+                           cmdlet/parameter names (no aliases); and added a
+                           per-table "Sending N record(s)" line to the final
+                           output.
 
     Run in the DETECTION slot of a Proactive Remediation on a schedule. It exits
     0 after a successful upload (device stays 'compliant') and exits 1 only on a
@@ -73,9 +80,10 @@ $ErrorActionPreference = 'Stop'
 # the exit code, so the script writes a single summary line at the end. Full
 # timestamped detail goes into the Intune Management Extension (IME) Logs folder.
 # ----------------------------------------------------------------------------
-$script:LogDir   = Join-Path $env:ProgramData 'Microsoft\IntuneManagementExtension\Logs'
-$script:LogFile  = Join-Path $script:LogDir 'LogIngestion-Remediate.log'
-$script:Warnings = New-Object System.Collections.Generic.List[string]
+$script:LogDir      = Join-Path $env:ProgramData 'Microsoft\IntuneManagementExtension\Logs'
+$script:LogFile     = Join-Path $script:LogDir 'LogIngestion-Remediate.log'
+$script:Warnings    = New-Object System.Collections.Generic.List[string]
+$script:SendSummary = ''
 
 # Appends a timestamped, leveled line to the IME log file (best-effort; never
 # throws). WARN messages are also collected so the end-of-run summary can report
@@ -251,6 +259,17 @@ function Send-Telemetry {
     # $Payload is the table-keyed object from Get-DeviceData. Post it as-is; the
     # Function fans each table's records out to its DCR stream.
     $body = ConvertTo-Json -InputObject $Payload -Depth 10
+
+    # Log (and remember for the end-of-run summary) the exact per-table record
+    # count and total body size being POSTed.
+    $sendLines = foreach ($entry in $Payload.GetEnumerator()) {
+        $recordCount = @($entry.Value).Count
+        $sendLine = "Sending $recordCount record(s) to table $($entry.Key) (body $($body.Length) bytes)."
+        Write-Log -Level INFO -Message $sendLine
+        $sendLine
+    }
+    $script:SendSummary = ($sendLines -join ' ')
+
     $uri = $FunctionUrl
     $headers = Get-AuthHeader
 
@@ -341,7 +360,7 @@ try {
         $summary = 'Telemetry uploaded successfully.'
     }
     Write-Log -Level INFO -Message $summary
-    Write-Output "$summary Log: $script:LogFile"
+    Write-Output ((@($script:SendSummary, $summary) | Where-Object { $_ }) -join ' ')
     exit 0
 }
 catch {

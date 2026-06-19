@@ -136,6 +136,8 @@
                            default permission assignment attempts with clearer
                            manual fallback guidance, and improved Cloud Shell
                            -SchemaPath handling.
+        1.1.1 (2026-06-19) Reviewed with PSScriptAnalyzer for cmdlet aliases and
+                           approved verbs; no alias issues found.
 #>
 
 [CmdletBinding()]

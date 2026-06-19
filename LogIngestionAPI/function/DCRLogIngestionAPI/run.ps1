@@ -8,6 +8,17 @@
 #   1.1.0 (2026-06-19) Hardened auth failure responses to return a generic 401
 #                      body (no reason leakage) while preserving structured
 #                      diagnostics in server-side logs.
+#   1.1.1 (2026-06-19) Fixed Get-RecordBatch returning an unrolled List, which
+#                      made a single-batch upload count each record's properties
+#                      as records and inflated the "Ingested N" log by the column
+#                      count. Data was unaffected; only the reported count.
+#   1.1.2 (2026-06-19) Renamed internal functions to approved verbs / singular
+#                      nouns (Get-Members -> Get-RecordMember, Get-RecordBatches
+#                      -> Get-RecordBatch, Normalize-DisplayString ->
+#                      ConvertTo-DisplayString) and renamed the
+#                      Write-BadRequestResponse -Error parameter to -ErrorMessage
+#                      so it no longer shadows the automatic $Error variable. No
+#                      behavior change.
 # =============================================================================
 
 using namespace System.Net
@@ -44,11 +55,11 @@ function Write-HttpResponse {
 function Write-BadRequestResponse {
     param(
         [Parameter(Mandatory)][string]$Code,
-        [Parameter(Mandatory)][string]$Error,
+        [Parameter(Mandatory)][string]$ErrorMessage,
         [hashtable]$Context = @{}
     )
 
-    $parts = @("Bad request [$Code]", $Error)
+    $parts = @("Bad request [$Code]", $ErrorMessage)
     foreach ($key in $Context.Keys) {
         $value = $Context[$key]
         if ($null -eq $value -or $value -eq '') { continue }
@@ -56,7 +67,7 @@ function Write-BadRequestResponse {
     }
     Write-Warning ($parts -join ' ')
 
-    $body = [ordered]@{ code = $Code; error = $Error }
+    $body = [ordered]@{ code = $Code; error = $ErrorMessage }
     foreach ($key in $Context.Keys) {
         $body[$key] = $Context[$key]
     }
@@ -66,7 +77,7 @@ function Write-BadRequestResponse {
 
 # Returns the member name/value pairs of an object, transparently handling both
 # PSCustomObject (the usual JSON deserialization) and Hashtable/dictionary.
-function Get-Members {
+function Get-RecordMember {
     param($Obj)
     if ($Obj -is [System.Collections.IDictionary]) {
         return @($Obj.Keys | ForEach-Object { [pscustomobject]@{ Name = $_; Value = $Obj[$_] } })
@@ -80,13 +91,13 @@ function Get-Members {
 function Test-TableKeyed {
     param($Body)
     if ($null -eq $Body -or $Body -is [System.Array]) { return $false }
-    $members = Get-Members $Body
+    $members = Get-RecordMember $Body
     if ($members.Count -eq 0) { return $false }
     foreach ($m in $members) { if ($m.Value -isnot [System.Array]) { return $false } }
     return $true
 }
 
-function Get-RecordBatches {
+function Get-RecordBatch {
     # The Logs Ingestion API rejects any single call larger than 1 MB
     # (uncompressed). Split the records into batches whose serialized JSON array
     # stays under $MaxBytes (kept below 1 MB for header/encoding headroom).
@@ -118,7 +129,12 @@ function Get-RecordBatches {
         $currentSize += $size
     }
     if ($current.Count -gt 0) { $batches.Add($current.ToArray()) }
-    return $batches
+    # Return the List as a single object. Without the leading comma, PowerShell
+    # unrolls the List into the pipeline; when there is exactly one batch the
+    # caller then receives the batch's record array instead of a list-of-batches,
+    # so each record is mistaken for a batch and $batch.Count returns the record's
+    # property count (inflating "Ingested N" by the number of columns).
+    return , $batches
 }
 
 # Pulls an HTTP status code from a failed Invoke-RestMethod exception when
@@ -156,7 +172,7 @@ function Test-IsRetriableIngestionFailure {
 
 # Normalizes text that may contain encoding/rendering artifacts before it lands
 # in Log Analytics. Keeps normal Unicode while stripping problematic controls.
-function Normalize-DisplayString {
+function ConvertTo-DisplayString {
     param([string]$Value)
 
     if ($null -eq $Value) { return $null }
@@ -251,7 +267,7 @@ Write-Information "Device authenticated (did=$($auth.Claims.did) tid=$($auth.Cla
 # --- Validate payload -------------------------------------------------------
 $payload = $Request.Body
 if (-not $payload) {
-    Write-BadRequestResponse -Code 'EmptyBody' -Error 'Request body is empty.'
+    Write-BadRequestResponse -Code 'EmptyBody' -ErrorMessage 'Request body is empty.'
     return
 }
 
@@ -259,7 +275,7 @@ if (-not $payload) {
 # the matching stream; anything else goes to the default (first) table.
 $groups = New-Object System.Collections.Generic.List[object]
 if (Test-TableKeyed $payload) {
-    foreach ($m in (Get-Members $payload)) {
+    foreach ($m in (Get-RecordMember $payload)) {
         $table = [string]$m.Name
         # Prefer the configured stream, but fall back to Custom-<table> for tables
         # not listed in DCR_STREAMS. A schema-only update adds the DCR stream
@@ -275,7 +291,7 @@ if (Test-TableKeyed $payload) {
 }
 else {
     if (-not $defaultTable) {
-        Write-BadRequestResponse -Code 'MissingDefaultStream' -Error "Send a table-keyed body, e.g. { 'MyTable_CL': [ { ... } ] }. No DCR_STREAMS default table is configured for a bare array." -Context @{
+        Write-BadRequestResponse -Code 'MissingDefaultStream' -ErrorMessage "Send a table-keyed body, e.g. { 'MyTable_CL': [ { ... } ] }. No DCR_STREAMS default table is configured for a bare array." -Context @{
             payloadType = $payload.GetType().FullName
             configuredTables = ($streamByTable.Keys -join ',')
         }
@@ -288,7 +304,7 @@ else {
 $totalRecords = 0
 foreach ($g in $groups) { $totalRecords += $g.Records.Count }
 if ($groups.Count -eq 0 -or $totalRecords -eq 0) {
-    Write-BadRequestResponse -Code 'NoRecords' -Error 'No records to ingest.' -Context @{
+    Write-BadRequestResponse -Code 'NoRecords' -ErrorMessage 'No records to ingest.' -Context @{
         groupCount = $groups.Count
         totalRecords = $totalRecords
     }
@@ -304,11 +320,11 @@ foreach ($group in $groups) {
                 $record['TimeGenerated'] = $nowUtc
             }
             if ($record.Contains('AppLockerPublisher')) {
-                $record['AppLockerPublisher'] = Normalize-DisplayString -Value ([string]$record['AppLockerPublisher'])
+                $record['AppLockerPublisher'] = ConvertTo-DisplayString -Value ([string]$record['AppLockerPublisher'])
             }
             elseif ($record.Contains('Publisher')) {
                 # Backward compatibility with any payloads that still use "Publisher".
-                $record['Publisher'] = Normalize-DisplayString -Value ([string]$record['Publisher'])
+                $record['Publisher'] = ConvertTo-DisplayString -Value ([string]$record['Publisher'])
             }
         }
         else {
@@ -316,10 +332,10 @@ foreach ($group in $groups) {
                 $record | Add-Member -NotePropertyName 'TimeGenerated' -NotePropertyValue $nowUtc -Force
             }
             if ($record.PSObject.Properties['AppLockerPublisher']) {
-                $record.AppLockerPublisher = Normalize-DisplayString -Value ([string]$record.AppLockerPublisher)
+                $record.AppLockerPublisher = ConvertTo-DisplayString -Value ([string]$record.AppLockerPublisher)
             }
             elseif ($record.PSObject.Properties['Publisher']) {
-                $record.Publisher = Normalize-DisplayString -Value ([string]$record.Publisher)
+                $record.Publisher = ConvertTo-DisplayString -Value ([string]$record.Publisher)
             }
         }
     }
@@ -353,7 +369,7 @@ foreach ($group in $groups) {
     $ingestUri = "$dcrEndpoint/dataCollectionRules/$dcrImmutableId/streams/$($group.Stream)?api-version=2023-01-01"
 
     $oversized = New-Object System.Collections.Generic.List[object]
-    $batches = Get-RecordBatches -Records $group.Records -Oversized ([ref]$oversized)
+    $batches = Get-RecordBatch -Records $group.Records -Oversized ([ref]$oversized)
     $oversizedTotal += $oversized.Count
     if ($oversized.Count -gt 0) {
         Write-Warning "$($oversized.Count) record(s) for table $($group.Table) exceed the 1 MB per-call limit and were skipped."
@@ -363,7 +379,7 @@ foreach ($group in $groups) {
     $batchIndex = 0
     foreach ($batch in $batches) {
         $batchIndex++
-        # Compact JSON: matches the size estimate in Get-RecordBatches and minimizes
+        # Compact JSON: matches the size estimate in Get-RecordBatch and minimizes
         # the payload so each call stays under the 1 MB Logs Ingestion limit.
         $body = $batch | ConvertTo-Json -Depth 10 -AsArray -Compress
         try {

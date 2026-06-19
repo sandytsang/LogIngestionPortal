@@ -15,6 +15,8 @@
 
     Version history:
         1.0.0 (2026-06-19) Initial release.
+        1.0.1 (2026-06-19) Reviewed with PSScriptAnalyzer for cmdlet aliases and
+                           approved verbs; no alias issues found.
 #>
 
 [CmdletBinding()]
