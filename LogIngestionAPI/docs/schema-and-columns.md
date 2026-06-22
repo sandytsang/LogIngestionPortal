@@ -68,7 +68,7 @@ sends that is not projected never reaches the table.
 3. **Apply the schema** — you do **not** need a full redeploy:
 
    ```powershell
-   ./deploy.ps1 -SchemaOnly `
+   ./scripts/deploy.ps1 -SchemaOnly `
      -WorkspaceName  <workspace> -WorkspaceResourceGroup <rg> `
      -DcrName        <dcr>       -DcrResourceGroup       <rg>
    ```

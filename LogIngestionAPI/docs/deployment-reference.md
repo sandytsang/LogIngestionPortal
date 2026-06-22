@@ -48,11 +48,12 @@ convention is imposed).
 
 ## Common scenarios
 
+Run all commands from the `LogIngestionAPI` folder.
+
 ### Standard deploy
 
 ```powershell
-cd scripts
-./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+./scripts/deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
   -FunctionAppName func-logingestion-dev `
   -WorkspaceName log-logingestion-dev `
   -DcrName dcr-logingestion-dev
@@ -61,7 +62,7 @@ cd scripts
 ### Split resource groups (shared workspace/DCR)
 
 ```powershell
-./deploy.ps1 -ResourceGroup rg-fn -Location eastus `
+./scripts/deploy.ps1 -ResourceGroup rg-fn -Location eastus `
   -FunctionAppName func-logingestion-dev `
   -WorkspaceName log-shared-monitoring -WorkspaceResourceGroup rg-shared-monitoring `
   -WorkspaceLocation westeurope `
@@ -71,7 +72,7 @@ cd scripts
 ### Contributor-only deploy (no role assignments)
 
 ```powershell
-./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+./scripts/deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
   -FunctionAppName func-logingestion-dev `
   -WorkspaceName log-logingestion-dev `
   -DcrName dcr-logingestion-dev `
@@ -89,14 +90,14 @@ for prerequisites, exact placeholders, verification, and escalation inputs.
 
 ```powershell
 # 1) Monitoring Metrics Publisher on DCR resource-group scope
-./AssignDcrPublisherPermission.ps1 `
+./scripts/AssignDcrPublisherPermission.ps1 `
   -FunctionResourceGroup <function-resource-group> `
   -FunctionAppName <function-app-name> `
   -DcrRg <dcr-resource-group> `
   -Subscription <subscription-id>
 
 # 2) Graph Device.Read.All (required when JWT_REQUIRE_ENTRA_DEVICE=true)
-./AssignMSIPermisison.ps1 `
+./scripts/AssignMSIPermisison.ps1 `
   -ResourceGroup <function-resource-group> `
   -FunctionAppName <function-app-name>
 ```
@@ -104,7 +105,7 @@ for prerequisites, exact placeholders, verification, and escalation inputs.
 ### Schema-only update (after a `columns.json` change)
 
 ```powershell
-./deploy.ps1 -SchemaOnly `
+./scripts/deploy.ps1 -SchemaOnly `
   -WorkspaceName log-logingestion-dev -WorkspaceResourceGroup rg-logging-dev `
   -DcrName dcr-logingestion-dev -DcrResourceGroup rg-logging-dev
 ```
@@ -113,8 +114,8 @@ for prerequisites, exact placeholders, verification, and escalation inputs.
 
 ```bash
 git clone https://github.com/sandytsang/LogIngestionPortal.git
-cd LogIngestionPortal/LogIngestionAPI/scripts
-pwsh ./deploy.ps1 \
+cd LogIngestionPortal/LogIngestionAPI
+pwsh ./scripts/deploy.ps1 \
   -Subscription <subscription-name-or-id> \
   -ResourceGroup rg-logging-dev -Location eastus \
   -FunctionAppName func-logingestion-dev \

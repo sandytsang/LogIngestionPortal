@@ -88,7 +88,7 @@ export function DeployHelp() {
                 <div>cd ~</div>
                 <div>rm -rf LogIngestionPortal</div>
                 <div>git clone https://github.com/sandytsang/LogIngestionPortal.git</div>
-                <div>cd LogIngestionPortal</div>
+                <div>cd LogIngestionPortal/LogIngestionAPI</div>
               </div>
             </li>
             <li>

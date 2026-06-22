@@ -111,19 +111,20 @@
     columns file stored outside the repo clone.
 
 .EXAMPLE
-    ./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+    # Run from the LogIngestionAPI folder
+    ./scripts/deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
         -FunctionAppName func-contoso-logs -WorkspaceName log-contoso -DcrName dcr-contoso
 
 .EXAMPLE
     # Workspace and DCR in a shared RG, Function App in another
-    ./deploy.ps1 -ResourceGroup rg-fn -Location eastus `
+    ./scripts/deploy.ps1 -ResourceGroup rg-fn -Location eastus `
         -FunctionAppName func-contoso-logs `
         -WorkspaceName log-shared -WorkspaceResourceGroup rg-logs `
         -DcrName dcr-contoso -DcrResourceGroup rg-logs
 
 .EXAMPLE
     # Update data columns only (no Function App changes)
-    ./deploy.ps1 -SchemaOnly -WorkspaceName log-shared -WorkspaceResourceGroup rg-logs `
+    ./scripts/deploy.ps1 -SchemaOnly -WorkspaceName log-shared -WorkspaceResourceGroup rg-logs `
         -DcrResourceGroup rg-dcr -DcrName dcr-contoso
 
 .NOTES

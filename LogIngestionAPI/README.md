@@ -23,9 +23,10 @@ Sign in first:
 
 ## Deploy
 
+Run all commands from the `LogIngestionAPI` folder:
+
 ```powershell
-cd scripts
-./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+./scripts/deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
   -FunctionAppName func-logingestion-dev `
   -WorkspaceName log-logingestion-dev `
   -DcrName dcr-logingestion-dev
@@ -47,8 +48,8 @@ git clone https://github.com/sandytsang/LogIngestionPortal.git
 Then deploy:
 
 ```bash
-cd LogIngestionPortal/LogIngestionAPI/scripts
-pwsh ./deploy.ps1 \
+cd LogIngestionPortal/LogIngestionAPI
+pwsh ./scripts/deploy.ps1 \
   -Subscription <subscription-name-or-id> \
   -ResourceGroup rg-logging-dev \
   -Location eastus \
@@ -63,7 +64,7 @@ pwsh ./deploy.ps1 \
 - Contributor-only deploy (no roleAssignments/write):
 
 ```powershell
-./deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
+./scripts/deploy.ps1 -ResourceGroup rg-logging-dev -Location eastus `
   -FunctionAppName func-logingestion-dev `
   -WorkspaceName log-logingestion-dev `
   -DcrName dcr-logingestion-dev `
@@ -73,7 +74,7 @@ pwsh ./deploy.ps1 \
 - Place workspace and DCR in different resource groups:
 
 ```powershell
-./deploy.ps1 -ResourceGroup rg-fn -Location eastus `
+./scripts/deploy.ps1 -ResourceGroup rg-fn -Location eastus `
   -FunctionAppName func-logingestion-dev `
   -WorkspaceName log-shared-monitoring `
   -WorkspaceResourceGroup rg-shared-monitoring `
@@ -85,7 +86,7 @@ pwsh ./deploy.ps1 \
 - Update only table and DCR (no Function App changes):
 
 ```powershell
-./deploy.ps1 -SchemaOnly `
+./scripts/deploy.ps1 -SchemaOnly `
   -WorkspaceName log-logingestion-dev `
   -WorkspaceResourceGroup rg-logging-dev `
   -DcrName dcr-logingestion-dev `
