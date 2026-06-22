@@ -684,6 +684,13 @@ if ($useExistingFunctionApp) {
     Write-Host '==> Configuring app settings on the existing Function App' -ForegroundColor Cyan
     $dcrEndpointOut = $outputs.dcrIngestionEndpoint.value
     $dcrImmutableIdOut = $outputs.dcrImmutableId.value
+    # Prefer the live host name; fall back to the standard public-cloud host built
+    # from the app name so JWT_EXPECTED_AUDIENCE is never left as a bare "https://"
+    # when az returns an empty defaultHostName.
+    if ([string]::IsNullOrWhiteSpace($functionHost)) {
+        $functionHost = "$functionAppName.azurewebsites.net"
+        Write-Warning "    Function host name came back empty; defaulting JWT audience to https://$functionHost."
+    }
     $expectedAudience = "https://$functionHost"
     $appSettings = @(
         "DCR_ENDPOINT=$dcrEndpointOut"
