@@ -149,11 +149,42 @@ export function generateScript(
   // ending in `(.*)$'` inside a collector) are inserted literally. A string
   // replacement would treat `$'`, `$&`, `$1`, `$$` etc. as special patterns and
   // corrupt the output.
-  return scriptTemplate
+  const script = scriptTemplate
     .replace('__FUNCTION_URL__', () => config.functionUrl)
     .replace('__USE_JWT__', () => '$true')
     .replace('__SCRIPT_VERSION__', () => escapePsSingleQuote(config.scriptVersion))
     .replace('__GET_DEVICE_DATA_BODY__', () => body);
+
+  // Force the generated script to pure ASCII. Non-ASCII characters (typographic
+  // dashes/quotes pasted into the template, a contributed collector, or a field
+  // expression) change the file's byte length, and when Intune re-encodes the
+  // script on the device the Authenticode hash no longer matches the signature,
+  // so a signed remediation fails with "the hash of the file does not match the
+  // hash stored in the digital signature". Keeping it ASCII makes signing stable.
+  return toAsciiScript(script);
+}
+
+// Maps common non-ASCII typographic characters to safe ASCII equivalents, then
+// drops anything still outside the 0x00-0x7F range so the generated PowerShell
+// script is guaranteed to be pure ASCII (see signing note in generateScript).
+function toAsciiScript(text: string): string {
+  const map: Record<string, string> = {
+    '\u2013': '-', // en dash
+    '\u2014': '-', // em dash
+    '\u2018': "'", // left single quote
+    '\u2019': "'", // right single quote
+    '\u201C': '"', // left double quote
+    '\u201D': '"', // right double quote
+    '\u2026': '...', // ellipsis
+    '\u2022': '*', // bullet
+    '\u00B7': '*', // middle dot
+    '\u2192': '->', // right arrow
+    '\u00A0': ' ', // non-breaking space
+  };
+  return text
+    .replace(/[\u2013\u2014\u2018\u2019\u201C\u201D\u2026\u2022\u00B7\u2192\u00A0]/g, (c) => map[c])
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x00-\x7F]/g, '');
 }
 
 /** A group of tables collected by one generated Intune script (schedule group). */

@@ -127,6 +127,16 @@ describe('generateScript', () => {
     expect(script).toContain("$ScriptVersion = 'O''Brien'");
   });
 
+  it('emits a pure-ASCII script so signed remediations survive Intune re-encoding', () => {
+    const tables: TableConfig[] = [
+      { id: 't1', name: 'Table1_CL', description: '', fieldIds: defaultFieldIds() },
+      { id: 't2', name: 'Table2_CL', description: '', fieldIds: defaultFieldIds() },
+    ];
+    const script = generateScript(catalog, tables, baseConfig);
+    const nonAscii = script.match(/[^\x00-\x7F]/g);
+    expect(nonAscii).toBeNull();
+  });
+
   it('injects collectors containing $-replacement patterns literally (no String.replace corruption)', () => {
     // The w32tm collector regex ends with `(.*)$'`. A string-based replace would
     // treat `$'` as "text after the match" and truncate the body; a function

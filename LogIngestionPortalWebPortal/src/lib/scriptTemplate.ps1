@@ -310,7 +310,7 @@ function Send-Telemetry {
         }
         catch {
             # Pull the HTTP status and the server's JSON error body. The Function
-            # returns a reason such as { "error": "Unknown table 'X'" } — without
+            # returns a reason such as { "error": "Unknown table 'X'" } - without
             # this the caller only sees a bare "(400) Bad Request".
             $status = $null
             try { $status = [int]$_.Exception.Response.StatusCode } catch { }
@@ -356,7 +356,7 @@ function Send-Telemetry {
             $info = (@(if ($status) { "HTTP $status" }, $detail) | Where-Object { $_ }) -join ' - '
 
             # 4xx is a client/payload problem (e.g. a table not yet deployed to
-            # the Function's DCR_STREAMS) — retrying cannot help, so fail at once
+            # the Function's DCR_STREAMS) - retrying cannot help, so fail at once
             # with the server's reason instead of after three attempts.
             if ($status -ge 400 -and $status -lt 500) {
                 throw "Upload rejected ($info)."

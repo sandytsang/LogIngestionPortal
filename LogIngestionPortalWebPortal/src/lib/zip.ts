@@ -27,6 +27,16 @@ function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+/** Prepends the UTF-8 byte-order mark (EF BB BF) to already-encoded bytes. */
+function withUtf8Bom(bytes: Uint8Array): Uint8Array {
+  const out = new Uint8Array(bytes.length + 3);
+  out[0] = 0xef;
+  out[1] = 0xbb;
+  out[2] = 0xbf;
+  out.set(bytes, 3);
+  return out;
+}
+
 /** Builds a ZIP archive (STORE/no-compression) as a Blob. */
 export function createZip(entries: ZipEntry[]): Blob {
   const encoder = new TextEncoder();
@@ -36,7 +46,13 @@ export function createZip(entries: ZipEntry[]): Blob {
 
   for (const entry of entries) {
     const nameBytes = encoder.encode(entry.name);
-    const dataBytes = encoder.encode(entry.content);
+    // PowerShell scripts are written as UTF-8 with a BOM. Intune-signed
+    // remediation scripts are hashed byte-for-byte; emitting the same encoding
+    // the signing tool expects keeps the on-disk bytes (and therefore the
+    // Authenticode hash) stable after the script is re-saved and signed.
+    const dataBytes = entry.name.toLowerCase().endsWith('.ps1')
+      ? withUtf8Bom(encoder.encode(entry.content))
+      : encoder.encode(entry.content);
     const crc = crc32(dataBytes);
     const size = dataBytes.length;
 
