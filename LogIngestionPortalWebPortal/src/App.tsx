@@ -194,6 +194,14 @@ export default function App() {
   const [showContribute, setShowContribute] = useState(false);
   const [showSample, setShowSample] = useState(false);
   const [config, setConfig] = useState<PortalConfig>(() => ({ ...defaultConfig(), ...(persisted.config ?? {}) }));
+  // Transient toast notification (replaces native window.alert for import etc.).
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const ms = toast.kind === 'error' ? 8000 : 4000;
+    const id = window.setTimeout(() => setToast(null), ms);
+    return () => window.clearTimeout(id);
+  }, [toast]);
 
   const knownCategories = useMemo(
     () => [...new Set(catalog.fields.filter((f) => !f.locked).map((f) => f.category))],
@@ -405,10 +413,10 @@ export default function App() {
       setTables(importedTables);
       setConfig({ ...defaultConfig(), ...parsed.config });
       setWorkspaceName(parsed.workspaceName ?? '');
-      window.alert('Configuration imported successfully.');
+      setToast({ kind: 'success', message: 'Configuration imported successfully.' });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown import error.';
-      window.alert(`Import failed: ${msg}`);
+      setToast({ kind: 'error', message: `Import failed: ${msg}` });
     } finally {
       event.currentTarget.value = '';
     }
@@ -435,6 +443,35 @@ export default function App() {
 
   return (
     <div className="min-h-screen app-shell text-slate-900">
+      {/* Transient toast notification */}
+      {toast && (
+        <div
+          className="fixed inset-x-0 top-4 z-50 flex justify-center px-4 sm:justify-end sm:pr-6"
+          aria-live="assertive"
+        >
+          <div
+            role="alert"
+            className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border px-4 py-3 shadow-lg ${
+              toast.kind === 'success'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200'
+                : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-200'
+            }`}
+          >
+            <span aria-hidden className="mt-0.5 text-lg leading-none">
+              {toast.kind === 'success' ? '✓' : '⚠️'}
+            </span>
+            <p className="flex-1 text-sm font-medium">{toast.message}</p>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              aria-label="Dismiss notification"
+              className="-mr-1 shrink-0 rounded-md px-1.5 text-lg leading-none opacity-60 hover:opacity-100"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="app-header shadow-md">
           <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 py-4">

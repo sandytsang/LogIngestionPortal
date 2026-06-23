@@ -71,6 +71,16 @@ export function TablesPanel({ tables, onAddTable, onRemoveTable, onUpdateTable }
             const f = catalog.fields.find((x) => x.id === id);
             return Boolean(f?.element && f.element.length);
           }).length;
+          // Device-level (non per-item) fields assigned alongside a per-item row
+          // source get duplicated onto EVERY item row. Identity columns are
+          // locked and never stored in fieldIds, so anything here is a real
+          // device-level field that bloats the table.
+          const duplicatedFields = rs
+            ? t.fieldIds
+                .map((id) => catalog.fields.find((x) => x.id === id))
+                .filter((f): f is NonNullable<typeof f> => Boolean(f) && f!.id !== rs.id)
+                .filter((f) => !(f.element && f.element.length))
+            : [];
           return (
             <div
               key={t.id}
@@ -122,6 +132,28 @@ export function TablesPanel({ tables, onAddTable, onRemoveTable, onUpdateTable }
                 <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
                   Only one per-item dataset per table — using {rs.label}.
                 </p>
+              )}
+              {rs && duplicatedFields.length > 0 && (
+                <div
+                  role="alert"
+                  className="mt-2 flex gap-2 rounded-md border border-amber-400 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-300"
+                >
+                  <span aria-hidden className="text-base leading-none">⚠️</span>
+                  <div>
+                    <p className="font-semibold">
+                      This table expands to one row per {rs.label}.
+                    </p>
+                    <p className="mt-1">
+                      The {duplicatedFields.length} device-level{' '}
+                      {duplicatedFields.length === 1 ? 'field' : 'fields'} you added (
+                      {duplicatedFields.map((f) => f.label).join(', ')}) will be{' '}
+                      <span className="font-semibold">copied onto every item row</span>, bloating the
+                      table and making queries harder. Keep device-level fields in a separate device
+                      table; per-item rows already include the device identity columns for
+                      correlation.
+                    </p>
+                  </div>
+                </div>
               )}
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
                 {t.fieldIds.length} {t.fieldIds.length === 1 ? 'field' : 'fields'} assigned.

@@ -137,19 +137,6 @@
       }
     },
     {
-      "id": "DefaultAUService",
-      "label": "Default update service",
-      "order": 49,
-      "default": false,
-      "setups": [],
-      "collector": "(New-Object -ComObject 'Microsoft.Update.ServiceManager').Services | Where-Object { $_.IsDefaultAUService } | Select-Object -First 1 -ExpandProperty Name",
-      "column": {
-        "name": "DefaultAUService",
-        "type": "string",
-        "description": "Default Windows Update service (e.g. Microsoft Update, Windows Server Update Service)."
-      }
-    },
-    {
       "id": "ComputerInfo",
       "label": "Computer info",
       "order": 100,
