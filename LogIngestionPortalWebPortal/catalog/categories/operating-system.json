@@ -150,19 +150,6 @@
       }
     },
     {
-      "id": "AUMetered",
-      "label": "Updates over metered networks",
-      "order": 50,
-      "default": false,
-      "setups": [],
-      "collector": "$v = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings' -Name AllowAutoWindowsUpdateDownloadOverMeteredNetwork -ErrorAction SilentlyContinue).AllowAutoWindowsUpdateDownloadOverMeteredNetwork\n[bool]($v -eq 1)",
-      "column": {
-        "name": "AUMetered",
-        "type": "boolean",
-        "description": "Whether automatic update downloads over metered networks are allowed."
-      }
-    },
-    {
       "id": "ComputerInfo",
       "label": "Computer info",
       "order": 100,
