@@ -137,16 +137,16 @@
       }
     },
     {
-      "id": "ComputerInfo",
-      "label": "Computer info",
-      "order": 100,
+      "id": "WindowsProductName",
+      "label": "Windows product name",
+      "order": 49,
       "default": false,
       "setups": [],
-      "collector": "Get-ComputerInfo | Select-Object OsName, OsVersion, OsBuildNumber, OsArchitecture, WindowsProductName, WindowsVersion, CsManufacturer, CsModel, CsName, BiosManufacturer, BiosVersion",
+      "collector": "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -Name ProductName -ErrorAction SilentlyContinue).ProductName",
       "column": {
-        "name": "ComputerInfo",
-        "type": "dynamic",
-        "description": "Selected Get-ComputerInfo properties (OS, Windows, manufacturer/model, BIOS) as a JSON object."
+        "name": "WindowsProductName",
+        "type": "string",
+        "description": "Windows edition / product name from CurrentVersion\\ProductName (e.g. 'Windows 11 Enterprise')."
       }
     }
   ]

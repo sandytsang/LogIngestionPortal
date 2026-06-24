@@ -59,6 +59,19 @@
       }
     },
     {
+      "id": "BiosManufacturer",
+      "label": "BIOS manufacturer",
+      "order": 22,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "$bios.Manufacturer",
+      "column": {
+        "name": "BiosManufacturer",
+        "type": "string",
+        "description": "BIOS firmware manufacturer (Win32_BIOS.Manufacturer)."
+      }
+    },
+    {
       "id": "AutopilotHardwareHash",
       "label": "Autopilot hardware hash",
       "order": 26,
