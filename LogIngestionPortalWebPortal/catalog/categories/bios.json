@@ -2,6 +2,58 @@
   "category": "BIOS",
   "fields": [
     {
+      "id": "SerialNumber",
+      "label": "Serial number",
+      "order": 11,
+      "default": true,
+      "setups": ["bios"],
+      "expression": "$bios.SerialNumber",
+      "column": {
+        "name": "SerialNumber",
+        "type": "string",
+        "description": "BIOS/asset serial number (Win32_BIOS.SerialNumber)."
+      }
+    },
+    {
+      "id": "BiosVersion",
+      "label": "BIOS version",
+      "order": 21,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "$bios.SMBIOSBIOSVersion",
+      "column": {
+        "name": "BiosVersion",
+        "type": "string",
+        "description": "BIOS firmware version (Win32_BIOS.SMBIOSBIOSVersion)."
+      }
+    },
+    {
+      "id": "BiosManufacturer",
+      "label": "BIOS manufacturer",
+      "order": 22,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "$bios.Manufacturer",
+      "column": {
+        "name": "BiosManufacturer",
+        "type": "string",
+        "description": "BIOS firmware manufacturer (Win32_BIOS.Manufacturer)."
+      }
+    },
+    {
+      "id": "BiosDate",
+      "label": "BIOS release date",
+      "order": 38,
+      "default": false,
+      "setups": ["bios"],
+      "expression": "if ($bios.ReleaseDate) { $bios.ReleaseDate.ToUniversalTime().ToString('o') } else { $null }",
+      "column": {
+        "name": "BiosDate",
+        "type": "datetime",
+        "description": "BIOS firmware release date (Win32_BIOS.ReleaseDate, UTC)."
+      }
+    },
+    {
       "id": "BiosName",
       "label": "BIOS name",
       "order": 79,

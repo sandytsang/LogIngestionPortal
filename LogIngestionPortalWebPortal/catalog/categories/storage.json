@@ -31,6 +31,32 @@
         "type": "dynamic",
         "description": "Per-physical-disk health (wear, read/write errors, temperature, media type, health status) as a JSON array."
       }
+    },
+    {
+      "id": "DiskDrives",
+      "label": "Disk drives",
+      "order": 90,
+      "default": false,
+      "setups": [],
+      "collector": "Get-CimInstance -ClassName Win32_DiskDrive -ErrorAction Stop | Select-Object Index, Model, Manufacturer, SerialNumber, InterfaceType, MediaType, Size, Partitions, PNPDeviceID",
+      "column": {
+        "name": "DiskDrives",
+        "type": "dynamic",
+        "description": "Physical disk drives as a JSON array (model, manufacturer, serial, interface, media type, size, partition count) from Win32_DiskDrive."
+      }
+    },
+    {
+      "id": "LogicalDrives",
+      "label": "Logical drives",
+      "order": 91,
+      "default": false,
+      "setups": [],
+      "collector": "Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction Stop | Select-Object DeviceID, DriveType, FileSystem, VolumeName, Size, FreeSpace, Description",
+      "column": {
+        "name": "LogicalDrives",
+        "type": "dynamic",
+        "description": "Logical drives/volumes as a JSON array (drive letter, type, file system, label, size, free space) from Win32_LogicalDisk."
+      }
     }
   ]
 }
