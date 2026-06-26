@@ -1,5 +1,5 @@
 {
-  "category": "Security",
+  "category": "Secure Boot",
   "fields": [
     {
       "id": "SecureBootCertStatus",
